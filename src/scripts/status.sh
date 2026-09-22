@@ -144,10 +144,22 @@ service_running() {
     echo "$RUNNING_CONTAINERS" | grep -q "^${name}$"
 }
 
+# A shared service's IP on the Docker network. Probes used the container NAME,
+# which only resolved on the host through /etc/hosts entries Zeltro no longer
+# writes -- so every healthy service printed "PING ... FAILED". The IP is what a
+# host-side probe can actually reach. Falls back to the name if inspect fails.
+service_addr() {
+    local ip
+    ip=$(docker container inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$1" 2>/dev/null | awk '{print $1}')
+    if [ -n "$ip" ]; then printf '%s' "$ip"; else printf '%s' "$1"; fi
+}
+
 ping_host() {
     local hostname="$1"
     local resolved_ip
-    if command -v getent >/dev/null 2>&1; then
+    if [[ "$hostname" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        resolved_ip="$hostname"
+    elif command -v getent >/dev/null 2>&1; then
         resolved_ip=$(getent hosts "$hostname" 2>/dev/null | awk '{print $1}' | head -n 1)
     elif command -v host >/dev/null 2>&1; then
         resolved_ip=$(host "$hostname" 2>/dev/null | awk '/has address/ {print $4; exit}')
@@ -281,7 +293,16 @@ parse_docker_compose_services() {
         # Extract the service section
         local service_section=$(sed -n "${service_start},${next_service}p" "$compose_file")
         
-        local container_name=$(echo "$service_section" | grep -E "^\s+container_name:" | head -1 | sed 's/.*container_name: *\(.*\)/\1/' | tr -d '"'"'" | sed 's/\${[^}]*:-\([^}]*\)}/\1/g')
+        local container_name=$(echo "$service_section" | grep -E "^\s+container_name:" | head -1 | sed 's/.*container_name: *\(.*\)/\1/' | tr -d '"'"'")
+        # Resolve ${VAR:-default} the way compose does: VAR if set, else the
+        # default. Taking the default unconditionally made this look for
+        # zeltro-mariadb on a box whose container is podium-mariadb, so the JSON
+        # (what the GUI reads) reported every running service as stopped.
+        local _cn_re='^\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}$'
+        if [[ "$container_name" =~ $_cn_re ]]; then
+            local _cn_var="${BASH_REMATCH[1]}" _cn_def="${BASH_REMATCH[3]}"
+            container_name="${!_cn_var:-$_cn_def}"
+        fi
         local image_name=$(echo "$service_section" | grep -E "^\s+image:" | head -1 | sed 's/.*image: *\(.*\)/\1/')
         local ip_suffix=$(echo "$service_section" | grep -E "^\s+ipv4_address:" | head -1 | sed 's/.*\${VPC_SUBNET}\.\([0-9]*\).*/\1/')
         local port=$(echo "$service_section" | grep -A 5 "expose:" | grep -E "^\s+- " | head -1 | grep -o '[0-9]\+' | head -1)
@@ -581,25 +602,33 @@ if [[ "$JSON_OUTPUT" == "1" ]]; then
                 [ -z "$service_name" ] && continue
                 
                 service_status=$(echo "$SERVICES_JSON" | jq -r --arg name "$service_name" '.[$name].status')
-                resolved_ip=$(resolve_host "$service_name")
+                resolved_ip=""
+                [ "$service_status" = "running" ] && resolved_ip=$(service_addr "$service_name")
+                case "$resolved_ip" in *[!0-9.]*) resolved_ip="" ;; esac
                 
                 ping_state="skipped"
                 http_state="skipped"
                 http_url=""
                 
-                if [ "$service_status" = "running" ]; then
-                    if ping_status "$service_name"; then
+                if [ "$service_status" = "running" ] && ! zeltro_host_reaches_containers; then
+                    # Docker Desktop (macOS/Windows): container IPs are not
+                    # routable from the host, so a probe could only ever fail.
+                    ping_state="not_applicable"
+                elif [ "$service_status" = "running" ]; then
+                    if ping_status "${resolved_ip:-$service_name}"; then
                         ping_state="ok"
                     else
                         ping_state="failed"
                     fi
-                    
+
+                    # Keys are container names (podium-phpmyadmin), so the bare
+                    # "phpmyadmin)" pattern never matched and these never ran.
                     case "$service_name" in
-                        phpmyadmin)
-                            http_url="http://$PHPMYADMIN_CONTAINER_NAME/"
+                        *phpmyadmin)
+                            http_url="http://${resolved_ip:-$service_name}/"
                             ;;
-                        mailhog)
-                            http_url="http://$MAILHOG_CONTAINER_NAME:8025/"
+                        *mailhog)
+                            http_url="http://${resolved_ip:-$service_name}:8025/"
                             ;;
                     esac
                     
@@ -673,49 +702,49 @@ if zeltro_host_reaches_containers; then
 
     if service_running "$MARIADB_CONTAINER_NAME"; then
         echo-white -n "PING (MariaDB): "
-        ping_host "$MARIADB_CONTAINER_NAME"
+        ping_host "$(service_addr "$MARIADB_CONTAINER_NAME")"
     else
         echo-yellow "PING (MariaDB): skipped (not running)"
     fi
 
     if service_running "$PHPMYADMIN_CONTAINER_NAME"; then
         echo-white -n "PING (phpMyAdmin): "
-        ping_host "$PHPMYADMIN_CONTAINER_NAME"
+        ping_host "$(service_addr "$PHPMYADMIN_CONTAINER_NAME")"
     else
         echo-yellow "PING (phpMyAdmin): skipped (not running)"
     fi
 
     if service_running "$REDIS_CONTAINER_NAME"; then
         echo-white -n "PING (Redis): "
-        ping_host "$REDIS_CONTAINER_NAME"
+        ping_host "$(service_addr "$REDIS_CONTAINER_NAME")"
     else
         echo-yellow "PING (Redis): skipped (not running)"
     fi
 
     if service_running "$MEMCACHED_CONTAINER_NAME"; then
         echo-white -n "PING (Memcached): "
-        ping_host "$MEMCACHED_CONTAINER_NAME"
+        ping_host "$(service_addr "$MEMCACHED_CONTAINER_NAME")"
     else
         echo-yellow "PING (Memcached): skipped (not running)"
     fi
 
     if service_running "$POSTGRES_CONTAINER_NAME"; then
         echo-white -n "PING (PostgreSQL): "
-        ping_host "$POSTGRES_CONTAINER_NAME"
+        ping_host "$(service_addr "$POSTGRES_CONTAINER_NAME")"
     else
         echo-yellow "PING (PostgreSQL): skipped (not running)"
     fi
 
     if service_running "$MONGO_CONTAINER_NAME"; then
         echo-white -n "PING (MongoDB): "
-        ping_host "$MONGO_CONTAINER_NAME"
+        ping_host "$(service_addr "$MONGO_CONTAINER_NAME")"
     else
         echo-yellow "PING (MongoDB): skipped (not running)"
     fi
 
     if service_running "$MAILHOG_CONTAINER_NAME"; then
         echo-white -n "PING (MailHog): "
-        ping_host "$MAILHOG_CONTAINER_NAME"
+        ping_host "$(service_addr "$MAILHOG_CONTAINER_NAME")"
     else
         echo-yellow "PING (MailHog): skipped (not running)"
     fi
@@ -723,15 +752,21 @@ if zeltro_host_reaches_containers; then
     # Optional shared services, only reported when this machine has them enabled —
     # otherwise every install would show two permanently-skipped lines for services
     # it deliberately does not run.
-    for _opt in ${OPTIONAL_SERVICES:-}; do
-        case "$_opt" in
-            minio)       _opt_host="${MINIO_CONTAINER_NAME:-zeltro-minio}"; _opt_label="MinIO" ;;
-            meilisearch) _opt_host="${MEILISEARCH_CONTAINER_NAME:-zeltro-meilisearch}"; _opt_label="Meilisearch" ;;
-            *)           _opt_host="${SERVICE_PREFIX:-zeltro}-$_opt"; _opt_label="$_opt" ;;
-        esac
-        if service_running "$_opt_host"; then
-            echo-white -n "PING ($_opt_label): "
-            ping_host "$_opt_host"
+        for _opt in ${OPTIONAL_SERVICES:-}; do
+            case "$_opt" in
+                # Databases became opt-in, so they appear in OPTIONAL_SERVICES --
+                # but they are already reported above. "mysql" in particular was
+                # looked up as <prefix>-mysql, which never exists, and printed a
+                # running MariaDB as "enabled but NOT RUNNING".
+                mysql|mariadb|postgres|postgresql|mongo|mongodb|redis|memcached|mailhog|phpmyadmin) continue ;;
+                minio)       _opt_label="MinIO" ;;
+                meilisearch) _opt_label="Meilisearch" ;;
+                *)           _opt_label="$_opt" ;;
+            esac
+            _opt_host="$(zeltro_service_container "$_opt")"
+            if service_running "$_opt_host"; then
+                echo-white -n "PING ($_opt_label): "
+                ping_host "$(service_addr "$_opt_host")"
         else
             echo-yellow "PING ($_opt_label): enabled but NOT RUNNING — try 'zeltro start-services'"
         fi
@@ -744,14 +779,14 @@ if zeltro_host_reaches_containers; then
 
     if service_running "$PHPMYADMIN_CONTAINER_NAME"; then
         echo-white -n "HTTP (phpMyAdmin): "
-        curl_check "http://$PHPMYADMIN_CONTAINER_NAME/"
+        curl_check "http://$(service_addr "$PHPMYADMIN_CONTAINER_NAME")/"
     else
         echo-yellow "HTTP (phpMyAdmin): skipped (not running)"
     fi
 
     if service_running "$MAILHOG_CONTAINER_NAME"; then
         echo-white -n "HTTP (MailHog): "
-        curl_check "http://$MAILHOG_CONTAINER_NAME:8025/"
+        curl_check "http://$(service_addr "$MAILHOG_CONTAINER_NAME"):8025/"
     else
         echo-yellow "HTTP (MailHog): skipped (not running)"
     fi
