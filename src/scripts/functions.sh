@@ -104,6 +104,30 @@ zeltro_network_name() {
     echo "${VPC_NETWORK_NAME:-${COMPOSE_PROJECT_NAME:-zeltro-cli}_vpc}"
 }
 
+# The container name for a shared service. Every service has a
+# *_CONTAINER_NAME setting in /etc/zeltro-cli/.env, and on a box installed under
+# the Podium name those are podium-*. Several callers built the name by hand as
+# "zeltro-<svc>" instead, so on those boxes they looked for containers that do
+# not exist and reported healthy services as stopped, or not running at all.
+zeltro_service_container() {
+    local p="${SERVICE_PREFIX:-zeltro}"
+    case "$1" in
+        mysql|mariadb)       printf '%s' "${MARIADB_CONTAINER_NAME:-$p-mariadb}" ;;
+        postgres|postgresql) printf '%s' "${POSTGRES_CONTAINER_NAME:-$p-postgres}" ;;
+        mongo|mongodb)       printf '%s' "${MONGO_CONTAINER_NAME:-$p-mongo}" ;;
+        redis)               printf '%s' "${REDIS_CONTAINER_NAME:-$p-redis}" ;;
+        memcached)           printf '%s' "${MEMCACHED_CONTAINER_NAME:-$p-memcached}" ;;
+        mailhog)             printf '%s' "${MAILHOG_CONTAINER_NAME:-$p-mailhog}" ;;
+        phpmyadmin)          printf '%s' "${PHPMYADMIN_CONTAINER_NAME:-$p-phpmyadmin}" ;;
+        adminer)             printf '%s' "${ADMINER_CONTAINER_NAME:-$p-adminer}" ;;
+        minio)               printf '%s' "${MINIO_CONTAINER_NAME:-$p-minio}" ;;
+        meilisearch)         printf '%s' "${MEILISEARCH_CONTAINER_NAME:-$p-meilisearch}" ;;
+        mongo-express)       printf '%s' "${MONGOEXPRESS_CONTAINER_NAME:-$p-mongo-express}" ;;
+        redisinsight)        printf '%s' "${REDISINSIGHT_CONTAINER_NAME:-$p-redisinsight}" ;;
+        *)                   printf '%s' "$p-$1" ;;
+    esac
+}
+
 # Does a compose file sit on Zeltro's network? Setup writes $(zeltro_network_name),
 # which on a box installed under the Podium name is podium-cli_vpc, so checking
 # for the literal "zeltro-cli_vpc" rejected every project on those machines --
@@ -2566,28 +2590,32 @@ zeltro_project_is_disabled() {
 # Map a zeltro-* hostname to its compose service name. These differ — the
 # MariaDB service is called `mysql` but its container is `zeltro-mariadb`.
 _zeltro_host_to_service() {
+    # Both product names: a project on a pre-rename box references podium-*.
     case "$1" in
-        zeltro-mariadb)   printf 'mysql' ;;
-        zeltro-postgres)  printf 'postgres' ;;
-        zeltro-mongo)     printf 'mongo' ;;
-        zeltro-redis)     printf 'redis' ;;
-        zeltro-memcached) printf 'memcached' ;;
-        zeltro-mailhog)   printf 'mailhog' ;;
-        zeltro-minio)     printf 'minio' ;;
-        zeltro-meilisearch) printf 'meilisearch' ;;
+        zeltro-mariadb|podium-mariadb)         printf 'mysql' ;;
+        zeltro-postgres|podium-postgres)       printf 'postgres' ;;
+        zeltro-mongo|podium-mongo)             printf 'mongo' ;;
+        zeltro-redis|podium-redis)             printf 'redis' ;;
+        zeltro-memcached|podium-memcached)     printf 'memcached' ;;
+        zeltro-mailhog|podium-mailhog)         printf 'mailhog' ;;
+        zeltro-minio|podium-minio)             printf 'minio' ;;
+        zeltro-meilisearch|podium-meilisearch) printf 'meilisearch' ;;
         *) return 1 ;;
     esac
 }
 
 # Echo the service names referenced anywhere in the given text.
 services_referenced_in() {
-    local text="$1" host svc out=""
-    for host in zeltro-mariadb zeltro-postgres zeltro-mongo zeltro-redis \
-                zeltro-memcached zeltro-mailhog zeltro-minio zeltro-meilisearch; do
-        case "$text" in
-            *"$host"*)
-                svc="$(_zeltro_host_to_service "$host")" && out="$out $svc" ;;
-        esac
+    local text="$1" host svc out="" pfx name
+    for name in mariadb postgres mongo redis memcached mailhog minio meilisearch; do
+        for pfx in zeltro podium; do
+            host="$pfx-$name"
+            case "$text" in
+                *"$host"*)
+                    svc="$(_zeltro_host_to_service "$host")" || continue
+                    case " $out " in *" $svc "*) ;; *) out="$out $svc" ;; esac ;;
+            esac
+        done
     done
     printf '%s' "${out# }"
 }
@@ -2628,8 +2656,7 @@ ensure_services_running() {
     # already-running stack costs nothing.
     local need_start=0 cname
     for svc in $wanted; do
-        cname="${SERVICE_PREFIX:-zeltro}-$svc"
-        [ "$svc" = "mysql" ] && cname="zeltro-mariadb"
+        cname="$(zeltro_service_container "$svc")"
         docker container inspect -f '{{.State.Running}}' "$cname" 2>/dev/null | grep -q true || need_start=1
     done
 
@@ -2650,8 +2677,7 @@ ensure_services_running() {
     # behind it, so `OPTIONAL_SERVICES` stopped being a statement about reality.
     local confirmed="${OPTIONAL_SERVICES:-}" failed=""
     for svc in $newly; do
-        cname="${SERVICE_PREFIX:-zeltro}-$svc"
-        [ "$svc" = "mysql" ] && cname="zeltro-mariadb"
+        cname="$(zeltro_service_container "$svc")"
         if docker container inspect -f '{{.State.Running}}' "$cname" 2>/dev/null | grep -q true; then
             confirmed="${confirmed:+$confirmed }$svc"
             ZELTRO_SERVICES_ENABLED_THIS_RUN="$ZELTRO_SERVICES_ENABLED_THIS_RUN $svc"
