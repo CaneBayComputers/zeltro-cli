@@ -104,6 +104,20 @@ zeltro_network_name() {
     echo "${VPC_NETWORK_NAME:-${COMPOSE_PROJECT_NAME:-zeltro-cli}_vpc}"
 }
 
+# Does a compose file sit on Zeltro's network? Setup writes $(zeltro_network_name),
+# which on a box installed under the Podium name is podium-cli_vpc, so checking
+# for the literal "zeltro-cli_vpc" rejected every project on those machines --
+# setup wrote one name and validation looked for another. Accept this machine's
+# own name, plus both product names, so a project folder copied between an old
+# and a new box still validates.
+zeltro_compose_on_vpc() {
+    local file="${1:-docker-compose.yaml}" net
+    net="$(zeltro_network_name)"
+    [ -f "$file" ] || return 1
+    grep -qF "$net" "$file" 2>/dev/null && return 0
+    grep -qE '(zeltro|podium)-cli_vpc' "$file" 2>/dev/null
+}
+
 # Optional shared services are addressed as <prefix>-<service>. The always-on
 # services each have their own *_CONTAINER_NAME override, but the optional ones
 # had the prefix hardcoded, so a machine whose containers are named differently
@@ -1641,8 +1655,8 @@ $err" || true
     # Guard the two contract items an agent most often drops. These are cheap to
     # check and expensive to debug later: a project on the wrong network appears
     # to start and then cannot reach any shared service.
-    if ! grep -q "zeltro-cli_vpc" docker-compose.yaml 2>/dev/null; then
-        echo-yellow "Warning: generated compose does not reference zeltro-cli_vpc — shared services will be unreachable."
+    if ! zeltro_compose_on_vpc docker-compose.yaml; then
+        echo-yellow "Warning: generated compose does not reference $(zeltro_network_name) — shared services will be unreachable."
     fi
     if ! grep -q "$ip" docker-compose.yaml 2>/dev/null; then
         echo-yellow "Warning: generated compose does not pin $ip — http://$project_name/ may not resolve to this project."

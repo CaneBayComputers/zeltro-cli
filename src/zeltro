@@ -245,7 +245,7 @@ validate_project_context() {
     fi
     
     # Check if it's actually a Zeltro project by looking for the Zeltro VPC network
-    if ! grep -q "zeltro-cli_vpc" docker-compose.yaml 2>/dev/null; then
+    if ! zeltro_compose_on_vpc docker-compose.yaml; then
         echo-red "❌ Not a Zeltro project!"
         echo-white "Found docker-compose.yaml but it's not a Zeltro project."
         echo-white "Current directory: $(pwd)"
