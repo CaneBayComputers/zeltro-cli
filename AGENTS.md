@@ -12,7 +12,7 @@ This is the boiled-down version of `README.md` — same facts, no marketing, opt
 Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflows**, not a single-app framework. Lean into these properties when working with it:
 
 - **Shared services over bundled.** One `zeltro-postgres` / `zeltro-mariadb` / `zeltro-redis` / `zeltro-mongo` / `zeltro-memcached` serves N projects instead of N projects each spinning up their own. Cuts RAM from ~700MB of redundant DB containers down to ~100MB and eliminates port collisions.
-- **Hostname-based routing, both layers.** The host's `/etc/hosts` resolves `http://<project>/` for browsers; Docker's embedded DNS resolves `zeltro-postgres`/`zeltro-redis`/sibling-project names from inside containers. Both layers share one naming scheme.
+- **Names inside the network, addresses outside it.** Docker's embedded DNS resolves `zeltro-postgres`/`zeltro-redis`/sibling-project names from inside containers. The host is not on that network, so browsers and host tools use the address `zeltro status <project>` prints. Zeltro does **not** write `/etc/hosts`.
 - **Stable platform for AI agents.** Each "yo install <app>" session that has to rediscover networking, ports, secret generation, and shared services from scratch burns tokens reinventing what Zeltro already encodes. Reach for `zeltro install <app>` first; only hand-roll a compose if no installer exists.
 
 **Where Zeltro does not add value**: single-project devs. Upstream `docker compose up` works fine for them.
@@ -38,6 +38,8 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 `zeltro create`, `zeltro new`, `zeltro clone`, and `zeltro install` write an `AGENTS.md` handoff file into the new project, then `cd` into it and send the AI agent a one-off prompt telling it to read that file. Pass `--one-off` (or run with `--json-output` / non-TTY / no AI agent configured) to skip the handoff entirely.
 
 `zeltro ai "<prompt>"` is a one-off prompt by default — durable project context lives in the project's `AGENTS.md`, not in a long-lived session. Pass `--interactive` for a persistent session.
+
+**Always go through `zeltro exec`, never a raw `docker exec -u developer …`.** The image's `developer` user is uid 1001 but the bind-mounted project files belong to the host user (usually 1000), so a raw exec fails with errors like `./composer.json is not writable`. The CLI passes `--user "$(id -u):$(id -g)"` for you.
 
 For automation, prefer `zeltro exec` / `zeltro exec-root` over interactive variants (`zeltro bash`, `zeltro tinker`, `zeltro exec-tty*`) — those allocate a TTY and aren't agent-friendly. `zeltro exec` accepts either separate arguments (`zeltro exec python3 manage.py migrate`) or a single quoted string (`zeltro exec "python3 manage.py migrate"`).
 
@@ -82,6 +84,8 @@ These are host tools — run them via your Bash tool, not via `zeltro exec`.
 
 Use these hostnames + credentials when configuring projects. Do not inspect containers to derive them.
 
+> **Machines installed before the rename use `podium-*` names.** On those boxes the shared containers are `podium-postgres`, `podium-mariadb`, `podium-redis` and so on, and the network is `podium-cli_vpc` — the `zeltro-*` hostnames below **do not resolve** there. Check once with `grep COMPOSE_PROJECT_NAME /etc/zeltro-cli/.env`: `podium-cli` means use `podium-*`, anything else (or unset) means `zeltro-*`.
+
 | Service | Host | Port | User | Password |
 |---|---|---|---|---|
 | PostgreSQL | `zeltro-postgres` | 5432 | `root` | `password` |
@@ -102,20 +106,20 @@ Use these hostnames + credentials when configuring projects. Do not inspect cont
 
 ## VPC Networking & IP Allocation
 
-All Zeltro containers attach to the `zeltro-cli_vpc` Docker network (subnet `${VPC_SUBNET}.0/24`, configured per machine in `/etc/zeltro-cli/.env`). The address space is partitioned to keep static IPs from colliding with dynamic allocations:
+All Zeltro containers attach to the `zeltro-cli_vpc` Docker network (`podium-cli_vpc` on a pre-rename machine) (subnet `${VPC_SUBNET}.0/24`, configured per machine in `/etc/zeltro-cli/.env`). The address space is partitioned to keep static IPs from colliding with dynamic allocations:
 
 | Range | Purpose | Allocation |
 |---|---|---|
 | `.2`–`.8` | Shared services (`zeltro-mariadb`, `zeltro-phpmyadmin`, `zeltro-mongo`, `zeltro-redis`, `zeltro-postgres`, `zeltro-memcached`, `zeltro-mailhog`) | Static via `ipv4_address` |
 | `.32`–`.63` | Helper containers in multi-service projects (workers, schedulers, internal services) | Dynamic via `ip_range: ${VPC_SUBNET}.32/27` |
-| `.100`–`.250` | Project entry-points (the web-facing service, addressable as `http://<project>/`) | Static, randomly assigned per project |
+| `.100`–`.250` | Project entry-points (the web-facing service) | Static, randomly assigned per project |
 
 When writing a custom compose: give the entry-point service a static IP in `.100`–`.250`, leave helper services without `ipv4_address` so they land in `.32`–`.63`, and never touch `.2`–`.8`.
 
-### Two-layer hostname resolution
+### How a project is reached
 
-- **Host → project**: `/etc/hosts` entries (`10.x.x.219    typebot`). Browsers and host-side tooling use this.
-- **Container → container**: Docker's embedded DNS resolves container names automatically as long as both ends are on `zeltro-cli_vpc`. Frameworks inside a project container can `psql -h zeltro-postgres` or `fetch('http://other-project/')` without any extra config.
+- **Container → container, by name.** Docker's embedded DNS resolves container names automatically as long as both ends are on the network. Frameworks inside a project container can `psql -h zeltro-postgres` or `fetch('http://other-project/')` without any extra config.
+- **Host or LAN → project, by address.** `zeltro status <project>` prints a local address (the container IP, e.g. `http://10.x.x.219`, or `http://localhost:<port>` on macOS/Windows where Docker runs in a VM) and a LAN address (`http://<machine-ip>:<port>`). Nothing is written to `/etc/hosts`, so `http://<project>/` does not work from the host.
 
 ---
 
@@ -183,7 +187,7 @@ COMPOSE
 - **Name the entry-point service** so `setup_project.sh`'s web detection picks it up: one of `nginx`, `web`, `app`, `api`, `server`, `frontend`, `backend`, `http`. Setup will assign it the project's static IP and `container_name`.
 - **Helper services** (workers, schedulers, sidekiq) attach to the default network without `ipv4_address` — they land in `.32`–`.63`.
 - **Generate secrets** via `openssl rand -hex 32` (or whatever the upstream expects).
-- **Pick a slug**: lowercase hyphenated. Becomes the filename, project URL (`http://<slug>/`), and DB name (with hyphens → underscores).
+- **Pick a slug**: lowercase hyphenated. Becomes the filename, the container name, and DB name (with hyphens → underscores).
 
 ### Source-based installers
 
@@ -231,8 +235,8 @@ After `zeltro clone` of a complex project, the agent's checklist:
 
 1. Read the generated `docker-compose.yaml` to verify the adaptation. Check the correct web-facing service was identified, that env vars use Zeltro shared hostnames, and that the entry-point listens on port 80 (or note the port for the URL).
 2. Read the project's config files (`.env`, `configuration/`) and update any hostnames still referencing removed services.
-3. If the web-facing service uses a non-80 port (e.g. 8080), either front it with a small `nginx:alpine` reverse proxy in the compose, or note that the URL needs the port (e.g. `http://project-name:8080/`).
-4. `zeltro up <project>` and verify with `curl -sI http://<project>/`.
+3. If the web-facing service uses a non-80 port (e.g. 8080), front it with a small `nginx:alpine` reverse proxy in the compose so the project answers on 80.
+4. `zeltro up <project>`, then `zeltro status <project>` for its address, and verify with `curl -sI <that address>`.
 
 ### Upstream compose preservation
 

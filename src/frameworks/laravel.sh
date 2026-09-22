@@ -172,12 +172,23 @@ framework_run_migrations() {
     # non-destructive, no data loss, no seed. Greenfield: full reset + seed.
     if [ "${MIGRATE_SAFE:-0}" = "1" ]; then
         echo-cyan 'Applying pending migrations (artisan migrate) ...'; echo-white
+        # A failure used to be swallowed by `|| true` and followed by a green
+        # "Migrations applied" -- a stack trace, then a success message. Report it,
+        # but don't abort: the container is already up and still useful.
+        local _mig_ok=0
         if [[ "$JSON_OUTPUT" == "1" ]]; then
-            art-docker migrate --force > /dev/null 2>&1 || true
+            art-docker migrate --force > /dev/null 2>&1 && _mig_ok=1
         else
-            art-docker migrate --force || true
+            art-docker migrate --force && _mig_ok=1
         fi
-        echo-green 'Migrations applied (existing data and seeders left untouched).'; echo-white
+        if [ "$_mig_ok" = "1" ]; then
+            echo-green 'Migrations applied (existing data and seeders left untouched).'; echo-white
+        else
+            echo-red "Migrations FAILED -- see the output above. The project is up; fix the"
+            echo-red "cause, then run: zeltro art migrate"
+            echo-yellow "Common cause: the .env DB_HOST/DB_DATABASE do not match Zeltro's shared services"
+            echo-yellow "(re-run setup with --overwrite-env to point them there)."; echo-white
+        fi
         return
     fi
 

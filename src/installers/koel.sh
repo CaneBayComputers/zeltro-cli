@@ -10,7 +10,7 @@ pre_install() {
 
     # Koel's init writes back to .env; bind-mounting the file fails due to AppArmor on the host.
     # Write .env inside the ephemeral container and run koel:init there, then use SKIP_INIT for the main container.
-    docker run --rm --network zeltro-cli_vpc \
+    docker run --rm --network "$(zeltro_network_name)" \
         --entrypoint /bin/sh \
         phanan/koel:latest \
         -c "cat > /var/www/html/.env << 'ENVEOF'

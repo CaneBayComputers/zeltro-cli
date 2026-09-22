@@ -384,6 +384,17 @@ fi
 if [ -n "$EXISTING_COMPOSE_FILE" ]; then
     MIGRATE_SAFE=1
 fi
+
+# A .env that setup is going to KEEP is an existing app too, compose or not.
+# `zeltro new` always passes --overwrite-env, so a kept .env never means
+# greenfield. Without this, an app with a real .env but no compose file (most
+# Laravel apps) was treated as greenfield and got `migrate:fresh` -- which drops
+# every table -- run against whatever database that kept .env points at.
+KEEP_EXISTING_ENV=0
+if [ -f ".env" ] && [ "${OVERWRITE_ENV:-0}" != "1" ]; then
+    KEEP_EXISTING_ENV=1
+    MIGRATE_SAFE=1
+fi
 export MIGRATE_SAFE
 
 # Capture original compose and detect complexity before conflict handling deletes it
@@ -913,6 +924,36 @@ PYEOF
 
     # Create new database (idempotent — if it already exists, just continue).
     # The engine must be running before we can create a database in it.
+    # When the app's own .env is kept, the database that matters is the one it
+    # names -- that is what migrations connect to. Creating the project-named
+    # database instead produced "Database ready!" followed by
+    # "Unknown database 'laravel_flat_file_website'".
+    if [ "$KEEP_EXISTING_ENV" = "1" ]; then
+        _env_conn=$(grep -E '^[[:space:]]*DB_CONNECTION=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' \r")
+        _env_db=$(grep -E '^[[:space:]]*DB_DATABASE=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' \r")
+        case "$_env_conn" in
+            pgsql|postgres|postgresql) DATABASE_ENGINE="postgres" ;;
+            mongodb|mongo)             DATABASE_ENGINE="mongo" ;;
+            mysql|mariadb)             DATABASE_ENGINE="mysql" ;;
+            sqlite)                    DATABASE_ENGINE="sqlite" ;;
+        esac
+        if [ "$DATABASE_ENGINE" != "sqlite" ] && [ -n "$_env_db" ] && [ "$_env_db" != "$DB_NAME" ]; then
+            if [[ "$_env_db" =~ ^[A-Za-z0-9_]+$ ]]; then
+                if [ -n "$DB_NAME_OVERRIDE" ]; then
+                    echo-yellow "--db-name '$DB_NAME' not applied: the kept .env uses '$_env_db'. Pass --overwrite-env to switch it."
+                else
+                    echo-cyan "Using database '$_env_db' from the existing .env (project name would give '$DB_NAME')."
+                fi
+                DB_NAME="$_env_db"
+                export DB_NAME
+            else
+                echo-yellow "The existing .env names database '$_env_db', which is not a plain name Zeltro will create."
+                echo-yellow "Skipping migrations. Create it yourself, or pass --overwrite-env to use '$DB_NAME'."
+                RUN_MIGRATIONS=0
+            fi
+        fi
+    fi
+
     ensure_services_for_project "$PROJECT_NAME" || true
     ensure_database "$DB_NAME" "$DATABASE_ENGINE"
 

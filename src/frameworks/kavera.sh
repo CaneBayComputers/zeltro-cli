@@ -48,20 +48,24 @@ framework_run_migrations() {
     # until this runs.
     [ ! -f "artisan" ] && return
 
+    # Both paths used `migrate --force || true` and then announced "Kavera is
+    # ready" whatever happened. Report a failure instead of hiding it.
+    local _mig_ok=0
     if [ "${MIGRATE_SAFE:-0}" = "1" ]; then
         echo-cyan 'Applying pending migrations (artisan migrate) ...'; echo-white
-        if [[ "$JSON_OUTPUT" == "1" ]]; then
-            art-docker migrate --force > /dev/null 2>&1 || true
-        else
-            art-docker migrate --force || true
-        fi
     else
         echo-cyan 'Running migrations ...'; echo-white
-        if [[ "$JSON_OUTPUT" == "1" ]]; then
-            art-docker migrate --force > /dev/null 2>&1 || true
-        else
-            art-docker migrate --force || true
-        fi
+    fi
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        art-docker migrate --force > /dev/null 2>&1 && _mig_ok=1
+    else
+        art-docker migrate --force && _mig_ok=1
+    fi
+    if [ "$_mig_ok" != "1" ]; then
+        echo-red "Migrations FAILED -- see the output above. The project is up; fix the"
+        echo-red "cause, then run: zeltro art migrate"
+        echo-yellow "Common cause: the .env DB_HOST/DB_DATABASE do not match Zeltro's shared services"
+        echo-yellow "(re-run setup with --overwrite-env to point them there)."; echo-white
     fi
 
     echo-cyan 'Building Kavera content registry ...'; echo-white
@@ -70,5 +74,9 @@ framework_run_migrations() {
     else
         art-docker app:update-content-list || true
     fi
-    echo-green 'Kavera is ready. Pages live in resources/views/content.'; echo-white
+    if [ "$_mig_ok" = "1" ]; then
+        echo-green 'Kavera is ready. Pages live in resources/views/content.'; echo-white
+    else
+        echo-yellow 'Kavera is running, but finish the migrations above before relying on it.'; echo-white
+    fi
 }
