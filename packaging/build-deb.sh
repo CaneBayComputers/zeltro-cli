@@ -20,7 +20,8 @@ echo "Building zeltro-cli ${VERSION_DEB}"
 
 install -d "$BUILD/opt/zeltro-cli" "$BUILD/usr/bin" "$BUILD/DEBIAN"
 # Ship the runtime tree only: no .git, no docs site, no packaging scaffolding.
-for item in src VERSION LICENSE README.md; do
+# AGENTS.md is runtime: the generated projects-dir AGENTS.md points agents at it.
+for item in src VERSION LICENSE README.md AGENTS.md; do
     [ -e "$REPO_ROOT/$item" ] && cp -r "$REPO_ROOT/$item" "$BUILD/opt/zeltro-cli/"
 done
 ln -s /opt/zeltro-cli/src/zeltro "$BUILD/usr/bin/zeltro"
