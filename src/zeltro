@@ -142,6 +142,10 @@ show_help() {
     echo "  zeltro configure          - Configure Zeltro environment"
     echo "  zeltro ai \"<prompt>\"      - Send a one-off prompt to the AI agent (--interactive for a session)"
     echo "  zeltro ai-set             - Configure AI agent and model"
+    echo "  zeltro peers              - List agent sessions running in the Zeltro app (all hosts)"
+    echo "  zeltro send <p>[@host] ... -- <msg>"
+    echo "                            - Message other agent sessions (--all for everyone else;"
+    echo "                              - reads the message from stdin). Run it from your project."
     echo "  zeltro update [--full]    - Update Zeltro CLI (--full also re-pulls Docker images)"
     echo "  zeltro start-services     - Start shared services"
     echo "  zeltro enable-service <n> - Enable an optional shared service (minio, meilisearch)"
@@ -729,6 +733,12 @@ case "$1" in
         ;;
     "ai-set")
         "$SCRIPT_DIR/scripts/ai_set.sh" "${@:2}"
+        ;;
+    "peers")
+        "$SCRIPT_DIR/scripts/bus.sh" peers "${@:2}"
+        ;;
+    "send")
+        "$SCRIPT_DIR/scripts/bus.sh" send "${@:2}"
         ;;
     "set-metadata")
         "$SCRIPT_DIR/scripts/set_metadata.sh" "${@:2}"
