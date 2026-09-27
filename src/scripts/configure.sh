@@ -375,6 +375,9 @@ if [[ ! -d "$PROJECTS_DIR" || ! -w "$PROJECTS_DIR" ]]; then
     error "ERROR: Cannot create or write to projects directory: $PROJECTS_DIR"
 fi
 
+# Agent guide for the projects directory (kept current by every later zeltro run).
+zeltro_sync_projects_agents_md "$PROJECTS_DIR"
+
 # SELinux (Fedora/RHEL): every project is bind-mounted into its container. Docker
 # CE disables SELinux confinement by default (containers run as spc_t), so this
 # isn't required on a stock install — but with "selinux-enabled": true in
