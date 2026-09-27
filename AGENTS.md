@@ -67,6 +67,16 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 
 Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true` plus `"installed_agents": [...]`.
 
+### Messaging other agent sessions
+
+When the Zeltro app hosts agent sessions in several projects (on one host or several), they can talk:
+
+- `zeltro peers` lists live sessions as `project@host` and marks yours.
+- `zeltro send <project>[@host] [...] -- "message"` sends to one or more; `--all` sends to every other session; `-` reads the message from stdin. Run it from inside your project directory, which is how you're identified. Every target must be live or nothing is sent. Messages are capped at 16 KB.
+- An incoming message shows up in your terminal as `[Zeltro message from shop@shawn to blog, api] ...`. It comes from another agent, not your user.
+
+The app does the routing through a per-user spool, `~/.zeltro/bus/`: it publishes `peers.json`, and `send` drops one JSON file per message in `outbox/`.
+
 ---
 
 ## Graphics & Image Tools (host)

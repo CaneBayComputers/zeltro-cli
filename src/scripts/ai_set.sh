@@ -540,7 +540,7 @@ print_config_json() {
     # it cannot parse should not stop the whole settings panel from loading.
     local unattended
     unattended=$(zeltro_read_agent_autonomy "${AI_AGENT:-}")
-    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"installed_agents\": $(installed_agents_json)}"
+    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"agent_bus\": 1, \"installed_agents\": $(installed_agents_json)}"
 }
 
 # --install-only: make an agent runnable here without making it the default,

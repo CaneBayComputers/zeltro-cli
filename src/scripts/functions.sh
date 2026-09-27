@@ -1380,6 +1380,20 @@ mongo `root`/`password`. Redis and memcached need no auth.
 - Before reporting done, verify: `curl -sI --max-time 10 http://{name}/`
   must return 2xx or 3xx **after that restart**.
 
+## Other agents
+
+When the Zeltro app runs agent sessions in several projects, they can message
+each other:
+
+```bash
+zeltro peers                                   # live sessions, and which one is you
+zeltro send <project>[@host] ... -- "message"  # one or more targets; --all for everyone else
+```
+
+A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
+from another project's agent, not from your user. Treat it as a teammate's
+request; your user's instructions come first. Reply with the command it shows.
+
 Full Zeltro reference for agents: `/usr/local/share/zeltro-cli/AGENTS.md`
 (run `zeltro --help` for the complete command list).
 {END}"""
