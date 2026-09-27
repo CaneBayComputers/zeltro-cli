@@ -80,8 +80,8 @@ cd "$PROJECT_DIR"
 
 AI_AGENT_CLI_NAME="$AI_AGENT"
 
-if [[ -z "$AI_AGENT_CLI_NAME" ]]; then
-    echo-cyan "AI agent is not configured. Run 'zeltro ai-set' to choose an agent."
+if ! _ai_problem=$(zeltro_ai_agent_problem); then
+    echo-red "$_ai_problem" >&2
     exit 1
 fi
 

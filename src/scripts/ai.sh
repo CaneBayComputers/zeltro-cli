@@ -85,15 +85,8 @@ fi
 
 AI_AGENT_CLI_NAME="$AI_AGENT"
 
-if [[ -z "$AI_AGENT_CLI_NAME" ]]; then
-    echo-cyan "AI agent is not configured. Run 'zeltro ai-set' to choose an agent and model."
-    cd "$CALLER_DIR"
-    exit 1
-fi
-
-if ! command -v "$AI_AGENT_CLI_NAME" >/dev/null 2>&1; then
-    echo-red "Configured AI agent CLI '$AI_AGENT_CLI_NAME' is not on PATH."
-    echo-white "Run 'zeltro ai-set' to choose a different agent, or ensure $AI_AGENT_CLI_NAME is installed."
+if ! _ai_problem=$(zeltro_ai_agent_problem); then
+    echo-red "$_ai_problem" >&2
     cd "$CALLER_DIR"
     exit 1
 fi

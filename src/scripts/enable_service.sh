@@ -43,6 +43,11 @@ mongo-express|admin-ui|Web admin for MongoDB|http://zeltro-mongo-express:8081
 redisinsight|admin-ui|Web admin for Redis|http://zeltro-redisinsight:5540
 minio|storage-search|S3-compatible object storage|http://zeltro-minio:9000
 meilisearch|storage-search|Full-text search engine|http://zeltro-meilisearch:7700"
+# A box installed under the Podium name runs podium-* containers, and zeltro-*
+# does not resolve there, so show the names this machine actually uses.
+if [ "${SERVICE_PREFIX:-zeltro}" != "zeltro" ]; then
+    OPTIONAL_SERVICE_CATALOG="${OPTIONAL_SERVICE_CATALOG//zeltro-/${SERVICE_PREFIX}-}"
+fi
 
 # The catalogue and the flat list are two spellings of one fact; disagreement
 # means a service is unreachable or invisible. Cheap to check, so check.
@@ -59,10 +64,7 @@ fi
 # misleading: a failed pull used to leave the name recorded with no container.
 service_state() {
     local svc="$1" cname
-    case "$svc" in
-        mysql) cname="zeltro-mariadb" ;;
-        *)     cname="${SERVICE_PREFIX:-zeltro}-$svc" ;;
-    esac
+    cname=$(zeltro_service_container "$svc")
     case " ${OPTIONAL_SERVICES:-} " in
         *" $svc "*) ;;
         *) printf 'disabled'; return 0 ;;
@@ -131,11 +133,7 @@ if ! printf '%s\n' $AVAILABLE_OPTIONAL_SERVICES | grep -qx "$SERVICE"; then
     error "Unknown optional service '$SERVICE'. Available: $AVAILABLE_OPTIONAL_SERVICES"
 fi
 
-case "$SERVICE" in
-    minio)       CONTAINER="${MINIO_CONTAINER_NAME:-zeltro-minio}" ;;
-    meilisearch) CONTAINER="${MEILISEARCH_CONTAINER_NAME:-zeltro-meilisearch}" ;;
-    *)           CONTAINER="${SERVICE_PREFIX:-zeltro}-$SERVICE" ;;
-esac
+CONTAINER=$(zeltro_service_container "$SERVICE")
 
 CURRENT="${OPTIONAL_SERVICES:-}"
 NEW=""
@@ -195,32 +193,32 @@ if [[ "$MODE" == "enable" ]]; then
     echo-green "$SERVICE enabled."
     case "$SERVICE" in
         minio)
-            echo-white "  API:     http://zeltro-minio:9000  (from inside a container)"
-            echo-white "  Console: http://zeltro-minio:9001"
+            echo-white "  API:     http://$CONTAINER:9000  (from inside a container)"
+            echo-white "  Console: http://$CONTAINER:9001"
             echo-white "  Keys:    root / password"
             ;;
         meilisearch)
-            echo-white "  API:       http://zeltro-meilisearch:7700"
+            echo-white "  API:       http://$CONTAINER:7700"
             echo-white "  Master key: zeltro-dev-master-key"
             ;;
         redisinsight)
-            echo-white "  Open: http://zeltro-redisinsight:5540"
+            echo-white "  Open: http://$CONTAINER:5540"
             echo-white "  The shared Redis is pre-registered as 'Zeltro Redis'. It stays"
             echo-white "  hidden until you accept the terms on the first-run screen —"
             echo-white "  RedisInsight only runs its discovery after that."
             ;;
         adminer)
-            echo-white "  Open: http://zeltro-adminer:8080"
-            echo-white "  Server is prefilled with zeltro-mariadb; change it and pick the"
+            echo-white "  Open: http://$CONTAINER:8080"
+            echo-white "  Server is prefilled with $(zeltro_service_container mysql); change it and pick the"
             echo-white "  engine at the login screen for PostgreSQL or MongoDB."
             echo-white "  User: root"
             ;;
         mongo-express)
-            echo-white "  Open: http://zeltro-mongo-express:8081"
-            echo-white "  Already connected to zeltro-mongo; no login needed."
+            echo-white "  Open: http://$CONTAINER:8081"
+            echo-white "  Already connected to $(zeltro_service_container mongo); no login needed."
             ;;
         phpmyadmin)
-            echo-white "  Open: http://zeltro-phpmyadmin"
+            echo-white "  Open: http://$CONTAINER"
             echo-white "  User: root  (no password)"
             ;;
     esac
