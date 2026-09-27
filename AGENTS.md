@@ -53,6 +53,20 @@ To restart processes inside a running container use `zeltro supervisor restart a
 
 Never pass `--json-output` to `zeltro new` from an automation context — it suppresses all output, so success and errors both look identical.
 
+### Per-session AI overrides
+
+`zeltro ai`, `resume`, `create` (including `--classify-only`), `clone`, `create-installer` and `update-installer` use the agent set by `zeltro ai-set`. To use a different one for a single run without changing that default, set these in the environment. They are never written to `/etc/zeltro-cli/.env`.
+
+| Variable | Overrides |
+|---|---|
+| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `gemini`, `aider` or `qwen` |
+| `ZELTRO_AI_MODEL` | `AI_MODEL` |
+| `ZELTRO_AI_API_BASE` | `AI_API_BASE` |
+| `ZELTRO_AI_API_KEY` | `AI_API_KEY` |
+| `ZELTRO_AI_API_KEY_FILE` | `AI_API_KEY`, read from the file's first line. Wins over `ZELTRO_AI_API_KEY` when non-empty. Keep the file until the session ends: nested `zeltro` calls re-read it. |
+
+Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true` plus `"installed_agents": [...]`.
+
 ---
 
 ## Graphics & Image Tools (host)

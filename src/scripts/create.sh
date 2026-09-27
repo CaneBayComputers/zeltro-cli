@@ -168,6 +168,19 @@ fi
 # build had been paid for.
 source "$SCRIPT_DIR/classify.sh"
 
+# Both phases need a working agent. Check it up front: the classifier discards
+# the agent's stderr and retries, which would turn "ZELTRO_AI_AGENT names an
+# agent that isn't installed" into a vague "could not determine a stack".
+if ! _ai_problem=$(zeltro_ai_agent_problem); then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        _action=create; [[ "$CLASSIFY_ONLY" == "1" ]] && _action=classify
+        python3 -c 'import json,sys; print(json.dumps({"action": sys.argv[1], "status": "error", "error": "ai_agent_unavailable", "message": sys.argv[2]}))' "$_action" "$_ai_problem"
+    else
+        echo-red "$_ai_problem" >&2
+    fi
+    exit 1
+fi
+
 # Menus need a human. Anything scripted takes the top recommendation silently,
 # preserving the promise that no zeltro command ever blocks an agent.
 # --classify-only stops here: run phase 1, report, and create nothing. Placed

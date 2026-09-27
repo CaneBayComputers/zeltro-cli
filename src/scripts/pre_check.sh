@@ -33,6 +33,8 @@ fi
 
 # Source the environment file
 source /etc/zeltro-cli/.env
+# Re-sourcing reset any AI_* the caller overrode for this run; apply them again.
+zeltro_apply_ai_overrides
 
 # Check Docker is accessible — catches both "not in docker group yet" and "Docker not running"
 if command -v docker >/dev/null 2>&1; then

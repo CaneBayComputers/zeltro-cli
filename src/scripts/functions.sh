@@ -2,10 +2,91 @@
 # Zeltro - Internal Functions
 # This file provides functions needed by Zeltro scripts without polluting user's shell
 
+# Agents Zeltro knows how to drive. The agent name is also its binary name.
+ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen"
+
+# Per-session AI overrides. A caller (the GUI running a chosen profile, a script)
+# can pick the agent for ONE run without rewriting /etc/zeltro-cli/.env:
+#
+#   ZELTRO_AI_AGENT, ZELTRO_AI_MODEL, ZELTRO_AI_API_BASE, ZELTRO_AI_API_KEY
+#       Each replaces the matching AI_* value from the .env. Unset = keep the
+#       .env value; set but empty = clear it for this run.
+#   ZELTRO_AI_API_KEY_FILE
+#       Read the key from this file instead (first line, trailing CR/LF dropped),
+#       so it never appears in a process list. When non-empty it wins over
+#       ZELTRO_AI_API_KEY. The file must stay in place for the whole session:
+#       nested zeltro calls re-read it.
+#
+# Nothing here writes the .env. ai-set and configure set ZELTRO_AI_NO_OVERRIDE=1
+# before sourcing this file, so they can never persist an override. A bad
+# override is recorded rather than fatal, so commands that never touch AI
+# (status, up) are unaffected; zeltro_ai_agent_problem reports it where an agent
+# is about to run.
+zeltro_apply_ai_overrides() {
+    ZELTRO_AI_OVERRIDE_ACTIVE=0
+    ZELTRO_AI_OVERRIDE_ERROR=""
+    [ "${ZELTRO_AI_NO_OVERRIDE:-0}" = "1" ] && return 0
+
+    if [ -n "${ZELTRO_AI_AGENT+x}" ]; then AI_AGENT="$ZELTRO_AI_AGENT"; ZELTRO_AI_OVERRIDE_ACTIVE=1; fi
+    if [ -n "${ZELTRO_AI_MODEL+x}" ]; then AI_MODEL="$ZELTRO_AI_MODEL"; ZELTRO_AI_OVERRIDE_ACTIVE=1; fi
+    if [ -n "${ZELTRO_AI_API_BASE+x}" ]; then AI_API_BASE="$ZELTRO_AI_API_BASE"; ZELTRO_AI_OVERRIDE_ACTIVE=1; fi
+
+    if [ -n "${ZELTRO_AI_API_KEY_FILE:-}" ]; then
+        ZELTRO_AI_OVERRIDE_ACTIVE=1
+        if [ -f "$ZELTRO_AI_API_KEY_FILE" ] && [ -r "$ZELTRO_AI_API_KEY_FILE" ]; then
+            local _key
+            IFS= read -r _key < "$ZELTRO_AI_API_KEY_FILE" || true
+            AI_API_KEY="${_key%$'\r'}"
+        else
+            AI_API_KEY=""
+            ZELTRO_AI_OVERRIDE_ERROR="ZELTRO_AI_API_KEY_FILE is set, but '$ZELTRO_AI_API_KEY_FILE' is not a readable file."
+        fi
+    elif [ -n "${ZELTRO_AI_API_KEY+x}" ]; then
+        AI_API_KEY="$ZELTRO_AI_API_KEY"; ZELTRO_AI_OVERRIDE_ACTIVE=1
+    fi
+
+    if [ -n "${ZELTRO_AI_AGENT:-}" ] && [ -z "$ZELTRO_AI_OVERRIDE_ERROR" ]; then
+        case " $ZELTRO_KNOWN_AI_AGENTS " in
+            *" $ZELTRO_AI_AGENT "*) ;;
+            *) ZELTRO_AI_OVERRIDE_ERROR="Unknown AI agent '$ZELTRO_AI_AGENT' in ZELTRO_AI_AGENT. Known agents: $ZELTRO_KNOWN_AI_AGENTS." ;;
+        esac
+    fi
+    return 0
+}
+
+# Prints why the agent this run would use can't run, and returns 1; prints
+# nothing and returns 0 when it can. Callers print the message and exit.
+# Never installs anything: an override naming a missing agent is an error, not
+# a cue to change this machine.
+zeltro_ai_agent_problem() {
+    if [ -n "${ZELTRO_AI_OVERRIDE_ERROR:-}" ]; then
+        echo "$ZELTRO_AI_OVERRIDE_ERROR"
+        return 1
+    fi
+    if [ -z "${AI_AGENT:-}" ]; then
+        if [ -n "${ZELTRO_AI_AGENT+x}" ] && [ "${ZELTRO_AI_NO_OVERRIDE:-0}" != "1" ]; then
+            echo "ZELTRO_AI_AGENT is set but empty, so no AI agent is selected for this run."
+        else
+            echo "AI agent is not configured. Run 'zeltro ai-set' to choose an agent and model."
+        fi
+        return 1
+    fi
+    if ! command -v "$AI_AGENT" >/dev/null 2>&1; then
+        if [ -n "${ZELTRO_AI_AGENT:-}" ] && [ "${ZELTRO_AI_NO_OVERRIDE:-0}" != "1" ]; then
+            echo "AI agent '$AI_AGENT' (from ZELTRO_AI_AGENT) is not installed on $(hostname). Install it with: zeltro ai-set --install-only --agent $AI_AGENT"
+        else
+            echo "Configured AI agent CLI '$AI_AGENT' is not on PATH. Run 'zeltro ai-set' to choose a different agent, or install $AI_AGENT."
+        fi
+        return 1
+    fi
+    return 0
+}
+
 # Load primary configuration if available (for container names, paths, etc.)
 if [ -f "/etc/zeltro-cli/.env" ]; then
     # shellcheck disable=SC1091
     source "/etc/zeltro-cli/.env"
+    zeltro_apply_ai_overrides
 fi
 
 # Get the projects directory (configurable)

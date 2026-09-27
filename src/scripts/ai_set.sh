@@ -9,6 +9,9 @@ cd ..
 
 DEV_DIR=$(pwd)
 
+# This script writes AI_* to the .env, so it must see the .env values, never a
+# per-session ZELTRO_AI_* override (which would then get persisted).
+ZELTRO_AI_NO_OVERRIDE=1
 source scripts/functions.sh
 
 SCRIPT_DIR="$DEV_DIR/scripts"
@@ -21,6 +24,7 @@ API_BASE_PROVIDED=0
 NEW_API_BASE=""
 # "" = not requested (leave the agent's config alone), "allow", or "revoke".
 UNATTENDED_REQUEST=""
+INSTALL_ONLY=0
 
 # AI agent configuration rules (summary)
 # --------------------------------------
@@ -71,10 +75,16 @@ usage() {
     echo-white "  --allow-unattended    Let the agent run without approval prompts. Writes the setting"
     echo-white "                        to the agent's OWN config; applies non-interactively."
     echo-white "  --no-allow-unattended Turn that back off. Omit both to leave the setting unchanged."
+    echo-white "  --install-only        With --agent: install that agent's CLI if missing, without"
+    echo-white "                        making it the default. Writes nothing to the configuration."
     echo-white ""
     echo-white "Notes:"
     echo-white "  - When --json-output is used, no interactive prompts are shown."
     echo-white "  - If called with only --json-output, the current configuration is returned as JSON."
+    echo-white "    That call is read-only: it installs nothing and writes nothing."
+    echo-white "  - To use a different agent for one run without changing the default, set"
+    echo-white "    ZELTRO_AI_AGENT / ZELTRO_AI_MODEL / ZELTRO_AI_API_BASE / ZELTRO_AI_API_KEY"
+    echo-white "    (or ZELTRO_AI_API_KEY_FILE) in the environment. See 'zeltro help'."
 }
 
 # Parse arguments
@@ -94,6 +104,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-allow-unattended)
             UNATTENDED_REQUEST="revoke"
+            shift
+            ;;
+        --install-only)
+            INSTALL_ONLY=1
             shift
             ;;
         --agent)
@@ -475,6 +489,9 @@ ensure_ai_agent_installed() {
         gemini)
             npm install -g @google/gemini-cli
             ;;
+        qwen)
+            npm install -g @qwen-code/qwen-code
+            ;;
         claude)
             curl -fsSL https://claude.ai/install.sh | bash
             ;;
@@ -504,6 +521,91 @@ ensure_ai_agent_installed() {
     echo-white
 }
 
+# Known agents whose CLI is on PATH, as a JSON array.
+installed_agents_json() {
+    local a out=""
+    for a in $ZELTRO_KNOWN_AI_AGENTS; do
+        command -v "$a" >/dev/null 2>&1 && out="$out${out:+, }\"$a\""
+    done
+    printf '[%s]' "$out"
+}
+
+# The current (.env) configuration. session_overrides tells a caller this CLI
+# honours ZELTRO_AI_* per run; installed_agents says which of them can run here.
+print_config_json() {
+    local has_api_key="false"
+    [[ -n "$AI_API_KEY" ]] && has_api_key="true"
+    # `unattended` is true/false/unknown — never an error. The GUI renders
+    # "unknown" as unchecked with a note, which beats a failed call: a config
+    # it cannot parse should not stop the whole settings panel from loading.
+    local unattended
+    unattended=$(zeltro_read_agent_autonomy "${AI_AGENT:-}")
+    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"installed_agents\": $(installed_agents_json)}"
+}
+
+# --install-only: make an agent runnable here without making it the default,
+# so a per-session ZELTRO_AI_AGENT profile can use it. Touches no configuration.
+if [[ "$INSTALL_ONLY" == "1" ]]; then
+    _bad=""
+    if [[ -z "$NEW_AGENT" ]]; then
+        _bad="--install-only needs --agent NAME."
+    elif [[ -n "$NEW_MODEL" || "$API_KEY_PROVIDED" == "1" || "$API_BASE_PROVIDED" == "1" ]]; then
+        _bad="--install-only takes only --agent (plus --allow-unattended / --no-allow-unattended); it does not change the configuration."
+    else
+        case " $ZELTRO_KNOWN_AI_AGENTS " in
+            *" $NEW_AGENT "*) ;;
+            *) _bad="Unknown AI agent '$NEW_AGENT'. Known agents: $ZELTRO_KNOWN_AI_AGENTS." ;;
+        esac
+    fi
+    if [[ -n "$_bad" ]]; then
+        if [[ "$JSON_OUTPUT" == "1" ]]; then
+            echo "{\"action\": \"ai_install\", \"status\": \"error\", \"agent\": \"$NEW_AGENT\", \"details\": \"$_bad\"}"
+        else
+            echo-red "$_bad"
+        fi
+        exit 1
+    fi
+
+    [ -n "$UNATTENDED_REQUEST" ] && export ZELTRO_UNATTENDED_EXPLICIT=1
+    # The installer output is for humans; keep it off stdout in JSON mode.
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        ensure_ai_agent_installed "$NEW_AGENT" >&2 || true
+    else
+        ensure_ai_agent_installed "$NEW_AGENT" || true
+    fi
+
+    if ! command -v "$NEW_AGENT" >/dev/null 2>&1; then
+        if [[ "$JSON_OUTPUT" == "1" ]]; then
+            echo "{\"action\": \"ai_install\", \"status\": \"error\", \"agent\": \"$NEW_AGENT\", \"installed\": false, \"details\": \"$NEW_AGENT is still not on PATH after the install attempt.\", \"installed_agents\": $(installed_agents_json)}"
+        else
+            echo-red "$NEW_AGENT is still not on PATH after the install attempt."
+        fi
+        exit 1
+    fi
+
+    case "$UNATTENDED_REQUEST" in
+        allow)  zeltro_allow_agent_autonomy  "$NEW_AGENT" ;;
+        revoke) zeltro_revoke_agent_autonomy "$NEW_AGENT" ;;
+    esac
+
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        echo "{\"action\": \"ai_install\", \"status\": \"success\", \"agent\": \"$NEW_AGENT\", \"installed\": true, \"unattended\": \"$(zeltro_read_agent_autonomy "$NEW_AGENT")\", \"installed_agents\": $(installed_agents_json)}"
+    else
+        echo-green "$NEW_AGENT is installed. The default agent is unchanged (${AI_AGENT:-<none>})."
+    fi
+    cd "$ORIG_DIR"
+    exit 0
+fi
+
+# A bare `--json-output` is a probe: report and change nothing. It used to fall
+# through to the write path below, so reading the settings could sudo-rewrite
+# the .env and even try to install the configured agent.
+if [[ "$JSON_OUTPUT" == "1" && -z "$NEW_AGENT" && -z "$NEW_MODEL" && "$API_KEY_PROVIDED" != "1" && "$API_BASE_PROVIDED" != "1" && -z "$UNATTENDED_REQUEST" ]]; then
+    print_config_json
+    cd "$ORIG_DIR"
+    exit 0
+fi
+
 if [[ "$NONINTERACTIVE" -eq 1 ]]; then
     # An explicit --allow-unattended / --no-allow-unattended suppresses the
     # interactive consent prompt inside ensure_ai_agent_installed: the caller has
@@ -531,15 +633,7 @@ if [[ "$NONINTERACTIVE" -eq 1 ]]; then
     sudo-zeltro-env-set "AI_API_KEY" "${AI_API_KEY:-}" /etc/zeltro-cli/.env
 
     if [[ "$JSON_OUTPUT" == "1" ]]; then
-        has_api_key="false"
-        if [[ -n "$AI_API_KEY" ]]; then
-            has_api_key="true"
-        fi
-        # `unattended` is true/false/unknown — never an error. The GUI renders
-        # "unknown" as unchecked with a note, which beats a failed call: a config
-        # it cannot parse should not stop the whole settings panel from loading.
-        unattended=$(zeltro_read_agent_autonomy "${AI_AGENT:-}")
-        echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\"}"
+        print_config_json
     else
         echo-green "AI agent configuration updated."
         echo-white "  Agent: ${AI_AGENT:-<none>}"
