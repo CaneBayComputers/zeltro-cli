@@ -2,11 +2,13 @@
 # Vue framework hooks#
 # Serves on port 3000 inside the container. nginx runs in the same container and
 # proxies 127.0.0.1:3000 with Upgrade headers already set, so websockets work
-# without extra configuration and binding to localhost is sufficient.#
-# HMR clientPort is pinned to 80. Vite defaults its HMR socket to the dev
-# server's own port, but 3000 is never published — the browser reaches the app
-# on port 80 through nginx. Without this the page loads and hot reload silently
-# never connects.
+# without extra configuration. The dev server binds 127.0.0.1 explicitly:
+# Vite 8 resolves "localhost" to ::1 in this image, which nginx never tries.#
+# HMR clientPort is pinned to 80 (server.ws.clientPort; Vite 8.1 renamed it
+# from server.hmr.clientPort, which now logs a deprecation). Vite defaults its
+# HMR socket to the dev server's own port, but 3000 is never published — the
+# browser reaches the app on port 80 through nginx. Without this the page loads
+# and hot reload silently never connects.
 
 FRAMEWORK_IS_PYTHON=0
 FRAMEWORK_IS_NODE=1
@@ -29,11 +31,11 @@ framework_scaffold() {
     "preview": "vite preview --port 3000"
   },
   "dependencies": {
-    "vue": "^3.5.0"
+    "vue": "^3.5.40"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.0",
-    "vite": "^6.0.0"
+    "@vitejs/plugin-vue": "^6.0.0",
+    "vite": "^8.3.0"
   }
 }
 EOF
@@ -44,9 +46,11 @@ import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
   plugins: [vue()],
+  // nginx in this container proxies to 127.0.0.1:3000. Left at "localhost",
+  // Vite 8 binds only ::1 here and nginx gets connection refused (502).
   // The browser reaches this app on port 80 through nginx; the dev server's own
   // port is never published, so the HMR socket has to be told where to connect.
-  server: { hmr: { clientPort: 80 } },
+  server: { host: '127.0.0.1', ws: { clientPort: 80 } },
 });
 EOF
 

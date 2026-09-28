@@ -71,9 +71,13 @@ because it shares the same Node base image.
 > Hot reload is wired for you. The dev server's own port is never published.
 > The browser reaches the app on port 80 through nginx, so the Vite-based
 > projects (`nuxt`, `sveltekit`, `astro`, `react`, `vue`) pin the HMR socket to
-> port 80 in their config. Change that and hot reload stops connecting while
-> the page still loads, which is a confusing failure. `nextjs` needs no such
-> setting: its dev server connects back through the same address as the page.
+> port 80 in their config (`server.ws.clientPort`, which Vite 8.1 renamed from
+> `server.hmr.clientPort`). Change that and hot reload stops connecting while
+> the page still loads, which is a confusing failure. `nextjs` needs no port
+> setting, because its dev server connects back through the same address as
+> the page. Next.js 16 does refuse hot-reload connections from hosts it doesn't
+> know, so the scaffold's `next.config.mjs` lists the private IPv4 ranges in
+> `allowedDevOrigins`. Add any other hostname you browse the project by.
 
 ### Kavera
 
