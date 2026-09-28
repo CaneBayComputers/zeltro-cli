@@ -232,7 +232,7 @@ services:
       - plane-mq-data:/var/lib/rabbitmq
 
   plane-minio:
-    image: minio/minio:latest
+    image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     command: server /export --console-address ":9090"
     restart: unless-stopped
     environment:
