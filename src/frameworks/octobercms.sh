@@ -15,7 +15,7 @@
 # shellcheck source=/dev/null
 source "$DEV_DIR/frameworks/laravel.sh"
 
-OCTOBER_VERSION="${OCTOBER_VERSION:-v4.3.2}"
+OCTOBER_VERSION="${OCTOBER_VERSION:-v4.4.8}"
 
 framework_scaffold() {
     echo-return; echo-cyan "October CMS project selected!"
@@ -62,6 +62,16 @@ framework_run_migrations() {
         art-docker tailor:migrate || true
     fi
     echo-green 'Migrations complete.'; echo-white
-    echo-white "Backend is at http://$PROJECT_NAME/backend — create the admin user with:"
+    # Zeltro does not write /etc/hosts, so http://<project>/ does not resolve
+    # from the host. Print the address that does.
+    local site_url
+    site_url="$(zeltro_project_url "$PROJECT_NAME")"
+    [ -n "$site_url" ] || site_url="<address from 'zeltro status $PROJECT_NAME'>"
+    # The backend path is BACKEND_URI (October ships /admin); /backend is a 404.
+    local backend_uri
+    backend_uri="$(grep -E '^BACKEND_URI=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"' ")"
+    backend_uri="/${backend_uri#/}"
+    [ "$backend_uri" = "/" ] && backend_uri="/admin"
+    echo-white "Backend is at $site_url$backend_uri — create the admin user with:"
     echo-white "  zeltro art october:passwd <email> <password>"
 }

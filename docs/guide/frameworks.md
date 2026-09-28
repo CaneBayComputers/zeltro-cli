@@ -99,7 +99,7 @@ zeltro art app:update-content-list
 
 Both are CMSs with an admin UI, installed from source so they use Zeltro's shared databases.
 
-- **October CMS** (`zeltro new octobercms my-site`) is Laravel-based. Themes and plugins live in the project, so an agent can edit them. The admin is at `/backend`; create the admin user with `zeltro art october:passwd <email> <password>`. It is free for local development, but production use needs a licence from [octobercms.com](https://octobercms.com/pricing).
+- **October CMS** (`zeltro new octobercms my-site`) is Laravel-based. Themes and plugins live in the project, so an agent can edit them. The admin is at `/admin` (the `BACKEND_URI` in `.env`); create the admin user with `zeltro art october:passwd <email> <password>`. It is free for local development, but production use needs a licence from [octobercms.com](https://octobercms.com/pricing).
 - **Drupal** (`zeltro new drupal my-site`) installs Drupal 11 with Composer, then runs `drush site:install`. The docroot is `public/` instead of Drupal's usual `web/`. It is the slowest framework to create, so expect several minutes. Run Drush with `zeltro drush <args>`.
 
 ## Options
