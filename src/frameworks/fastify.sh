@@ -1,5 +1,9 @@
 #!/bin/bash
 # Fastify framework hooks
+#
+# Fastify 5 (Node 20+; v4 is past end of life). `logger: true` still builds
+# the default pino logger; a custom logger instance now goes in
+# `loggerInstance`, and listen() only takes the options object used below.
 
 FRAMEWORK_IS_PYTHON=0
 FRAMEWORK_IS_NODE=1
@@ -18,8 +22,8 @@ framework_scaffold() {
     "start": "node server.js"
   },
   "dependencies": {
-    "dotenv": "^16.0.0",
-    "fastify": "^4.0.0"
+    "dotenv": "^18.0.0",
+    "fastify": "^5.12.0"
   }
 }
 EOF

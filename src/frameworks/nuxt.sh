@@ -3,10 +3,11 @@
 # Serves on port 3000 inside the container. nginx runs in the same container and
 # proxies 127.0.0.1:3000 with Upgrade headers already set, so websockets work
 # without extra configuration and binding to localhost is sufficient.#
-# HMR clientPort is pinned to 80. Vite defaults its HMR socket to the dev
-# server's own port, but 3000 is never published — the browser reaches the app
-# on port 80 through nginx. Without this the page loads and hot reload silently
-# never connects.#
+# HMR clientPort is pinned to 80 (server.ws.clientPort; Vite 8.1 renamed it
+# from server.hmr.clientPort, which now logs a deprecation). Vite defaults its
+# HMR socket to the dev server's own port, but 3000 is never published — the
+# browser reaches the app on port 80 through nginx. Without this the page loads
+# and hot reload silently never connects.#
 # Nuxt needs two things the other dev servers do not.
 #
 # --no-fork: by default `nuxt dev` forks a child Vite process and proxies to it
@@ -40,28 +41,32 @@ framework_scaffold() {
     "preview": "nuxt preview"
   },
   "dependencies": {
-    "nuxt": "^3.15.0",
-    "vue": "^3.5.0",
-    "vue-router": "^4.5.0"
+    "nuxt": "^4.5.0",
+    "vue": "^3.5.40",
+    "vue-router": "^5.3.0"
   }
 }
 EOF
 
     cat > nuxt.config.ts << 'EOF'
 export default defineNuxtConfig({
-  compatibilityDate: '2025-01-01',
+  compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   // The browser reaches this app on port 80 through nginx; the dev server's own
   // port is never published, so the HMR socket has to be told where to connect.
-  vite: { server: { hmr: { clientPort: 80 } } },
+  vite: { server: { ws: { clientPort: 80 } } },
 });
 EOF
 
-    cat > app.vue << 'EOF'
+    # Nuxt 4 keeps application code under app/ (srcDir). A root-level app.vue
+    # is still auto-detected for upgraded projects, but new ones use app/.
+    mkdir -p app
+
+    cat > app/app.vue << 'EOF'
 <template>
   <main style="font-family: system-ui, sans-serif; padding: 3rem">
     <h1>Hello from Nuxt</h1>
-    <p>Edit <code>app.vue</code> and this page reloads itself.</p>
+    <p>Edit <code>app/app.vue</code> and this page reloads itself.</p>
   </main>
 </template>
 EOF

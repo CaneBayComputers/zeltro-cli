@@ -18,7 +18,7 @@ framework_scaffold() {
     "start": "node server.js"
   },
   "dependencies": {
-    "dotenv": "^16.0.0"
+    "dotenv": "^18.0.0"
   }
 }
 EOF

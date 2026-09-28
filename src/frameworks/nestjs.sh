@@ -1,5 +1,11 @@
 #!/bin/bash
 # NestJS framework hooks
+#
+# NestJS 12 ships ESM-only packages, so the scaffold is an ESM project like the
+# official starter: "type": "module", nodenext resolution, and relative imports
+# spelled with a .js extension (./app.module.js), which TypeScript maps back to
+# the .ts source. The app runs on Node 20.19+/22.12+; the CLI's schematics ask
+# for Node 22.22.3+ and only warn (EBADENGINE) on older Node 22 releases.
 
 FRAMEWORK_IS_PYTHON=0
 FRAMEWORK_IS_NODE=1
@@ -15,6 +21,8 @@ framework_scaffold() {
   "name": "$PROJECT_NAME",
   "version": "0.0.1",
   "description": "",
+  "private": true,
+  "type": "module",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -22,43 +30,67 @@ framework_scaffold() {
     "start:prod": "node dist/main"
   },
   "dependencies": {
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
-    "@nestjs/platform-express": "^10.0.0",
-    "reflect-metadata": "^0.1.13",
+    "@nestjs/common": "^12.1.0",
+    "@nestjs/core": "^12.1.0",
+    "@nestjs/platform-express": "^12.1.0",
+    "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.0.0",
-    "@nestjs/schematics": "^10.0.0",
-    "typescript": "^5.1.3"
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/schematics": "^12.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.2"
   }
 }
 EOF
 
+    # Matches the official v12 starter (nestjs/typescript-starter): ESM with
+    # nodenext resolution. TypeScript 6 no longer loads every @types package by
+    # default, so "types" has to name node or process.env stops type-checking.
     cat > tsconfig.json << 'EOF'
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2021",
+    "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": false,
-    "noImplicitAny": false
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "types": ["node"]
   }
+}
+EOF
+
+    # nest build/start compile with this file when it exists. TypeScript 6
+    # defaults rootDir to the tsconfig's own directory and refuses to build
+    # (TS5011) unless it is set, so it pins rootDir to src and dist/main.js
+    # stays where start:prod expects it.
+    cat > tsconfig.build.json << 'EOF'
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }
 EOF
 
     cat > nest-cli.json << 'EOF'
 {
+  "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
@@ -70,21 +102,21 @@ EOF
     cat > src/main.ts << 'EOF'
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { AppModule } from './app.module.js';
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
-    const port = parseInt(process.env.PORT ?? '3000');
+    const port = parseInt(process.env.PORT ?? '3000', 10);
     await app.listen(port, '0.0.0.0');
     console.log(`Application is running on port ${port}`);
 }
-bootstrap();
+await bootstrap();
 EOF
 
     cat > src/app.module.ts << 'EOF'
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
 
 @Module({
     imports: [],
@@ -96,7 +128,7 @@ EOF
 
     cat > src/app.controller.ts << 'EOF'
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { AppService } from './app.service.js';
 
 @Controller()
 export class AppController {
