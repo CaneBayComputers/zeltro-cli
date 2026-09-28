@@ -164,6 +164,7 @@ show_help() {
     echo "  ZELTRO_AI_API_BASE        - API endpoint for this run"
     echo "  ZELTRO_AI_API_KEY         - API key for this run"
     echo "  ZELTRO_AI_API_KEY_FILE    - Read the key from this file instead (wins over ZELTRO_AI_API_KEY)"
+    echo "  ZELTRO_AI_LANGUAGE        - Language the agent replies in, e.g. \"Spanish\" (Zeltro's output stays English)"
     echo "  Unset = use the 'zeltro ai-set' value. Set but empty = clear it for this run."
     echo "  An unknown or uninstalled override agent is an error; nothing is installed."
     echo "  Install one without making it the default: zeltro ai-set --install-only --agent <name>"
