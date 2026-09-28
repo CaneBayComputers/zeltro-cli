@@ -192,24 +192,20 @@ zeltro new <TAB>           → django  express  fastapi  flask  kavera  laravel 
 
 ## The desktop app
 
-[Zeltro GUI](https://github.com/CaneBayComputers/zeltro-gui) is optional. On
-Linux and macOS, one command installs it, and installs this CLI first if
-`zeltro` is missing:
+The Zeltro desktop app is optional. On Linux, one command installs it, and
+installs this CLI first if `zeltro` is missing:
 
 ```bash
 curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 ```
 
-For other platforms, replace `ubuntu` at the end of the link with `fedora`,
-`arch` or `mac`. On macOS, install [Homebrew](https://brew.sh) first, because
-the GUI installer stops if it is missing.
+It works on Ubuntu/Debian, Fedora/RHEL and Arch. Windows has a Setup `.exe`, and
+a Mac app is coming soon. On first launch the app shows a short setup form and
+runs `zeltro configure` for you; if you have already configured Zeltro in a
+terminal, it skips the form.
 
-On first launch the GUI shows a short setup form and runs `zeltro configure`
-for you. If you have already configured Zeltro in a terminal, it skips the
-form.
-
-Packaged builds (Windows `.exe`, `.deb`, `.rpm`, pacman, `.dmg`) are on the
-[releases page](https://github.com/CaneBayComputers/zeltro-gui/releases/latest).
+The packages are on the
+[releases page](https://github.com/CaneBayComputers/zeltro-releases/releases).
 See [Downloads](../downloads/) for which to use.
 
 ---
