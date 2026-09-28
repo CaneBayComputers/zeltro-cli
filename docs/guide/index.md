@@ -42,7 +42,7 @@ Left alone, an AI agent will scaffold a project however it likes — its own por
 
 | | |
 |---|---|
-| [Installation](installation/) | Install Zeltro on Linux or macOS (Windows: installer coming, WSL2 route in preview) |
+| [Installation](installation/) | Install Zeltro on Linux, macOS or Windows (beta installer; WSL2 route in preview) |
 | [Downloads](downloads/) | The desktop app, and the CLI on its own |
 | [Quick start](quick-start/) | Your first project in one command |
 | [Frameworks](frameworks/) | `zeltro new` — scaffold a project you write |
