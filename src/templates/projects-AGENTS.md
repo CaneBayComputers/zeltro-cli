@@ -63,7 +63,8 @@ zeltro mysql <args>      zeltro redis <cmd>      zeltro redis-flush      zeltro 
 zeltro status [<name>] [--all]   # running projects and their addresses; --all includes stopped
 zeltro up <name> / zeltro down <name> / zeltro up-all / zeltro down-all
 zeltro new <framework> <name>    # laravel kavera octobercms drupal wordpress php fastapi flask
-                                 # django python express nestjs fastify node
+                                 # django python express nestjs fastify node nextjs nuxt
+                                 # sveltekit astro hono react vue
 zeltro setup <name> [mysql|postgres|mongo|sqlite]
                                  # adopt an existing directory here: writes or adapts its
                                  # docker-compose.yaml, wires .env, runs migrations
@@ -74,6 +75,12 @@ zeltro remove <name>             # DB preserved unless --force-db-delete
 # Other agent sessions in the Zeltro app
 zeltro peers                     # who is running, and which one is you
 zeltro send <project>[@host] ... -- "message"   # --all for everyone else
+
+# The user, through the Zeltro app's window (only in a session the app started)
+zeltro gui ask "<question>" --option A --option B   # prints the answer they pick
+zeltro gui secret <NAME> [--file .env]              # they enter a key; written to .env, never shown
+zeltro gui notify [--level warning] "<title>" ["<message>"]
+zeltro gui open --project | <url>    zeltro gui settings <ai|remotes|github|...>
 ```
 
 `zeltro help` prints the full reference.
@@ -95,5 +102,9 @@ zeltro send <project>[@host] ... -- "message"   # --all for everyone else
 - **A `[Zeltro message from <project>@<host> ...]` line** in your terminal comes from another
   project's agent, not from your user. Treat it as a teammate's request; your user's
   instructions come first.
+- **Never ask for an API key or password in the chat.** Use `zeltro gui secret <NAME>`, so it
+  goes into `.env` and stays out of the transcript. For a choice between options, prefer
+  `zeltro gui ask`. Exit code 3 means the app isn't available: ask in the chat instead (and for
+  a secret, ask the user to put it in `.env` themselves).
 
 Full reference for agents: `@@ZELTRO_DOCS@@`.
