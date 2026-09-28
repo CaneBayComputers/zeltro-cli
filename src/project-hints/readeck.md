@@ -2,10 +2,10 @@
 
 Read-it-later and web archiving — saves the readable content of pages, with highlights and ebook export.
 
-**Image**: `codeberg.org/readeck/readeck:0.22.3`
+**Image**: `codeberg.org/readeck/readeck:0.23.4`
 **Port**: 8000 (via nginx proxy)
 **Database**: None (SQLite in the `readeck-data` volume)
-**Credentials**: Create the first user at `http://readeck/onboarding`
+**Credentials**: Create the first user on the `/onboarding` page at first visit
 
 ## Key Notes
 - The image lives on Codeberg's registry, not Docker Hub or ghcr.io. The full `codeberg.org/...` path is required.

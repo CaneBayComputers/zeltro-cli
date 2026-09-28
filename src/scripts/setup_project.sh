@@ -452,7 +452,7 @@ if [ "$ORIGINAL_COMPOSE_IS_COMPLEX" = "1" ] && [ -f "$ORIGINAL_COMPOSE_TMPFILE" 
     # from the environment so an upgraded machine keeps its existing network.
     export ZELTRO_NETWORK_NAME="$(zeltro_network_name)"
     ADAPT_SUMMARY=$(python3 - "$IP_ADDRESS" "$PROJECT_NAME" "$D_CLASS" "$ORIGINAL_COMPOSE_TMPFILE" docker-compose.yaml "$CUSTOM_IMAGE" 2>/dev/null << 'PYEOF'
-import sys, yaml, re, json
+import sys, os, yaml, re, json
 
 ip, project, d_class, src, dst = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 custom_image = sys.argv[6] if len(sys.argv) > 6 else ''

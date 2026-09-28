@@ -1,5 +1,5 @@
 INSTALL_DISPLAY="Readeck"
-INSTALL_CREDENTIALS="Create the first user at http://readeck/onboarding"
+INSTALL_CREDENTIALS="Create the first user on the /onboarding page at first visit"
 INSTALL_NOTES="Keep the readeck-data volume — the auto-generated secret key lives in it, and losing it invalidates every session and token."
 INSTALL_READY_RETRIES=30
 
@@ -7,7 +7,7 @@ write_files() {
     cat > docker-compose.yaml << 'EOF'
 services:
   readeck-app:
-    image: codeberg.org/readeck/readeck:0.22.3
+    image: codeberg.org/readeck/readeck:0.23.4
     restart: unless-stopped
     environment:
       READECK_LOG_LEVEL: info

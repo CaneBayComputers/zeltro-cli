@@ -124,6 +124,24 @@ x-app-env: &app-env
   LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY}
 
 services:
+  # Listed first on purpose: setup gives the static IP and container name to the
+  # first service whose name looks web-facing, and `web` (the Next.js frontend
+  # on :3000) matched before this gateway did, so nothing answered on port 80.
+  nginx:
+    image: makeplane/plane-proxy:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    environment:
+      <<: *proxy-env
+    volumes:
+      - plane-proxy-config:/config
+      - plane-proxy-data:/data
+    depends_on:
+      - web
+      - api
+      - space
+      - admin
+      - live
+
   web:
     image: makeplane/plane-frontend:${APP_RELEASE:-stable}
     restart: unless-stopped
@@ -214,28 +232,13 @@ services:
       - plane-mq-data:/var/lib/rabbitmq
 
   plane-minio:
-    image: minio/minio:latest
+    image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     command: server /export --console-address ":9090"
     restart: unless-stopped
     environment:
       <<: *minio-env
     volumes:
       - plane-uploads:/export
-
-  nginx:
-    image: makeplane/plane-proxy:${APP_RELEASE:-stable}
-    restart: unless-stopped
-    environment:
-      <<: *proxy-env
-    volumes:
-      - plane-proxy-config:/config
-      - plane-proxy-data:/data
-    depends_on:
-      - web
-      - api
-      - space
-      - admin
-      - live
 
 volumes:
   plane-uploads:

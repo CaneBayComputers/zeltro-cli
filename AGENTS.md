@@ -124,7 +124,7 @@ Use these hostnames + credentials when configuring projects. Do not inspect cont
 
 | Service | Host | Port | Credentials |
 |---|---|---|---|
-| MinIO (S3-compatible storage) | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |
+| MinIO (S3-compatible storage; runs Silo, the maintained MinIO fork) | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |
 | Meilisearch (full-text search) | `zeltro-meilisearch` | 7700 | master key `zeltro-dev-master-key` |
 
 ---

@@ -133,9 +133,11 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     _DB_HINTS=$(grep -E "^(DB_HOST|DB_CONNECTION)=" "$PROJECT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr '\n' ' ')
 fi
 if [ -z "$_DB_HINTS" ]; then
-    # No root .env or no DB vars — scan env files and docker-compose.yaml for Zeltro shared service hostnames
-    _DB_HINTS=$(grep -rh "zeltro-postgres\|zeltro-mongo\|zeltro-mariadb" \
-        "$PROJECT_DIR"/*.env "$PROJECT_DIR"/.env.* "$PROJECT_DIR"/env/ \
+    # No root .env or no DB_HOST/DB_CONNECTION in it — scan env files (the root
+    # .env too: installers like langfuse and plane name the host in DATABASE_URL or
+    # PGHOST there) and docker-compose.yaml for Zeltro shared service hostnames
+    _DB_HINTS=$(grep -rhE "(zeltro|podium)-(postgres|mongo|mariadb)" \
+        "$PROJECT_DIR"/.env "$PROJECT_DIR"/*.env "$PROJECT_DIR"/.env.* "$PROJECT_DIR"/env/ \
         "$PROJECT_DIR"/docker-compose.yaml "$PROJECT_DIR"/docker-compose.yml \
         2>/dev/null | head -5 | tr '\n' ' ')
 fi
@@ -146,9 +148,10 @@ elif echo "$_DB_HINTS" | grep -qiE "mongo"; then
 fi
 
 # A project only uses a shared Zeltro DB if its config references one of the
-# zeltro-* hostnames. Bundled-DB projects (e.g. budibase) don't, so we should
+# zeltro-* hostnames (podium-* on a box installed before the rename). Bundled-DB
+# projects (e.g. budibase) don't, so we should
 # skip the start-services + DROP DATABASE step entirely for those.
-if echo "$_DB_HINTS" | grep -q "zeltro-postgres\|zeltro-mongo\|zeltro-mariadb"; then
+if echo "$_DB_HINTS" | grep -qE "(zeltro|podium)-(postgres|mongo|mariadb)"; then
     HAS_SHARED_DB=true
 fi
 debug "Detected database engine: $DB_ENGINE, uses shared DB: $HAS_SHARED_DB"

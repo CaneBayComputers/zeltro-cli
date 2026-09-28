@@ -1,6 +1,6 @@
 INSTALL_DISPLAY="Langfuse"
 INSTALL_CREDENTIALS="admin@example.com / admin123"
-INSTALL_NOTES="Heavy stack: web + worker + ClickHouse + MinIO. First boot runs ClickHouse migrations and can take 2-3 minutes."
+INSTALL_NOTES="Heavy stack: web + worker + ClickHouse + S3 storage (Silo, a MinIO fork). First boot runs ClickHouse migrations and can take 2-3 minutes."
 
 pre_install() {
     docker exec zeltro-postgres psql -U root -d postgres -c "CREATE DATABASE langfuse;" 2>/dev/null || true
@@ -97,11 +97,14 @@ services:
       retries: 20
       start_period: 10s
 
+  # Silo, the maintained MinIO fork: MinIO's own images are gone. Same S3 API,
+  # MINIO_* variables and ports. Its binary is `silo`, so go through the
+  # image's entrypoint, which maps `server` onto it.
   langfuse-minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     restart: unless-stopped
     entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    command: -c 'mkdir -p /data/langfuse && exec docker-entrypoint.sh server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: miniosecret

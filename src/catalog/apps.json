@@ -340,7 +340,7 @@
       "slug": "freescout",
       "display": "FreeScout",
       "database": "mysql",
-      "note": "FreeScout is a help desk / shared inbox. Visit http://$PROJECT_NAME/ to access."
+      "note": "Help desk / shared inbox. First boot takes a few minutes. FreeScout answers 403 Untrusted Host unless the browser host matches APP_URL in docker-compose.yaml: set APP_URL to the address zeltro status prints, then zeltro down + up."
     },
     {
       "slug": "freshrss",
@@ -578,7 +578,7 @@
       "slug": "langfuse",
       "display": "Langfuse",
       "database": "postgres",
-      "note": "Heavy stack: web + worker + ClickHouse + MinIO. First boot runs ClickHouse migrations and can take 2-3 minutes."
+      "note": "Heavy stack: web + worker + ClickHouse + S3 storage (Silo, a MinIO fork). First boot runs ClickHouse migrations and can take 2-3 minutes."
     },
     {
       "slug": "leantime",
@@ -757,9 +757,9 @@
     },
     {
       "slug": "minio",
-      "display": "MinIO",
+      "display": "MinIO (Silo)",
       "database": "",
-      "note": "S3-compatible object storage. API port 9000 is internal; the web console is at http://$PROJECT_NAME/."
+      "note": "S3-compatible object storage. Runs Silo, the maintained MinIO fork: same S3 API, MINIO_* settings and data format. API port 9000 is internal; the web console is at http://$PROJECT_NAME/."
     },
     {
       "slug": "mixpost",
@@ -1148,12 +1148,6 @@
       "note": "TrailBase normally prints a random admin password to the log; the entrypoint here resets it to a known one instead."
     },
     {
-      "slug": "trilium",
-      "display": "Trilium Notes",
-      "database": "",
-      "note": "Set your login password on first visit."
-    },
-    {
       "slug": "triliumnext",
       "display": "Trilium Notes (TriliumNext)",
       "database": "",
@@ -1228,12 +1222,6 @@
       "display": "wger",
       "database": "postgres",
       "note": "Startup takes up to 5 minutes — the health check waits for Django to be ready."
-    },
-    {
-      "slug": "whoogle",
-      "display": "Whoogle Search",
-      "database": "",
-      "note": "A metasearch front-end for Google; it needs outbound internet access and can be rate-limited by Google."
     },
     {
       "slug": "wikijs",

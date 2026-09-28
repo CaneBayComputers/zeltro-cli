@@ -27,7 +27,7 @@ echo ""
 
 run_install "photoprism"
 run_install "immich"
-run_install "trilium"
+run_install "triliumnext"
 run_install "searxng"
 run_install "glances"
 run_install "wger"
