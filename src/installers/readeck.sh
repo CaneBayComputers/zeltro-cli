@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     environment:
       READECK_LOG_LEVEL: info
-      READECK_ALLOWED_HOSTS: readeck
+      READECK_ALLOWED_HOSTS: "__ZELTRO_PROJECT__,__ZELTRO_IP__"
     volumes:
       - readeck-data:/readeck
 
@@ -34,7 +34,7 @@ server {
     location / {
         proxy_pass http://readeck-app:8000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

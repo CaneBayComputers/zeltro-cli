@@ -18,9 +18,9 @@ services:
       _APP_ENV: production
       _APP_WORKER_PER_CORE: "6"
       _APP_OPENSSL_KEY_V1: $openssl_key
-      _APP_DOMAIN: appwrite
+      _APP_DOMAIN: __ZELTRO_IP__
       _APP_DOMAIN_FUNCTIONS: functions.appwrite
-      _APP_DOMAIN_TARGET: appwrite
+      _APP_DOMAIN_TARGET: __ZELTRO_IP__
       _APP_DOMAIN_TARGET_CNAME: appwrite
       _APP_OPTIONS_FORCE_HTTPS: disabled
       _APP_DB_HOST: zeltro-mariadb

@@ -26,6 +26,11 @@ write_files() {
     cat > .env.production << EOF
 LOCAL_DOMAIN=mastodon
 WEB_DOMAIN=mastodon
+# LOCAL_DOMAIN/WEB_DOMAIN are the instance's permanent identity, so they stay a
+# name. Rails only answers Hosts it knows, though, so the project IP -- filled
+# in by zeltro install before the first boot -- is allowed as an alternate.
+ALTERNATE_DOMAINS=__ZELTRO_IP__
+STREAMING_API_BASE_URL=ws://__ZELTRO_IP__
 LOCAL_HTTPS=false
 FORCE_SSL=false
 
@@ -34,7 +39,7 @@ NODE_ENV=production
 RAILS_SERVE_STATIC_FILES=true
 BIND=0.0.0.0
 PORT=3000
-TRUSTED_PROXY_IP=10.136.0.0/16
+TRUSTED_PROXY_IP=__ZELTRO_IP__/24
 
 DB_HOST=zeltro-postgres
 DB_PORT=5432
@@ -106,6 +111,12 @@ services:
     image: ghcr.io/mastodon/mastodon-streaming:v4.5.9
     restart: always
     env_file: .env.production
+    # .env.production sets PORT=3000 for the web process, and streaming reads
+    # PORT too. Without this it listened on 3000, its healthcheck (and nginx)
+    # looked on 4000, and nginx waited forever on a streaming that never
+    # turned healthy.
+    environment:
+      PORT: "4000"
     command: node ./streaming/index.js
     depends_on:
       db-migrate:
@@ -134,6 +145,10 @@ volumes:
   mastodon-system:
 EOF
 
+    # X-Forwarded-Proto https: Mastodon's production config sets force_ssl
+    # unconditionally (FORCE_SSL=false is not read), so a request it believes is
+    # plain http is redirected to https://<host>/, where nothing listens. The
+    # header comes from a trusted proxy (TRUSTED_PROXY_IP is the project /24).
     cat > nginx.conf << 'NGINX'
 map $http_upgrade $connection_upgrade {
     default upgrade;
@@ -153,10 +168,10 @@ server {
     }
 
     location /api/v1/streaming {
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_http_version 1.1;
@@ -164,10 +179,10 @@ server {
     }
 
     location / {
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_http_version 1.1;

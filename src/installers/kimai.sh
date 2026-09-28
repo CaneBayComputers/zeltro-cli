@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: prod
-      TRUSTED_HOSTS: kimai
+      TRUSTED_HOSTS: "__ZELTRO_PROJECT__,__ZELTRO_IP__,localhost,127.0.0.1"
       ADMINMAIL: admin@example.com
       ADMINPASS: admin123
       DATABASE_URL: mysql://root:@zeltro-mariadb:3306/kimai
@@ -41,7 +41,7 @@ server {
     location / {
         proxy_pass http://kimai-app:8001;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }

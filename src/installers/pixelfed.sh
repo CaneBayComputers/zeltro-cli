@@ -25,9 +25,12 @@ services:
       APP_KEY: "$APP_KEY"
       APP_DEBUG: "false"
       APP_URL: "http://$PROJECT_NAME"
-      APP_DOMAIN: "$PROJECT_NAME"
-      ADMIN_DOMAIN: "$PROJECT_NAME"
-      SESSION_DOMAIN: "$PROJECT_NAME"
+      # Pixelfed binds its routes to these domains, so a browser on any other
+      # Host gets 404 for every page. __ZELTRO_IP__ is filled in by zeltro install
+      # with the project's address before the first boot.
+      APP_DOMAIN: "__ZELTRO_IP__"
+      ADMIN_DOMAIN: "__ZELTRO_IP__"
+      SESSION_DOMAIN: "__ZELTRO_IP__"
       TRUST_PROXIES: "*"
       DB_CONNECTION: mysql
       DB_HOST: zeltro-mariadb

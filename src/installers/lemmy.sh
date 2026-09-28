@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
     environment:
       LEMMY_UI_LEMMY_INTERNAL_HOST: lemmy-backend:8536
-      LEMMY_UI_LEMMY_EXTERNAL_HOST: lemmy
+      LEMMY_UI_LEMMY_EXTERNAL_HOST: __ZELTRO_IP__
       LEMMY_UI_HTTPS: "false"
     depends_on:
       - lemmy-backend
@@ -116,7 +116,7 @@ http {
 NGINX
 
     cat > proxy_params << 'PARAMS'
-proxy_set_header Host $host;
+proxy_set_header Host $http_host;
 proxy_set_header X-Real-IP $remote_addr;
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;

@@ -15,7 +15,7 @@ services:
     image: shlinkio/shlink:stable
     restart: unless-stopped
     environment:
-      DEFAULT_DOMAIN: shlink
+      DEFAULT_DOMAIN: __ZELTRO_IP__
       IS_HTTPS_ENABLED: "false"
       SKIP_INITIAL_GEOLITE_DOWNLOAD: "true"
       INITIAL_API_KEY: $api_key
@@ -46,7 +46,7 @@ server {
     location / {
         proxy_pass http://shlink-app:8080;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

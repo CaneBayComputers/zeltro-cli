@@ -26,7 +26,7 @@ services:
       DB_USER: root
       DB_PASSWORD: password
       CSRF_TRUSTED_ORIGINS: http://babybuddy
-      ALLOWED_HOSTS: babybuddy,localhost,127.0.0.1
+      ALLOWED_HOSTS: __ZELTRO_PROJECT__,__ZELTRO_IP__,localhost,127.0.0.1
       EMAIL_HOST: zeltro-mailhog
       EMAIL_PORT: 1025
     volumes:
@@ -51,7 +51,7 @@ server {
     location / {
         proxy_pass http://babybuddy-app:8000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

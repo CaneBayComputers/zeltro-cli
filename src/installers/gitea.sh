@@ -20,6 +20,7 @@ services:
       GITEA__database__USER: root
       GITEA__database__PASSWD: ""
       GITEA__server__ROOT_URL: http://gitea/
+      GITEA__server__DOMAIN: __ZELTRO_IP__
       GITEA__server__HTTP_PORT: 3000
     volumes:
       - gitea-data:/data
@@ -43,7 +44,7 @@ server {
     location / {
         proxy_pass http://gitea-app:3000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }

@@ -349,7 +349,14 @@ while true; do
     # actually claim an address. /etc/hosts used to be consulted here, and a
     # stale entry left by a half-removed project made an address permanently
     # unusable while nothing was using it.
-    if ! zeltro_ip_in_use "$IP_ADDRESS"; then break; fi
+    zeltro_ip_in_use "$IP_ADDRESS" && continue
+    # The last octet is also the host port the project publishes. Skip it when
+    # another project's compose claims it or something on this machine already
+    # listens there (port 111 is rpcbind, 139 is Samba on many boxes), or the
+    # first `zeltro up` fails with "port is already allocated".
+    zeltro_port_in_use "$D_CLASS" && continue
+    (exec 3<>"/dev/tcp/127.0.0.1/$D_CLASS") >/dev/null 2>&1 && continue
+    break
 
 done
 
@@ -534,11 +541,38 @@ for name, svc in services.items():
         if not dep:
             svc.pop('depends_on', None)
 
+def container_port(entry):
+    """The container side of a compose port mapping, or None."""
+    if isinstance(entry, dict):
+        t = entry.get('target')
+        return str(t) if t is not None else None
+    if isinstance(entry, int):
+        return str(entry)
+    s = str(entry).split('/')[0]          # drop /tcp, /udp
+    part = s.rsplit(':', 1)[-1]           # [ip:]host:container -> container
+    part = part.split('-')[0]             # a range: take its first port
+    return part if part.isdigit() else None
+
 for name, svc in services.items():
     svc = svc or {}
     if name == web_name:
         svc['container_name'] = project
         svc['networks'] = {'default': {'ipv4_address': ip}}
+        # Publish one host port, the last octet of the IP -- the convention of
+        # the Zeltro templates ("PROJECT_PORT:80"), which zeltro_project_port
+        # reads for the LAN address and the macOS/Windows localhost URL. Without
+        # it an adapted install had no host port at all: `zeltro status` said
+        # ADDRESS: NOT FOUND and macOS could not reach the app. Upstream
+        # mappings on this service are replaced, not kept beside it: their
+        # fixed host ports (8080, 3000) collide between projects, and the first
+        # mapping in the file is the one zeltro_project_port reports. The
+        # container side is kept from the first upstream mapping, else 80.
+        target = None
+        for entry in (svc.get('ports') or []):
+            target = container_port(entry)
+            if target:
+                break
+        svc['ports'] = ['%s:%s' % (d_class, target or '80')]
         # User-supplied --image overrides the upstream web service image.
         if custom_image:
             svc['image'] = custom_image

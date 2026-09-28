@@ -419,7 +419,7 @@ By default project files are moved to the trash and the database and the project
 
 | Option | Description |
 |--------|-------------|
-| `--force-db-delete` | Also drop the database and the project's named volumes |
+| `--force-db-delete` | Also drop the project's databases, the database users its installer created, and its named volumes. Names come from the project's compose/.env files and its installer; any that another project also uses are kept |
 | `--preserve-database` | Skip database deletion entirely (wins over `--force-db-delete`) |
 
 ### Uninstall Options

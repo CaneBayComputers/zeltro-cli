@@ -23,7 +23,7 @@ services:
       DB_PASSWORD: password
       SECRET_KEY: $secret_key
       DEBUG: "False"
-      ALLOWED_HOSTS: healthchecks,localhost,127.0.0.1
+      ALLOWED_HOSTS: __ZELTRO_PROJECT__,__ZELTRO_IP__,localhost,127.0.0.1
       SITE_ROOT: http://healthchecks
       SITE_NAME: Healthchecks
       SUPERUSER_EMAIL: admin@example.com
@@ -55,7 +55,7 @@ server {
     location / {
         proxy_pass http://healthchecks-app:8000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

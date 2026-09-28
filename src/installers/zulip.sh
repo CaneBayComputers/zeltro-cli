@@ -30,7 +30,7 @@ services:
       DB_HOST_PORT: "5432"
       DB_USER: root
       DB_NAME: zulip
-      SETTING_EXTERNAL_HOST: zulip
+      SETTING_EXTERNAL_HOST: __ZELTRO_IP__
       SETTING_ZULIP_ADMINISTRATOR: admin@zulip.local
       SETTING_EMAIL_HOST: ""
       SETTING_EMAIL_HOST_USER: noreply@zulip.local
@@ -94,7 +94,7 @@ server {
     location / {
         proxy_pass http://zulip-app:80;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;

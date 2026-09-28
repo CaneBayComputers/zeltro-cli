@@ -23,7 +23,7 @@ usage() {
     echo-white "    (pass --force-db-delete to drop both)"
     echo-white ""
     echo-white "Options:"
-    echo-white "  --force-db-delete        Delete the database AND the project's named volumes"
+    echo-white "  --force-db-delete        Delete its databases, database users and named volumes"
     echo-white "  --preserve-database      Skip database deletion entirely"
     echo-white "  --json-output            Output results in JSON format"
     echo-white "  --debug                  Enable debug logging"
@@ -123,44 +123,39 @@ debug "Force trash project: $FORCE_TRASH_PROJECT"
 debug "Force DB delete: $FORCE_DB_DELETE"
 debug "JSON output mode: $JSON_OUTPUT"
 
-# Detect database engine from project config before we trash the directory.
-# Check root .env first, then fall back to scanning all env files and docker-compose.yaml
-# (complex projects with adapted composes often have no root .env).
-DB_ENGINE="mysql"
-HAS_SHARED_DB=false
-_DB_HINTS=""
-# Shared DB hostnames as this machine names them (podium-* on a box installed
-# before the rename), plus both product prefixes so a project folder copied
-# from another box is still recognised. Matching only "zeltro-*" made every
-# project on a podium-* box look DB-less, so --force-db-delete silently kept
-# the database.
-_SHARED_DB_RE="(zeltro|podium)-(postgres|mongo|mariadb)|$(zeltro_service_container postgres)|$(zeltro_service_container mongo)|$(zeltro_service_container mariadb)"
-if [ -f "$PROJECT_DIR/.env" ]; then
-    _DB_HINTS=$(grep -E "^(DB_HOST|DB_CONNECTION)=" "$PROJECT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr '\n' ' ')
+# Work out which shared databases and users this project uses, BEFORE the
+# directory is trashed -- the answer is in its files.
+#
+# This used to assume one database named after the project (t-freescout ->
+# t_freescout) in one engine. Installers name theirs after the app (freescout,
+# mastodon_production) and some create a dedicated user as well, so the real
+# database and the user both survived `--force-db-delete`, and the next install
+# of the same app met a stale schema or a user with a different password.
+# project_db_refs.py reads the project's compose/env/config files, the
+# installer recorded in its x-metadata, and every OTHER project's files, and
+# reports which names are this project's alone ("db"/"user") and which another
+# project also refers to ("shared-db"/"shared-user"), which are never dropped.
+DB_NAME=$(echo "$PROJECT_NAME" | sed 's/-/_/g')
+DB_REFS=""
+if [ -d "$PROJECT_DIR" ]; then
+    DB_REFS=$(ZELTRO_MARIADB="$(zeltro_service_container mariadb)" \
+              ZELTRO_POSTGRES="$(zeltro_service_container postgres)" \
+              ZELTRO_MONGO="$(zeltro_service_container mongo)" \
+              python3 "$DEV_DIR/scripts/project_db_refs.py" "$PROJECTS_DIR_PATH" "$PROJECT_NAME" "$DEV_DIR/installers" 2>/dev/null) || DB_REFS=""
 fi
-if [ -z "$_DB_HINTS" ]; then
-    # No root .env or no DB_HOST/DB_CONNECTION in it — scan env files (the root
-    # .env too: installers like langfuse and plane name the host in DATABASE_URL or
-    # PGHOST there) and docker-compose.yaml for Zeltro shared service hostnames
-    _DB_HINTS=$(grep -rhE "$_SHARED_DB_RE" \
-        "$PROJECT_DIR"/.env "$PROJECT_DIR"/*.env "$PROJECT_DIR"/.env.* "$PROJECT_DIR"/env/ \
-        "$PROJECT_DIR"/docker-compose.yaml "$PROJECT_DIR"/docker-compose.yml \
-        2>/dev/null | head -5 | tr '\n' ' ')
-fi
-if echo "$_DB_HINTS" | grep -qiE "postgres|pgsql|postgresql"; then
-    DB_ENGINE="postgres"
-elif echo "$_DB_HINTS" | grep -qiE "mongo"; then
-    DB_ENGINE="mongo"
-fi
+_refs() { printf '%s\n' "$DB_REFS" | awk -v k="$1" '$1 == k { print $2 }'; }
+DB_ENGINES="$(_refs engine | tr '\n' ' ')"
+DB_CANDIDATES="$(_refs db | tr '\n' ' ')"
+USER_CANDIDATES="$(_refs user | tr '\n' ' ')"
+SHARED_DBS="$(_refs shared-db | tr '\n' ' ')"
+SHARED_USERS="$(_refs shared-user | tr '\n' ' ')"
 
 # A project only uses a shared Zeltro DB if its config references one of the
-# zeltro-* hostnames (podium-* on a box installed before the rename). Bundled-DB
-# projects (e.g. budibase) don't, so we should
-# skip the start-services + DROP DATABASE step entirely for those.
-if echo "$_DB_HINTS" | grep -qE "$_SHARED_DB_RE"; then
-    HAS_SHARED_DB=true
-fi
-debug "Detected database engine: $DB_ENGINE, uses shared DB: $HAS_SHARED_DB"
+# shared database containers. Bundled-DB projects (e.g. budibase) don't, so the
+# start-services + DROP step is skipped entirely for those.
+HAS_SHARED_DB=false
+[ -n "${DB_ENGINES// /}" ] && HAS_SHARED_DB=true
+debug "Shared DB engines: $DB_ENGINES databases: $DB_CANDIDATES users: $USER_CANDIDATES shared: $SHARED_DBS $SHARED_USERS"
 
 # No interactive confirmation. The database is PRESERVED by default and only
 # dropped when --force-db-delete is passed (non-destructive default).
@@ -168,7 +163,7 @@ if [[ "$JSON_OUTPUT" != "1" ]]; then
     echo-cyan "This will remove the project '$PROJECT_NAME' and associated settings."
     echo-cyan "Project files will be moved to trash (recoverable)."
     if [ "$HAS_SHARED_DB" = true ] && [ "$FORCE_DB_DELETE" = false ] && [ "$PRESERVE_DATABASE" = false ]; then
-        echo-yellow "The shared database '$DB_ENGINE' will be PRESERVED — pass --force-db-delete to drop it."
+        echo-yellow "Its database(s) will be PRESERVED — pass --force-db-delete to drop them."
     fi
     echo-white
 fi
@@ -286,80 +281,149 @@ else
     echo-white
 fi
 
-# 5. Ask if user wants to delete the associated database
-DB_NAME=$(echo "$PROJECT_NAME" | sed 's/-/_/g')
+# 5. Drop the project's databases and users (only with --force-db-delete).
 DELETE_DB_CONFIRM="n"
+_db_list_text="${DB_CANDIDATES% }"
+[ -n "$_db_list_text" ] || _db_list_text="$DB_NAME"
 
-# Database is preserved by default; only dropped with --force-db-delete.
 if [ "$PRESERVE_DATABASE" = true ]; then
-    echo-cyan "Preserving database '$DB_NAME' (--preserve-database)."
+    echo-cyan "Preserving database(s) $_db_list_text (--preserve-database)."
     echo-white
-    DELETE_DB_CONFIRM="n"
 elif [ "$HAS_SHARED_DB" = false ]; then
     debug "Project has no shared Zeltro DB hostnames — skipping database step"
     echo-cyan "Project '$PROJECT_NAME' does not use a Zeltro shared database (bundled DB or none). Skipping database step."
     echo-white
-    DELETE_DB_CONFIRM="n"
 elif [ "$FORCE_DB_DELETE" = true ]; then
-    echo-cyan "Deleting database '$DB_NAME' (--force-db-delete)..."
+    echo-cyan "Deleting the project's databases and users (--force-db-delete)..."
+    echo-white
     DELETE_DB_CONFIRM="y"
 else
-    echo-cyan "Preserving database '$DB_NAME' (default). Pass --force-db-delete to drop it."
+    echo-cyan "Preserving database(s) $_db_list_text (default). Pass --force-db-delete to drop them."
     echo-white
-    DELETE_DB_CONFIRM="n"
 fi
 
+DROPPED_DBS=""
+DROPPED_USERS=""
 if [[ "$DELETE_DB_CONFIRM" == "y" ]]; then
 
-    # Start services
-    "$DEV_DIR/scripts/start_services.sh"
+    # Make sure the engine is up long enough to drop from. A stopped shared
+    # container is started, but a service is never ENABLED here: a machine that
+    # has no Postgres container has no Postgres database to drop.
+    _engine_ready() {
+        local c="$1" kind="$2" i
+        docker container inspect "$c" >/dev/null 2>&1 || return 1
+        docker start "$c" >/dev/null 2>&1 || true
+        for i in $(seq 1 30); do
+            case "$kind" in
+                postgres) docker container exec "$c" pg_isready -U root >/dev/null 2>&1 && return 0 ;;
+                mariadb)  docker container exec "$c" mariadb -u root -e "SELECT 1" >/dev/null 2>&1 && return 0 ;;
+                mongo)    docker container exec "$c" mongosh --quiet --eval "1" >/dev/null 2>&1 && return 0 ;;
+            esac
+            sleep 1
+        done
+        return 1
+    }
 
-    # Check if db exists
-    echo-cyan "Checking if database '$DB_NAME' exists in $DB_ENGINE..."
+    _in_list() { case " $2 " in *" $1 "*) return 0 ;; esac; return 1; }
+
+    for _db in $SHARED_DBS; do
+        echo-yellow "Keeping database '$_db': another project also uses it."
+    done
+    for _u in $SHARED_USERS; do
+        echo-yellow "Keeping database user '$_u': another project also uses it."
+    done
+
+    _pg="$(zeltro_service_container postgres)"
+    _my="$(zeltro_service_container mariadb)"
+    _mongo="$(zeltro_service_container mongo)"
+
+    for _engine in $DB_ENGINES; do
+        case "$_engine" in
+            postgres)
+                if ! _engine_ready "$_pg" postgres; then
+                    echo-yellow "Shared postgres container '$_pg' is not available; its databases were not checked."
+                    continue
+                fi
+                _existing_dbs=$(docker container exec -e PGPASSWORD=password "$_pg" psql -U root -d postgres -tAc "SELECT datname FROM pg_database;" 2>/dev/null | tr '\n' ' ' || true)
+                _existing_users=$(docker container exec -e PGPASSWORD=password "$_pg" psql -U root -d postgres -tAc "SELECT rolname FROM pg_roles WHERE NOT rolsuper;" 2>/dev/null | tr '\n' ' ' || true)
+                for _db in $DB_CANDIDATES; do
+                    _in_list "$_db" "$_existing_dbs" || continue
+                    if docker container exec -e PGPASSWORD=password "$_pg" psql -U root -d postgres -c "DROP DATABASE \"$_db\" WITH (FORCE);" >/dev/null 2>&1 \
+                        || docker container exec -e PGPASSWORD=password "$_pg" psql -U root -d postgres -c "DROP DATABASE \"$_db\";" >/dev/null 2>&1; then
+                        echo-green "Database '$_db' deleted from PostgreSQL."
+                        DROPPED_DBS="$DROPPED_DBS $_db"
+                    else
+                        echo-yellow "Could not delete PostgreSQL database '$_db'."
+                    fi
+                done
+                for _u in $USER_CANDIDATES; do
+                    _in_list "$_u" "$_existing_users" || continue
+                    if docker container exec -e PGPASSWORD=password "$_pg" psql -U root -d postgres -c "DROP ROLE \"$_u\";" >/dev/null 2>&1; then
+                        echo-green "PostgreSQL role '$_u' deleted."
+                        DROPPED_USERS="$DROPPED_USERS $_u"
+                    else
+                        echo-yellow "Could not delete PostgreSQL role '$_u' (it may still own objects elsewhere)."
+                    fi
+                done
+                ;;
+            mongo)
+                if ! _engine_ready "$_mongo" mongo; then
+                    echo-yellow "Shared mongo container '$_mongo' is not available; its databases were not checked."
+                    continue
+                fi
+                _existing_dbs=$(docker container exec "$_mongo" mongosh --quiet -u root -p password --authenticationDatabase admin --eval "db.getMongo().getDBNames().join(' ')" 2>/dev/null \
+                    || docker container exec "$_mongo" mongosh --quiet --eval "db.getMongo().getDBNames().join(' ')" 2>/dev/null || true)
+                for _db in $DB_CANDIDATES; do
+                    _in_list "$_db" "$_existing_dbs" || continue
+                    if docker container exec "$_mongo" mongosh --quiet -u root -p password --authenticationDatabase admin --eval "db.getSiblingDB('$_db').dropDatabase();" >/dev/null 2>&1 \
+                        || docker container exec "$_mongo" mongosh --quiet --eval "db.getSiblingDB('$_db').dropDatabase();" >/dev/null 2>&1; then
+                        echo-green "Database '$_db' deleted from MongoDB."
+                        DROPPED_DBS="$DROPPED_DBS $_db"
+                    else
+                        echo-yellow "Could not delete MongoDB database '$_db'."
+                    fi
+                done
+                ;;
+            mariadb)
+                if ! _engine_ready "$_my" mariadb; then
+                    echo-yellow "Shared mariadb container '$_my' is not available; its databases were not checked."
+                    continue
+                fi
+                _existing_dbs=$(docker container exec "$_my" mariadb -u root -N -e "SHOW DATABASES;" 2>/dev/null | tr '\n' ' ' || true)
+                for _db in $DB_CANDIDATES; do
+                    _in_list "$_db" "$_existing_dbs" || continue
+                    if docker container exec "$_my" mariadb -u root -e "DROP DATABASE \`$_db\`;" >/dev/null 2>&1; then
+                        echo-green "Database '$_db' deleted from MariaDB."
+                        DROPPED_DBS="$DROPPED_DBS $_db"
+                    else
+                        echo-yellow "Could not delete MariaDB database '$_db'."
+                    fi
+                done
+                for _u in $USER_CANDIDATES; do
+                    # A user exists once per host it may connect from ('x'@'%',
+                    # 'x'@'localhost'); drop every one of them.
+                    _hosts=$(docker container exec "$_my" mariadb -u root -N -e "SELECT host FROM mysql.user WHERE user='$_u';" 2>/dev/null || true)
+                    [ -n "$_hosts" ] || continue
+                    _ok=1
+                    while IFS= read -r _h; do
+                        [ -n "$_h" ] || continue
+                        docker container exec "$_my" mariadb -u root -e "DROP USER '$_u'@'$_h';" >/dev/null 2>&1 || _ok=0
+                    done <<< "$_hosts"
+                    if [ "$_ok" = 1 ]; then
+                        echo-green "MariaDB user '$_u' deleted."
+                        DROPPED_USERS="$DROPPED_USERS $_u"
+                    else
+                        echo-yellow "Could not delete every host entry of MariaDB user '$_u'."
+                    fi
+                done
+                ;;
+        esac
+    done
+
+    if [ -z "$DROPPED_DBS" ] && [ -z "$DROPPED_USERS" ]; then
+        echo-yellow "No database or user of '$PROJECT_NAME' was found to delete."
+    fi
     echo-white
-
-    case "$DB_ENGINE" in
-        postgres)
-            DB_EXISTS=$(docker container exec -e PGPASSWORD=password "$POSTGRES_CONTAINER_NAME" psql -U root -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME';" 2>/dev/null || true)
-            if [ -n "$DB_EXISTS" ]; then
-                echo-cyan "Deleting database '$DB_NAME' from PostgreSQL..."
-                echo-white
-                docker container exec -e PGPASSWORD=password "$POSTGRES_CONTAINER_NAME" psql -U root -d postgres -c "DROP DATABASE \"$DB_NAME\";" >/dev/null 2>&1 \
-                    && echo-green "Database '$DB_NAME' deleted." \
-                    || echo-yellow "Database deletion failed."
-                echo-white
-            else
-                echo-yellow "Database '$DB_NAME' not found in PostgreSQL. Skipping deletion."
-                echo-white
-            fi
-            ;;
-        mongo)
-            DB_EXISTS=$(docker container exec "$MONGO_CONTAINER_NAME" mongosh --quiet --eval "db.getMongo().getDBNames().indexOf('$DB_NAME') >= 0 ? '1' : ''" 2>/dev/null || true)
-            if [ "$DB_EXISTS" = "1" ]; then
-                echo-cyan "Deleting database '$DB_NAME' from MongoDB..."
-                echo-white
-                docker container exec "$MONGO_CONTAINER_NAME" mongosh --quiet --eval "db.getSiblingDB('$DB_NAME').dropDatabase();" >/dev/null 2>&1 \
-                    && echo-green "Database '$DB_NAME' deleted." \
-                    || echo-yellow "Database deletion failed."
-                echo-white
-            else
-                echo-yellow "Database '$DB_NAME' not found in MongoDB. Skipping deletion."
-                echo-white
-            fi
-            ;;
-        *)
-            DB_EXISTS=$(docker container exec "$MARIADB_CONTAINER_NAME" mariadb -u root -e "SHOW DATABASES LIKE '$DB_NAME';" 2>/dev/null | grep "$DB_NAME" || true)
-            if [ -n "$DB_EXISTS" ]; then
-                echo-cyan "Deleting database '$DB_NAME' from MariaDB..."
-                echo-white
-                json-mysql -u root -e "DROP DATABASE \`$DB_NAME\`;" && echo-green "Database '$DB_NAME' deleted." || echo-yellow "Database deletion failed."
-                echo-white
-            else
-                echo-yellow "Database '$DB_NAME' not found in MariaDB. Skipping deletion."
-                echo-white
-            fi
-            ;;
-    esac
 
 else
     echo-yellow "Database deletion skipped."

@@ -61,7 +61,7 @@ server {
         proxy_pass http://home-assistant-app:8123;
         proxy_method $ha_proxy_method;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

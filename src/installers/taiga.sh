@@ -14,7 +14,7 @@ write_files() {
 
     cat > .env << EOF
 TAIGA_SCHEME=http
-TAIGA_DOMAIN=taiga
+TAIGA_DOMAIN=__ZELTRO_IP__
 SUBPATH=""
 WEBSOCKETS_SCHEME=ws
 SECRET_KEY="$secret_key"

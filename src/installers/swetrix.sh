@@ -147,7 +147,7 @@ server {
   location /backend/ {
     proxy_pass http://swetrix-api:5005/;
     proxy_http_version 1.1;
-    proxy_set_header Host $host;
+    proxy_set_header Host $http_host;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
     proxy_set_header X-Real-IP $remote_addr;
@@ -162,7 +162,7 @@ server {
   location / {
     proxy_pass http://swetrix-fe:3000;
     proxy_http_version 1.1;
-    proxy_set_header Host $host;
+    proxy_set_header Host $http_host;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
     proxy_set_header X-Real-IP $remote_addr;

@@ -19,10 +19,10 @@ services:
       FORGEJO__database__NAME: forgejo
       FORGEJO__database__USER: root
       FORGEJO__database__PASSWD: ""
-      FORGEJO__server__DOMAIN: forgejo
+      FORGEJO__server__DOMAIN: __ZELTRO_IP__
       FORGEJO__server__ROOT_URL: http://forgejo/
       FORGEJO__server__HTTP_PORT: 3000
-      FORGEJO__server__SSH_DOMAIN: forgejo
+      FORGEJO__server__SSH_DOMAIN: __ZELTRO_IP__
       FORGEJO__mailer__ENABLED: "true"
       FORGEJO__mailer__PROTOCOL: smtp
       FORGEJO__mailer__SMTP_ADDR: zeltro-mailhog
@@ -50,7 +50,7 @@ server {
     location / {
         proxy_pass http://forgejo-app:3000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

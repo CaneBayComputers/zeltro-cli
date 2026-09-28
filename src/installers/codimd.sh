@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
     environment:
       CMD_DB_URL: postgres://root:password@zeltro-postgres:5432/codimd
-      CMD_DOMAIN: codimd
+      CMD_DOMAIN: __ZELTRO_IP__
       CMD_URL_ADDPORT: "false"
       CMD_PROTOCOL_USESSL: "false"
       CMD_HSTS_ENABLE: "false"
@@ -49,7 +49,7 @@ server {
     location / {
         proxy_pass http://codimd-app:3000;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
