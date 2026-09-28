@@ -10,8 +10,11 @@ optional desktop app that runs on top of it. On Linux and macOS, both install
 from source with one command. The checkout you install from is the one that
 runs, and updating is a `git pull`.
 
-There is no packaged download yet: no `.exe`, `.deb`, `.rpm`, pacman package
-or `.dmg`.
+Packaged builds of the desktop app are on the [releases page](https://github.com/CaneBayComputers/zeltro-gui/releases/latest) since
+v1.0.0-beta.2 (September 2026): a Windows Setup `.exe`, `.deb`, `.rpm`, a pacman
+package, and `.dmg` for Intel and Apple silicon. On Linux and macOS the one-line
+installers below are still the recommended route, because they also install the
+CLI and Docker.
 
 Run the commands below as your normal user, not as root.
 
@@ -57,10 +60,13 @@ cd zeltro-gui && ./install-ubuntu.sh
 
 **Windows**
 
-An installer is coming. A Windows Setup `.exe` has been built and tested but
-isn't released yet. When it is, it will be at
-[zeltro.build/download/windows](https://zeltro.build/download/windows). See
-[Windows](#windows) below for what works today.
+Download the installer from
+[zeltro.build/download/windows](https://zeltro.build/download/windows). It is a
+normal Setup `.exe` (about 128 MB, beta) that installs for your account only, so
+it needs no admin rights, and it updates itself from new releases. It is not
+code-signed yet, so Windows may say it "protected your PC": choose
+**More info → Run anyway**. See [Windows](#windows) below for how to run your
+projects once it is installed.
 
 ### After installing
 
@@ -138,13 +144,12 @@ on GitHub.
 
 ---
 
-## Why no packages?
+## Packages or the install script?
 
-On Linux and macOS, installing from source gives you one path to maintain
-instead of one build per distro. It also means there's no version skew
-between what you downloaded and what's in the repository. The GUI repository
-can still build `.deb`, `.rpm`, pacman and `.dmg` packages, but none are
-published.
+On Linux and macOS, the install script is still the recommended route: it
+installs the CLI and Docker along with the app, and updating is a `git pull`.
+The `.deb`, `.rpm`, pacman and `.dmg` packages on the
+[releases page](https://github.com/CaneBayComputers/zeltro-gui/releases/latest) install the desktop app only.
 
 A source install also avoids the macOS Gatekeeper problem. Unsigned `.dmg`
 builds get blocked on first launch with an "unidentified developer" warning,
