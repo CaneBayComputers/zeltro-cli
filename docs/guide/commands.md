@@ -118,6 +118,7 @@ Commands marked *(project dir)* must be run from inside a project directory.
 | `zeltro ai-unattended [agent] [--revoke\|--status]` | Let an agent run without approval prompts (written to the agent's own config) |
 | `zeltro peers` | List agent sessions running in the Zeltro app, on every host |
 | `zeltro send <project>[@host] ... -- <message>` | Message other agent sessions *(project dir)* |
+| `zeltro gui <action>` | From an agent in the Zeltro app: ask the user a question, collect a secret into `.env`, notify, or open a URL *(project dir)* |
 | `zeltro update [--full]` | Update the CLI with a `git pull` (`--full` also re-runs the platform installer and re-pulls images, stopping running projects) |
 | `zeltro start-services` | Start the shared services |
 | `zeltro stop-services` | Stop the shared services |
@@ -171,6 +172,22 @@ git diff | zeltro send api -- -                # read the message from stdin
 - Every target must be a live session, or nothing is sent. Messages are capped at 16 KB.
 - With a single target the `--` is optional: `zeltro send blog "message"`.
 - Exit 0 means queued. The message arrives in the target's terminal as `[Zeltro message from <you>@<host> to <targets>] ...`.
+
+#### Asking the Zeltro app for things
+
+An agent in a session the Zeltro app started can use the app's window to reach the user:
+
+```bash
+zeltro gui ask "Which database?" --option Postgres --option MariaDB   # prints the answer
+zeltro gui secret STRIPE_KEY --reason "for checkout"   # writes it into .env; never printed
+zeltro gui notify --level warning "Tests failing" "3 failures in api/"
+zeltro gui open --project                               # or: zeltro gui open https://...
+zeltro gui settings ai --reason "add an OpenRouter key"
+```
+
+Exit codes: 0 ok, 1 error, 2 usage, 3 the app isn't available (ask in the chat instead), 4 timed out, 5 the user declined, 6 the app refused. `secret` only writes to files inside the project.
+
+`zeltro ai` and `zeltro resume` also tell the app when each turn ends, using `zeltro gui event` as a hook for Claude Code, Codex and aider. The hook flags last one run and don't change your config files, and Codex's is skipped if you've set your own `notify`.
 
 #### `zeltro ai-set` options
 

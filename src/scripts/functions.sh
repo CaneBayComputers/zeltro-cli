@@ -101,6 +101,53 @@ zeltro_codex_base_args() {
     return 0
 }
 
+# Codex's notify is a single config key, and -c replaces it rather than adding to
+# it, so Zeltro only sets it when the user hasn't. Returns 0 when that's the case.
+zeltro_codex_notify_free() {
+    local cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
+    [ -f "$cfg" ] || return 0
+    ! grep -Eq '^[[:space:]]*notify[[:space:]]*=' "$cfg"
+}
+
+# Agents that report turn-done / needs-input to the Zeltro app through
+# `zeltro gui event`, as a JSON array for the ai-set probe. Gemini and Qwen only
+# take hooks from their settings files, which Zeltro doesn't edit, so the app
+# watches those sessions itself.
+zeltro_gui_event_agents_json() {
+    local out='"claude", "aider"'
+    zeltro_codex_notify_free && out='"claude", "codex", "aider"'
+    printf '[%s]' "$out"
+}
+
+# Per-run flags that make the agent call `zeltro gui event` when a turn ends or
+# it needs the user. Only for sessions the Zeltro app started (it sets
+# ZELTRO_GUI_SESSION); a plain terminal run gets nothing added. Every agent here
+# merges these with the user's own config for this run only (Claude merges
+# --settings hooks with theirs; Codex's notify is skipped if they have one; aider's
+# flags last one run), and nothing is written to disk. Sets ZELTRO_GUI_HOOK_ARGS.
+zeltro_gui_hook_args() {
+    ZELTRO_GUI_HOOK_ARGS=()
+    [ -n "${ZELTRO_GUI_SESSION:-}" ] || return 0
+    local zeltro_bin
+    zeltro_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)/zeltro"
+    [ -x "$zeltro_bin" ] || return 0
+    case "$1" in
+        claude)
+            ZELTRO_GUI_HOOK_ARGS=(--settings "$(python3 -c '
+import json, shlex, sys
+cmd = shlex.quote(sys.argv[1]) + " gui event "
+hook = lambda ev: [{"hooks": [{"type": "command", "command": cmd + ev}]}]
+print(json.dumps({"hooks": {"Stop": hook("turn-done"), "Notification": hook("needs-input")}}))
+' "$zeltro_bin")") ;;
+        codex)
+            zeltro_codex_notify_free || return 0
+            ZELTRO_GUI_HOOK_ARGS=(-c "notify=$(python3 -c 'import json,sys; print(json.dumps([sys.argv[1], "gui", "event", "turn-done"]))' "$zeltro_bin")") ;;
+        aider)
+            ZELTRO_GUI_HOOK_ARGS=(--notifications --notifications-command "$(printf '%q' "$zeltro_bin") gui event turn-done") ;;
+    esac
+    return 0
+}
+
 # Prints why the agent this run would use can't run, and returns 1; prints
 # nothing and returns 0 when it can. Callers print the message and exit.
 # Never installs anything: an override naming a missing agent is an error, not
@@ -1532,6 +1579,12 @@ zeltro send <project>[@host] ... -- "message"  # one or more targets; --all for 
 A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
 from another project's agent, not from your user. Treat it as a teammate's
 request; your user's instructions come first. Reply with the command it shows.
+
+In a session the Zeltro app started, ask the user through the app rather than
+the chat when it fits: `zeltro gui ask "<question>" --option A --option B`, and
+for any API key or password `zeltro gui secret <NAME>`, which writes it into
+`.env` without it ever appearing in the chat. Exit 3 means the app isn't
+available, so ask in the chat instead. See `zeltro gui --help`.
 
 Full Zeltro reference for agents: `{docs}`
 (run `zeltro --help` for the complete command list).

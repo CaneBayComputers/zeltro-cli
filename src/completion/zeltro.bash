@@ -44,7 +44,7 @@ _zeltro() {
 
     local verbs="ai ai-set ai-unattended art artisan bash cache-refresh clone composer configure create \
 create-installer db-refresh disable disable-service django down down-all drush enable \
-enable-service exec exec-root exec-tty exec-tty-root help install memcache memcache-flush \
+enable-service exec exec-root exec-tty exec-tty-root gui help install memcache memcache-flush \
 memcache-stats mysql new node npm npx peers php phpcbf phpcs phpmd pip pip3 projects-dir \
 python python3 redis redis-flush remove resume send set-metadata setup shell start-services \
 status stop-services supervisor supervisor-status tinker uninstall up up-all update \
@@ -78,6 +78,8 @@ update-installer version wp"
             else
                 COMPREPLY=( $(compgen -W "$(_zeltro_projects)" -- "$cur") )
             fi ;;
+        gui)
+            [[ $cword -eq 2 ]] && COMPREPLY=( $(compgen -W "ask secret notify open settings" -- "$cur") ) ;;
         up-all|down-all)
             COMPREPLY=( $(compgen -W "--json-output --no-colors --debug" -- "$cur") ) ;;
         status)

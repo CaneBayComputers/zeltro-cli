@@ -78,6 +78,18 @@ When the Zeltro app hosts agent sessions in several projects (on one host or sev
 
 The app does the routing through a per-user spool, `~/.zeltro/bus/`: it publishes `peers.json`, and `send` drops one JSON file per message in `outbox/`.
 
+### Asking the Zeltro app for things
+
+In a session the Zeltro app started (it sets `ZELTRO_GUI_SESSION`), an agent can ask the app to do things the user sees in its window:
+
+- `zeltro gui ask "<question>" --option <a> --option <b> [--default <a>]` shows a question with 1–6 answers and prints the one chosen.
+- `zeltro gui secret <NAME> [--file .env] [--reason "..."]` asks the user for an API key or password and writes `NAME=<value>` into that file in the project. The value is never printed, so it stays out of the transcript. Use this instead of asking the user to paste a secret into the chat.
+- `zeltro gui notify [--level info|warning|danger] "<title>" ["<message>"]`, `zeltro gui open <url>|--project` and `zeltro gui settings <general|appearance|services|remotes|ai|github>` notify the user, open a page, or open a settings tab.
+
+Exit codes: 0 ok, 1 error, 2 usage, **3 the app isn't available (ask in the chat instead)**, 4 timed out, 5 the user declined, 6 the app refused (e.g. a path outside the project). Outside the app, `ask` and `secret` exit 3 at once, so an agent can always try them first and fall back to the chat.
+
+`zeltro gui event <turn-done|needs-input|build-done>` tells the app a turn ended; `zeltro ai` and `zeltro resume` wire it up as a hook for Claude Code, Codex (unless you set your own `notify`) and aider, per run, without changing their config files. It always exits 0. Requests travel through `~/.zeltro/bus/gui/{requests,replies}/`.
+
 ---
 
 ## Graphics & Image Tools (host)
