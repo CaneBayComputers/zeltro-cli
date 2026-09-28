@@ -89,6 +89,13 @@ grep -q '"session": "s1"' "$T/seen" && grep -q '"project": "demo"' "$T/seen" \
 
 expect_code 4 "ask times out" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" ask "slow?" --option A --timeout 1
 [ -z "$(ls "$ZELTRO_BUS_DIR/gui/requests")" ] && ok "timed-out request withdrawn" || bad "request left behind"
+[ "$(ls "$ZELTRO_BUS_DIR/gui/cancel" | wc -l)" = 1 ] && ok "picked-up request cancelled" || bad "no cancel marker"
+rm -f "$ZELTRO_BUS_DIR"/gui/cancel/*
+kill -STOP $APP_PID    # the app is busy: the request is still unread when the caller gives up
+expect_code 4 "ask times out unread" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" ask "Q?" --option A --timeout 1
+kill -CONT $APP_PID
+[ -z "$(ls "$ZELTRO_BUS_DIR/gui/requests")" ] && [ -z "$(ls "$ZELTRO_BUS_DIR/gui/cancel")" ] \
+    && ok "unread request deleted, no cancel needed" || bad "unread timeout left files"
 
 printf 'APP_KEY=abc\nAPI_KEY=old\nexport API_KEY=older\n' > "$PROJ/.env"
 expect_code 0 "secret" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" secret API_KEY

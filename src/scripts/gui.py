@@ -10,6 +10,9 @@ turn ends. Requests go through the same per-user spool as `zeltro send`:
                                  {"version": 1, "id", "action", "args": {...},
                                   "from": {"project", "host", "session"},
                                   "sent_at": "<ISO8601 UTC>"}
+  <bus>/gui/cancel/<id>          written here when the caller gives up (timeout,
+                                 Ctrl-C) after the app already took the request,
+                                 so the app can close its dialog. Empty file.
   <bus>/gui/replies/<id>.json    written by the app for actions that wait:
                                  {"version": 1, "id", "status": "ok" | "declined"
                                   | "refused" | "error", "result": {...},
@@ -17,7 +20,7 @@ turn ends. Requests go through the same per-user spool as `zeltro send`:
                                  read and deleted here.
 
 The app deletes anything older than 10 minutes from both directories, which
-covers a caller killed while it waited. Files are 0600, directories 0700: a
+covers a caller killed while it waited. It deletes cancel/ files too. Files are 0600, directories 0700: a
 secret's value passes through a reply file.
 
 Exit codes: 0 ok, 1 error, 2 usage, 3 the app is not available (ask in the chat
@@ -61,6 +64,7 @@ VERSION = 1
 GUI = os.path.join(bus.BUS, "gui")
 REQUESTS = os.path.join(GUI, "requests")
 REPLIES = os.path.join(GUI, "replies")
+CANCELS = os.path.join(GUI, "cancel")
 JSON_OUT = bus.JSON_OUT
 POLL = 0.25
 EVENT_GAP = 2.0           # seconds: at most one event of a type per session this often
@@ -136,7 +140,7 @@ def app_problem():
 
 
 def ensure_dirs():
-    for d in (bus.BUS, GUI, REQUESTS, REPLIES):
+    for d in (bus.BUS, GUI, REQUESTS, REPLIES, CANCELS):
         os.makedirs(d, mode=0o700, exist_ok=True)
         try:
             os.chmod(d, 0o700)
@@ -179,16 +183,33 @@ def discard(path):
         pass
 
 
+def withdraw(rid):
+    """Take a request back. If the app hasn't picked it up yet, deleting it is
+    enough; if it has, a dialog may be open, so leave a cancel marker for it."""
+    req = os.path.join(REQUESTS, rid + ".json")
+    try:
+        os.unlink(req)
+        return
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return
+    try:
+        fd = os.open(os.path.join(CANCELS, rid), os.O_WRONLY | os.O_CREAT, 0o600)
+        os.close(fd)
+    except OSError:
+        pass
+
+
 def wait_reply(rid, timeout):
     """-> reply dict, or None on timeout. Withdraws the request if it gives up."""
-    req = os.path.join(REQUESTS, rid + ".json")
     rep = os.path.join(REPLIES, rid + ".json")
 
-    def withdraw(*_):
-        discard(req)
+    def interrupted(*_):
+        withdraw(rid)
         sys.exit(130)
-    signal.signal(signal.SIGINT, withdraw)
-    signal.signal(signal.SIGTERM, withdraw)
+    signal.signal(signal.SIGINT, interrupted)
+    signal.signal(signal.SIGTERM, interrupted)
 
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -201,8 +222,9 @@ def wait_reply(rid, timeout):
             continue
         discard(rep)
         return reply if isinstance(reply, dict) else {"status": "error", "error": "malformed reply"}
-    # Nobody answered: take the question back so the app doesn't show it late.
-    discard(req)
+    # Nobody answered: take the question back so the app doesn't show it late,
+    # or close it if it's already showing.
+    withdraw(rid)
     return None
 
 
