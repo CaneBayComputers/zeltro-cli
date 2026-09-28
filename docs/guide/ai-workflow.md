@@ -128,7 +128,7 @@ part of a settings change. For throwaway containers and CI, `ZELTRO_AI_AUTO_APPR
 adds each agent's bypass flag to a single run instead.
 
 {: .warning }
-With unattended mode on, the agent can change anything your user account can. Only use `zeltro ai` and `zeltro create` in directories you're comfortable letting an AI modify freely. `zeltro resume` currently starts Claude, Codex, Qwen Code and Gemini with their approval-bypass flags whatever this setting says.
+With unattended mode on, the agent can change anything your user account can. Only use `zeltro ai`, `zeltro create` and `zeltro resume` in directories you're comfortable letting an AI modify freely. All three follow this setting; `ZELTRO_AI_AUTO_APPROVE=1` overrides it for one run.
 
 ---
 

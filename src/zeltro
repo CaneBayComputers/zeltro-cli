@@ -56,14 +56,15 @@ show_help() {
     echo-white "WHAT IT IS:"
     echo "  Zeltro is a Docker-based local development manager for PHP, Python, and Node"
     echo "  projects, built for developers running multiple projects and for AI agents that"
-    echo "  need a stable platform to operate inside. Every project gets a stable hostname"
-    echo "  (http://<project-name>/, reachable from your browser and from inside containers)"
+    echo "  need a stable platform to operate inside. Every project gets its own address"
+    echo "  (\`zeltro status <project>\` prints it) and a name other containers reach it by,"
     echo "  and connects to one set of SHARED services — one zeltro-postgres, one"
     echo "  zeltro-mariadb, one zeltro-redis, one zeltro-mongo, one zeltro-memcached —"
     echo "  used by all projects on the machine."
     echo
     echo "  Greenfield scaffolding (laravel/kavera/octobercms/drupal/wordpress/php/fastapi/flask/django/python/"
-    echo "  express/nestjs/fastify/node), 200+ one-command installers for popular OSS apps, AI-driven"
+    echo "  express/nestjs/fastify/node/nextjs/nuxt/sveltekit/astro/hono/react/vue), 200+ one-command"
+    echo "  installers for popular OSS apps, AI-driven"
     echo "  project creation (zeltro create), and an interactive AI session in every"
     echo "  new/cloned/installed project are first-class."
     echo
@@ -72,8 +73,8 @@ show_help() {
     echo "  zeltro-mariadb, zeltro-redis, zeltro-mongo, zeltro-memcached, zeltro-mailhog."
     echo
     echo-white "DOCS FOR AGENTS:"
-    echo "  /usr/local/share/zeltro-cli/AGENTS.md       — agent-facing reference (read first)"
-    echo "  /usr/local/share/zeltro-cli/DEVELOPMENT.md  — modifying Zeltro itself"
+    echo "  $(dirname "$SCRIPT_DIR")/AGENTS.md       — agent-facing reference (read first)"
+    echo "  $(dirname "$SCRIPT_DIR")/DEVELOPMENT.md  — modifying Zeltro itself"
     echo
     echo-white "CONTAINERIZED DEVELOPMENT TOOLS: (Run from project directory)"
     echo "  zeltro composer <args>    - Run Composer inside container"
@@ -142,13 +143,14 @@ show_help() {
     echo "  zeltro configure          - Configure Zeltro environment"
     echo "  zeltro ai \"<prompt>\"      - Send a one-off prompt to the AI agent (--interactive for a session)"
     echo "  zeltro ai-set             - Configure AI agent and model"
+    echo "  zeltro ai-unattended [agent] - Let an agent run without approval prompts (--status, --revoke)"
     echo "  zeltro peers              - List agent sessions running in the Zeltro app (all hosts)"
     echo "  zeltro send <p>[@host] ... -- <msg>"
     echo "                            - Message other agent sessions (--all for everyone else;"
     echo "                              - reads the message from stdin). Run it from your project."
     echo "  zeltro update [--full]    - Update Zeltro CLI (--full also re-pulls Docker images)"
     echo "  zeltro start-services     - Start shared services"
-    echo "  zeltro enable-service <n> - Enable an optional shared service (minio, meilisearch)"
+    echo "  zeltro enable-service <n> - Enable an optional shared service (run it bare to list them)"
     echo "  zeltro disable-service <n>- Disable an optional shared service"
     echo "  zeltro stop-services      - Stop shared services"
     echo "  zeltro uninstall          - Remove Zeltro Docker resources"
@@ -172,12 +174,12 @@ show_help() {
     echo-white "CREATE PROJECT OPTIONS:"
     echo "  --classify-only           - Work out the stack, print it, and stop (creates nothing,"
     echo "                              never prompts; add --json-output for machine-readable)"
-    echo "  --one-off                 - Stop after creation; skip the AI handoff"
+    echo "  --one-off                 - No menus: take the top recommendation (the AI still builds it)"
     echo "  -f, --file <path>         - Read the project idea from a file"
     echo
     echo-white "NEW PROJECT OPTIONS:"
     echo "  --version <ver>           - Laravel/WordPress only: defaults to latest. Ignored by other frameworks"
-    echo "  --database <type>         - Database: mysql (default), postgres, mongodb, sqlite"
+    echo "  --database <type>         - Database: auto (default, chosen per framework), mysql, postgres, mongo, sqlite"
     echo "  --image <ref>             - Override the project's Docker image (default: framework cbc base image)"
     echo "  --github                  - Create GitHub repository in user account"
     echo "  --github-org <org>        - Create GitHub repository in organization"
@@ -218,7 +220,7 @@ show_help() {
     echo "                                             # Force setup even with existing Docker config"
     echo "  zeltro new laravel my-shop                 # Laravel project (database auto-selected: mysql)"
     echo "  zeltro new laravel survey --database postgres --version latest"
-    echo "                                             # Django project with PostgreSQL"
+    echo "                                             # Laravel project with PostgreSQL"
     echo "  zeltro new express my-api --json-output    # Express project with clean JSON output"
     echo "  zeltro remove myproject --preserve-database"
     echo "                                             # Remove project but keep database"
@@ -229,10 +231,10 @@ show_help() {
     echo "  zeltro supervisor restart all              # Restart all supervised processes"
     echo
     echo-white "NOTES:"
-    echo "  • Commands require explicit arguments (no interactive pickers) so they're safe for AI agents and scripts. 'configure' is the only interactive wizard."
+    echo "  • Commands require explicit arguments (no interactive pickers) so they're safe for AI agents and scripts. Only 'configure', and 'create' or a bare 'ai-set' at a terminal, ask questions."
     echo "  • 'zeltro up'/'down' need a <project>; use 'zeltro up-all'/'zeltro down-all' for every project. 'zeltro down' leaves shared services up (use 'zeltro stop-services')."
     echo "  • 'zeltro remove' preserves the database by default — pass --force-db-delete to drop it."
-    echo "  • 'zeltro create', 'zeltro new', 'zeltro clone', and 'zeltro install' all drop into an interactive AI session in the new project on completion. Pass --one-off to skip."
+    echo "  • 'zeltro new', 'zeltro clone' and 'zeltro install' hand the new project to your AI agent when done; pass --one-off to skip. 'zeltro create' always hands off, since building is its job."
     echo "  • Project-specific tools (composer, art, wp, drush, php, npm, npx, node, python, pip, shell, django, exec, db-refresh, cache-refresh, supervisor) require being in project directory"
     echo "  • Service tools (redis, memcache) work from any directory - they connect to shared services"
     echo "  • Use --json-output for programmatic integration (scripts, automation, CI)"
@@ -419,7 +421,8 @@ case "$1" in
         ;;
     "shell")
         validate_project_context || exit 1
-        local _framework
+        # Top-level dispatcher code, not a function: `local` here is an error
+        # ("can only be used in a function") and aborted the command.
         _framework=$(detect_project_framework)
         case "$_framework" in
             "laravel")

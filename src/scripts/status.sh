@@ -580,7 +580,9 @@ if [[ "$JSON_OUTPUT" == "1" ]]; then
     # Get VPC subnet from .env file
     VPC_SUBNET=""
     if [ -f "/etc/zeltro-cli/.env" ]; then
-        VPC_SUBNET=$(grep "^VPC_SUBNET=" /etc/zeltro-cli/.env | cut -d'=' -f2)
+        # Values in .env may be quoted (VPC_SUBNET="10.247.177"); keep the quotes
+        # out, or every ip_address in the JSON comes out as "\"10.247.177\".2".
+        VPC_SUBNET=$(grep "^VPC_SUBNET=" /etc/zeltro-cli/.env | cut -d'=' -f2 | tr -d "\"'")
     fi
     
     # Initialize JSON structure

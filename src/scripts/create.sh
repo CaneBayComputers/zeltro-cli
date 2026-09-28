@@ -269,6 +269,11 @@ fi
 # The environment already exists, so this prompt carries none of the creation
 # rules the old single-phase prompt needed. The per-project AGENTS.md written
 # above supplies the URL, database and command patterns.
+# The address that works from this machine. http://<name>/ no longer resolves
+# on the host, so an agent told to curl it could never verify its work.
+PROJECT_URL="$(zeltro_project_url "$CHOSEN_NAME")"
+[[ -n "$PROJECT_URL" ]] || PROJECT_URL="http://<the address 'zeltro status $CHOSEN_NAME' prints>"
+
 COMMON_RULES="Rules:
 - Run project tooling inside the container (zeltro exec / zeltro art / zeltro django manage / zeltro npm ...), never on the host.
 - Python containers provide python3, not python. For Django use 'zeltro django manage <args>'.
@@ -281,13 +286,13 @@ COMMON_RULES="Rules:
 - If you imported a package, add it to requirements.txt / package.json /
   composer.json AND install it in the container. An import that was never
   installed only fails once the process restarts.
-- You are NOT done until, AFTER that restart, 'curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 http://$CHOSEN_NAME/' returns 2xx or 3xx AND the response reflects what you built rather than the scaffold's placeholder page. If it does not, check 'docker logs $CHOSEN_NAME', fix it, and re-verify."
+- You are NOT done until, AFTER that restart, 'curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 $PROJECT_URL/' returns 2xx or 3xx AND the response reflects what you built rather than the scaffold's placeholder page. If it does not, check 'docker logs $CHOSEN_NAME', fix it, and re-verify."
 
 if [[ "$CHOSEN_KIND" == "app" ]]; then
     # The software is already installed, configured and serving. Framing this as
     # "build X" invites the agent to rebuild the whole app from scratch, so the
     # install is stated as done and only the leftover work is asked for.
-    BUILD_PROMPT="This Zeltro project is an existing, already-running install of '$CHOSEN_SLUG'. It is installed, configured and serving at http://$CHOSEN_NAME/.
+    BUILD_PROMPT="This Zeltro project is an existing, already-running install of '$CHOSEN_SLUG'. It is installed, configured and serving at $PROJECT_URL/.
 
 Do NOT install, reinstall, rebuild or scaffold it. Do NOT run zeltro new, zeltro clone or zeltro install. The software itself is finished.
 
@@ -318,13 +323,13 @@ fi
 
 echo-return
 echo-green "Project ready: $CHOSEN_NAME"
-echo-white "Local URL: http://$CHOSEN_NAME/"
+echo-white "Local URL: $PROJECT_URL/"
 echo-white "Directory: $PROJECT_DIR"
 echo-return
 # Asked for once, here, at the moment something actually worked -- not on `up`,
 # `status` or anything else people run all day. echo-white is a no-op under
 # --json-output, so machine consumers never see it.
-echo-white "Zeltro is free and always will be. If it saved you time: https://ko-fi.com/canebaycomputers"
+echo-white "Zeltro is open source with no paid tier. If it saved you time: https://zeltro.build/donate"
 echo-return
 
 if [[ "$JSON_OUTPUT" == "1" ]]; then

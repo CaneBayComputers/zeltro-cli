@@ -23,7 +23,7 @@ ACTION="set"
 JSON_OUTPUT="${JSON_OUTPUT:-}"
 
 usage() {
-    echo-white "Usage: ${ZELTRO_CMD:-$0} ai-unattended [AGENT] [--revoke] [--status] [--json-output]"
+    echo-white "Usage: zeltro ai-unattended [AGENT] [--revoke] [--status] [--json-output]"
     echo-white ""
     echo-white "Control whether an AI agent runs without asking approval for each action."
     echo-white ""

@@ -135,7 +135,7 @@ usage() {
 
 # Resolve Laravel repository URL (allows HTTPS or SSH via /etc/zeltro-cli/.env)
 if [ -z "$LARAVEL_REPOSITORY_URL" ] && [ -f "/etc/zeltro-cli/.env" ]; then
-    LARAVEL_REPOSITORY_URL=$(grep "^LARAVEL_REPOSITORY_URL=" "/etc/zeltro-cli/.env" 2>/dev/null | cut -d'=' -f2-)
+    LARAVEL_REPOSITORY_URL=$(grep "^LARAVEL_REPOSITORY_URL=" "/etc/zeltro-cli/.env" 2>/dev/null | cut -d'=' -f2- | tr -d "\"'")
 fi
 # Initialize variables
 PROJECT_NAME=""

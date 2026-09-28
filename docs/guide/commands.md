@@ -327,7 +327,7 @@ zeltro ai --interactive "Add a health-check endpoint at /ping"
 
 - Reads `AI_AGENT`, `AI_MODEL`, `AI_API_KEY` and `AI_API_BASE` from `/etc/zeltro-cli/.env`, unless a `ZELTRO_AI_*` override is set.
 - Runs the agent with the prompt (`[...]` parts are added only when set):
-  - Codex: `codex exec [--model "$AI_MODEL"] "<prompt>"` (one-off) / `codex [--model ...] "<prompt>"` (interactive). Key via `OPENAI_API_KEY`, endpoint via `OPENAI_BASE_URL`.
+  - Codex: `codex exec [--model "$AI_MODEL"] "<prompt>"` (one-off) / `codex [--model ...] "<prompt>"` (interactive). Key via `OPENAI_API_KEY`; the endpoint is passed as `-c openai_base_url="…"`, because current Codex ignores `OPENAI_BASE_URL`.
   - Claude: `claude -p [--model "$AI_MODEL"] "<prompt>"` (`-p` only for one-off). Key via `ANTHROPIC_API_KEY`, endpoint via `ANTHROPIC_BASE_URL`.
   - Codex and Claude both **removed their `--api-key` flags**; the key is passed through the environment instead. Zeltro checks the key looks like it belongs to that provider (`sk-` for Codex, `sk-ant-` for Claude) and, if it does not, ignores it with a warning and lets the CLI use its own sign-in — a key for the wrong provider would otherwise replace working auth with auth that cannot work.
   - Qwen: `qwen --auth-type openai [--model "$AI_MODEL"] --prompt "<prompt>"` (one-off) / `-i "<prompt>"` (interactive). Key and endpoint via `OPENAI_API_KEY` / `OPENAI_BASE_URL`.

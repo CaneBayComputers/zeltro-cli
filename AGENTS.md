@@ -24,7 +24,7 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 | Command | Purpose |
 |---|---|
 | `zeltro install <app> [name]` | Install a curated OSS app (`--list` to see all). Always check this first before hand-rolling anything. Optional `name` sets the project dir/hostname (defaults to the app slug). Override the image with `--image <ref>`. |
-| `zeltro new <framework> <name>` | Greenfield project. Framework + name are required positionals (`laravel`, `kavera`, `wordpress`, `php`, `fastapi`, `flask`, `django`, `python`, `express`, `nestjs`, `fastify`, `node`). DB auto-selected per framework; override with `--database` (`mysql`, `postgres`, `mongodb`, `sqlite`); version via `--version`. |
+| `zeltro new <framework> <name>` | Greenfield project. Framework + name are required positionals (`laravel`, `kavera`, `octobercms`, `drupal`, `wordpress`, `php`, `fastapi`, `flask`, `django`, `python`, `express`, `nestjs`, `fastify`, `node`, `nextjs`, `nuxt`, `sveltekit`, `astro`, `hono`, `react`, `vue`). DB auto-selected per framework; override with `--database` (`mysql`, `postgres`, `mongo`, `sqlite`); version via `--version`. |
 | `zeltro clone <mode> <repo> [name]` | Clone a Git repo and adapt its compose to use Zeltro shared services. Mode (required, git-remote style): `work-directly` (keep original as upstream), `fork`, or `new-repo`. |
 | `zeltro up <name>` / `zeltro up-all` | Start one project, or every project. Shared services always start. |
 | `zeltro down <name>` / `zeltro down-all` | Stop one project, or every project. Shared services keep running — use `zeltro stop-services` for those. |
@@ -33,7 +33,7 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 | `zeltro status [name] [--all]` | Show running state. Lists only active (running) projects by default; `--all` includes stopped projects. |
 | `zeltro exec <cmd>` | Run a command inside the project container, no TTY (automation-friendly). Run from the project directory. |
 
-**No interactive prompts.** Every command fails with a clear "required argument" error rather than prompting — so nothing ever blocks an agent. Always pass explicit arguments. (`zeltro configure` and `zeltro create` do prompt a human at a terminal, but both fall back to the hard error under `--one-off`, `--json-output`, or a non-TTY stdin — which is every context an agent runs in.)
+**No interactive prompts.** Every command fails with a clear "required argument" error rather than prompting — so nothing ever blocks an agent. Always pass explicit arguments. (`zeltro create` prompts a human only at a terminal; under `--one-off`, `--json-output` or a non-TTY stdin it takes the top recommendation instead. `zeltro configure` prompts unless you pass `--non-interactive` (`-y`), so an agent must always pass it.)
 
 `zeltro create`, `zeltro new`, `zeltro clone`, and `zeltro install` write an `AGENTS.md` handoff file into the new project, then `cd` into it and send the AI agent a one-off prompt telling it to read that file. Pass `--one-off` (or run with `--json-output` / non-TTY / no AI agent configured) to skip the handoff entirely.
 
@@ -118,7 +118,7 @@ Use these hostnames + credentials when configuring projects. Do not inspect cont
 | Redis | `zeltro-redis` | 6379 | — | *(none)* |
 | MongoDB | `zeltro-mongo` | 27017 | `root` | `password` |
 | Memcached | `zeltro-memcached` | 11211 | — | *(none)* |
-| MailHog | `zeltro-mailhog` | SMTP 1025 / UI 8025 | — | *(none)* |
+| Mail catcher (Mailpit) | `zeltro-mailhog` | SMTP 1025 / UI 8025 | — | *(none)* |
 
 **Optional shared services** — off by default, enabled per machine with `zeltro enable-service <name>`. Once enabled they start with every `zeltro up`, exactly like the core ones. Check `OPTIONAL_SERVICES` in `/etc/zeltro-cli/.env` to see what a machine has on.
 
