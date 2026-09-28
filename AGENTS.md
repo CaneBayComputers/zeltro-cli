@@ -88,7 +88,7 @@ In a session the Zeltro app started (it sets `ZELTRO_GUI_SESSION`), an agent can
 
 Exit codes: 0 ok, 1 error, 2 usage, **3 the app isn't available (ask in the chat instead)**, 4 timed out, 5 the user declined, 6 the app refused (e.g. a path outside the project). Outside the app, `ask` and `secret` exit 3 at once, so an agent can always try them first and fall back to the chat.
 
-`zeltro gui event <turn-done|needs-input|build-done>` tells the app a turn ended; `zeltro ai` and `zeltro resume` wire it up as a hook for Claude Code, Codex (unless you set your own `notify`) and aider, per run, without changing their config files. It always exits 0. Requests travel through `~/.zeltro/bus/gui/{requests,replies}/`.
+`zeltro gui event <turn-done|needs-input|build-done>` tells the app a turn ended; `zeltro ai` and `zeltro resume` wire it up as a hook for Claude Code, Codex (unless you set your own `notify`) and aider, per run, without changing their config files. It always exits 0. Requests travel through `~/.zeltro/bus/gui/{requests,replies,cancel}/`.
 
 ---
 
