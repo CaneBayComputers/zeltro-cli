@@ -175,7 +175,9 @@ if [ ! -f "$INSTALLER" ]; then
         trilium)
             echo-yellow "'trilium' ran the unmaintained zadam/trilium image and has been removed."
             echo-white "TriliumNext is the maintained successor. Run this instead:"
-            echo-white "  zeltro install triliumnext${PROJECT_NAME:+ $PROJECT_NAME}"
+            _name_arg=""
+            [ "$PROJECT_NAME" != "$APP" ] && _name_arg=" $PROJECT_NAME"
+            echo-white "  zeltro install triliumnext$_name_arg"
             exit 1 ;;
         whoogle)
             echo-yellow "'whoogle' has been removed: the project ended on 2026-07-24 and no longer returns results."

@@ -180,7 +180,7 @@ The following have been deployed successfully and have `src/project-hints/` file
 | Nextcloud | `nextcloud:latest` | Port 80 direct, MariaDB + Redis |
 | PhotoPrism | `photoprism/photoprism:latest` | Port 2342 → nginx, MariaDB, large client_max_body_size |
 | Immich | `ghcr.io/immich-app/immich-server:release` | Port 2283 → nginx, dedicated pgvecto-rs DB + shared Redis |
-| Trilium Notes | `zadam/trilium:latest` | Port 8080 → nginx, SQLite |
+| Trilium Notes (TriliumNext) | `ghcr.io/triliumnext/trilium:v0.104.1` | Port 8080 → nginx, SQLite |
 | SearXNG | `searxng/searxng:latest` | Port 8080 → nginx, no DB |
 | Glances | `nicolargo/glances:latest-full` | Port 61208 → nginx, pid:host + docker.sock |
 | wger | `wger/server:latest` | Port 80 direct + celery workers, PostgreSQL + Redis, config/prod.env |
