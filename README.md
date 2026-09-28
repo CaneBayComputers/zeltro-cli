@@ -109,32 +109,21 @@ Everything else — frameworks, the 200+ app library, the full command reference
 
 ## Prefer not to use a terminal?
 
-[**Zeltro GUI**](https://github.com/CaneBayComputers/zeltro-gui) is an optional
-desktop front end — same projects, same shared services, same URLs, just visible
-and clickable. It installs the same way this does — one command, which clones the repo for you:
+The **Zeltro app** is an optional desktop front end: same projects, same shared
+services, same addresses, just visible and clickable. On Linux it installs with
+one command, which also installs this CLI if `zeltro` is missing:
 
 ```bash
 curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 ```
 
-Swap `ubuntu` for `fedora`, `arch` or `mac`. On Linux and
-macOS it installs this CLI first if `zeltro` is missing, so it is the only thing
-you need to run.
-
-To install a checkout you already have instead of a fresh clone, run the script
-from inside it — it detects the local repository and builds that:
-
-```bash
-git clone https://github.com/CaneBayComputers/zeltro-gui.git
-cd zeltro-gui && ./install-ubuntu.sh
-```
-
-On **Windows**, [download the installer](https://zeltro.build/download/windows)
-(beta). The app drives Zeltro on machines you add under **Settings → Remotes →
-Hosts** (a Linux box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same
-PC (in preview). Packages for every platform are on the
-[releases page](https://github.com/CaneBayComputers/zeltro-gui/releases/latest).
+It works on Ubuntu/Debian, Fedora/RHEL and Arch. On **Windows**,
+[download the installer](https://zeltro.build/download/windows) (beta). The app
+drives Zeltro on machines you add under **Settings → Remotes → Hosts** (a Linux
+box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same PC (in preview).
+A Mac app is coming soon. Packages are on the
+[releases page](https://github.com/CaneBayComputers/zeltro-releases/releases).
 
 ---
 
-Runs on Linux and macOS, and on Windows through the desktop app. The CLI is open source (MIT); the desktop app is free for personal use, with a [commercial license](https://zeltro.build/commercial) for businesses.
+Runs on Linux and macOS, and on Windows through the desktop app. The CLI is open source (MIT); the desktop app is proprietary and free for personal use, with a [lifetime commercial license](https://zeltro.build/commercial) for businesses.
