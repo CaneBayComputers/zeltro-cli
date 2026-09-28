@@ -5,7 +5,7 @@ nav_order: 6
 
 # App library — `zeltro install`
 
-`zeltro install <app> [name]` deploys a **finished third-party app** — fully configured, running, reachable at `http://<app>/`, usually in under two minutes.
+`zeltro install <app> [name]` deploys a **finished third-party app**, fully configured and running, usually in under two minutes. Open it at the address `zeltro status <app>` prints.
 
 ```bash
 zeltro install grafana       # monitoring dashboards
@@ -23,13 +23,13 @@ For scaffolding a project *you write*, see [Frameworks](../frameworks/) instead.
 
 Each installer captures one app's quirks once, so you (or your agent) never re-derive them:
 
-- Creates the right databases and users
+- Creates the app's database on the shared service, plus a dedicated database user when the app refuses to run as root
 - Generates secrets and app keys
 - Writes a compose file wired to Zeltro's shared services instead of bundled databases
-- Assigns a VPC IP and hostname
-- Starts the container and waits for HTTP 200
+- Gives the app a static IP on Zeltro's network and a container name other containers can reach it by
+- Starts the container and waits until it answers over HTTP
 
-Image tags are **pinned to specific versions**, not `:latest`, so an install that worked yesterday works the same today and upgrades are deliberate.
+Newer installers **pin image tags to specific versions**, not `:latest`, so an install that worked yesterday works the same today and upgrades are deliberate. Some older installers still use floating tags; see [Available apps](#available-apps).
 
 ## Options
 
@@ -59,7 +59,7 @@ Both emit a prepared prompt telling an agent to fetch upstream, diff against the
 
 ## Available apps
 
-Being straight about what has and has not been checked, because "200+ apps" is easy to say and hard to stand behind:
+There are **216 apps**. Being straight about what has and has not been checked, because "200+ apps" is easy to say and hard to stand behind:
 
 - **126 have been installed on a real machine**, checked over HTTP, and removed — 115 added in the 2026-08 catalogue expansion, plus 11 older ones spot-checked since. Every one of those pins its images to specific versions.
 - **90 are older entries that predate that process.** They were written and used, but have not been through it, and most still track floating tags like `:latest`. They may well work; nobody has recently proved it.
@@ -67,10 +67,21 @@ Being straight about what has and has not been checked, because "200+ apps" is e
 If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-cli/issues) — that is the fastest way for it to get fixed.
 
 {: .note }
-> A few apps (Karakeep, Open Archiver, Langfuse) bring their own Meilisearch or MinIO container. Those two are *optional* shared services and off by default, so each app ships what it needs rather than assuming you enabled them. If you have enabled the shared one, you will have two — harmless, just not shared.
+> A few apps (Karakeep, Open Archiver, Langfuse, Plane) bring their own Meilisearch or MinIO container. Those two are *optional* shared services and off by default, so each app ships what it needs rather than assuming you enabled them. If you have enabled the shared one, you will have two — harmless, just not shared.
 
 {: .warning }
-> **Verified means "installs and responds", not "usable".** A handful of apps need a browser *secure context* for `crypto.subtle` or service workers, which `http://<app>/` cannot provide — those were deliberately left out rather than shipped as something that boots and then fails in the browser.
+> **Verified means "installs and responds", not "usable".** A handful of apps need a browser *secure context* for `crypto.subtle` or service workers, which a plain `http://` address cannot provide — those were deliberately left out rather than shipped as something that boots and then fails in the browser.
+
+{: .warning }
+> **Upstream changes to know about** (checked 2026-09-28):
+>
+> - **Whoogle Search** no longer returns results. Its maintainer ended the project on 24 July 2026 after Google blocked searches made without JavaScript.
+> - **MinIO**'s open-source repository is archived, and its images have been removed from Docker Hub and Quay. `zeltro install minio` fails to pull on a machine that doesn't already have the image, and so can **Plane** and **Langfuse**, which bundle it.
+> - **FreeScout** and **Readeck**: the image tags these installers use are no longer published (FreeScout's image moved from `tiredofit/` to `nfrastack/`), so a fresh install fails to pull.
+> - **Maybe Finance** is no longer maintained (final release v0.6.0, July 2025). **Sure** is the community fork and is in the list.
+> - **Pingvin Share** was archived in June 2025.
+> - **Trilium Notes** (`trilium`) runs the last `zadam/trilium` image from 2024. Use `triliumnext` for the maintained version.
+> - **LobeChat** is now called LobeHub. The installer runs the final 1.x LobeChat image.
 
 
 | App | One-liner | Category |
@@ -95,7 +106,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | BudgE | `zeltro install budge` | Finance |
 | Budibase | `zeltro install budibase` | Low-code |
 | Bugsink | `zeltro install bugsink` | Monitoring |
-| Cachet | `zeltro install cachet` | Status Page |
+| Cachet | `zeltro install cachet` | Status |
 | Cal.com | `zeltro install cal-com` | Scheduling |
 | Calibre-Web | `zeltro install calibre-web` | Books |
 | Calibre-Web Automated Book Downloader (Shelfmark) | `zeltro install calibre-web-automated-book-downloader` | Books |
@@ -112,7 +123,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Coolify | `zeltro install coolify` | DevOps |
 | CyberChef | `zeltro install cyberchef` | Utilities |
 | Dashy | `zeltro install dashy` | Dashboard |
-| Dify | `zeltro install dify` | AI / LLM |
+| Dify | `zeltro install dify` | AI |
 | Directus | `zeltro install directus` | CMS |
 | Docmost | `zeltro install docmost` | Wiki |
 | Documenso | `zeltro install documenso` | Documents |
@@ -132,12 +143,12 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Flame | `zeltro install flame` | Dashboard |
 | Flarum | `zeltro install flarum` | Forum |
 | Flipt | `zeltro install flipt` | Feature flags |
-| Flowise | `zeltro install flowise` | AI / LLM |
+| Flowise | `zeltro install flowise` | AI |
 | Forgejo | `zeltro install forgejo` | Git |
 | FreeScout | `zeltro install freescout` | Help Desk |
 | FreshRSS | `zeltro install freshrss` | RSS |
 | Ghost | `zeltro install ghost` | Blogging |
-| Gitea | `zeltro install gitea` | Git Server |
+| Gitea | `zeltro install gitea` | Git |
 | Glance | `zeltro install glance` | Dashboard |
 | Glances | `zeltro install glances` | Monitoring |
 | GlitchTip | `zeltro install glitchtip` | Monitoring |
@@ -151,7 +162,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Grist | `zeltro install grist` | Spreadsheet |
 | Grocy | `zeltro install grocy` | Home |
 | Healthchecks | `zeltro install healthchecks` | Monitoring |
-| HedgeDoc | `zeltro install hedgedoc` | Docs |
+| HedgeDoc | `zeltro install hedgedoc` | Notes |
 | Heimdall | `zeltro install heimdall` | Dashboard |
 | HeyForm | `zeltro install heyform` | Forms |
 | Homarr | `zeltro install homarr` | Dashboard |
@@ -169,11 +180,11 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Jupyter Notebook (Python) | `zeltro install jupyter-notebook-python` | Data |
 | Kanboard | `zeltro install kanboard` | Project Mgmt |
 | Karakeep | `zeltro install karakeep` | Bookmarks |
-| Kavita | `zeltro install kavita` | Library |
+| Kavita | `zeltro install kavita` | Books |
 | Keycloak | `zeltro install keycloak` | Auth |
 | Kimai | `zeltro install kimai` | Time Tracking |
 | Koel | `zeltro install koel` | Music |
-| Label Studio | `zeltro install label-studio` | ML / AI |
+| Label Studio | `zeltro install label-studio` | AI |
 | Langflow | `zeltro install langflow` | AI |
 | Langfuse | `zeltro install langfuse` | AI |
 | Laravel Livewire | `zeltro install livewire` | Starter Kit |
@@ -196,7 +207,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | marimo | `zeltro install marimo` | Data |
 | Mastodon | `zeltro install mastodon` | Social |
 | Matomo | `zeltro install matomo` | Analytics |
-| Mattermost | `zeltro install mattermost` | Team Chat |
+| Mattermost | `zeltro install mattermost` | Chat |
 | Mautic | `zeltro install mautic` | Marketing |
 | Maybe Finance | `zeltro install maybe` | Finance |
 | Mealie | `zeltro install mealie` | Recipes |
@@ -215,7 +226,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | NetBox | `zeltro install netbox` | Networking |
 | Netdata | `zeltro install netdata` | Monitoring |
 | New API | `zeltro install newapi` | AI |
-| Nextcloud | `zeltro install nextcloud` | File Hosting |
+| Nextcloud | `zeltro install nextcloud` | Files |
 | Nginx Proxy Manager | `zeltro install nginx-proxy-manager` | Networking |
 | NocoBase | `zeltro install nocobase` | Low-code |
 | NocoDB | `zeltro install nocodb` | Database |
@@ -226,7 +237,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | OneDev | `zeltro install onedev` | Git |
 | Onetime Secret | `zeltro install onetimesecret` | Secrets |
 | Open Archiver | `zeltro install open-archiver` | Archiving |
-| Open WebUI | `zeltro install open-webui` | AI / LLM |
+| Open WebUI | `zeltro install open-webui` | AI |
 | OpnForm | `zeltro install opnform` | Forms |
 | OrangeHRM | `zeltro install orangehrm` | HR |
 | Outline | `zeltro install outline` | Wiki |
@@ -279,7 +290,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Uptime Kuma | `zeltro install uptime-kuma` | Monitoring |
 | Vaultwarden | `zeltro install vaultwarden` | Passwords |
 | VERT | `zeltro install vert` | Utilities |
-| Vikunja | `zeltro install vikunja` | Task Mgmt |
+| Vikunja | `zeltro install vikunja` | Project Mgmt |
 | Wallabag | `zeltro install wallabag` | Read Later |
 | Web-Check | `zeltro install web-check` | Utilities |
 | Weblate | `zeltro install weblate` | Localization |
@@ -290,5 +301,5 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | YOURLS | `zeltro install yourls` | URL Shortener |
 | Zabbix | `zeltro install zabbix` | Monitoring |
 | Zipline | `zeltro install zipline` | File sharing |
-| Zulip | `zeltro install zulip` | Team Chat |
+| Zulip | `zeltro install zulip` | Chat |
 

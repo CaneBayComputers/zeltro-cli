@@ -11,6 +11,10 @@ nav_order: 10
 
 One set of service containers serves every project on the machine.
 
+Redis, Memcached and the mail catcher always run. The database servers do not:
+each one starts the first time a project on the machine needs it, and then stays
+on. A machine with only Postgres projects never runs MariaDB or MongoDB.
+
 This is Zeltro's central design decision, and it is a **trade-off rather than a
 free win** — worth understanding before you build a workflow on it.
 
@@ -23,16 +27,19 @@ the same in every project, forever.
 
 **What you give up.** These follow directly from the same decision:
 
-- **One version of each engine, machine-wide.** A project needing MySQL 5.7 and
-  another needing MySQL 8 cannot both run against the shared server. Pin the
-  version per project and you are back to a container per project.
-- **Shared lifecycle.** `zeltro down` stops the services for *every* project, not
-  just the one you were working on.
+- **One version of each engine, machine-wide.** The shared servers run MariaDB 12,
+  PostgreSQL 17 and MongoDB 8. A project that needs MySQL 5.7 or PostgreSQL 15
+  cannot get it from them. Pin the version per project and you are back to a
+  container per project.
+- **Shared lifecycle.** `zeltro down <project>` stops only that project, but
+  `zeltro stop-services` stops the services for *every* project, not just the one
+  you were working on.
 - **Shared blast radius.** A corrupted data volume, a runaway migration, or a
   `DROP DATABASE` affects one server that everything else is also using. Project
   databases are isolated by name, not by process.
 - **Shared credentials.** Every project connects as `root`. This is a local
-  development tool and the services are not exposed outside the Docker network,
+  development tool and the database servers publish no ports outside the Docker
+  network (only the mail catcher's web UI, port 8025, is published on the host),
   but it is not a model to copy into production.
 
 **When Zeltro is the wrong choice:** you need per-project database versions, or
@@ -44,34 +51,56 @@ better fit for both, at the cost of the resource usage described above.
 machine and would rather spend that memory on the projects than on twenty copies
 of MariaDB.
 
+**Always on:**
+
 | Service | Hostname | Port | User | Password |
 |---|---|---|---|---|
-| PostgreSQL | `zeltro-postgres` | 5432 | `root` | `password` |
-| MariaDB / MySQL | `zeltro-mariadb` | 3306 | `root` | *(empty)* |
-| Redis | `zeltro-redis` | 6379 | — | *(none)* |
-| MongoDB | `zeltro-mongo` | 27017 | `root` | `password` |
-| Memcached | `zeltro-memcached` | 11211 | — | *(none)* |
-| MailHog | `zeltro-mailhog` | SMTP 1025 / UI 8025 | — | *(none)* |
-| phpMyAdmin | `zeltro-phpmyadmin` | 80 | — | — |
+| Redis 8 | `zeltro-redis` | 6379 | — | *(none)* |
+| Memcached 1.6 | `zeltro-memcached` | 11211 | — | *(none)* |
+| Mail catcher ([Mailpit](https://mailpit.axllent.org/)) | `zeltro-mailhog` | SMTP 1025 / UI 8025 | — | *(none)* |
+
+The mail catcher is Mailpit, a MailHog replacement. It keeps the `zeltro-mailhog`
+hostname so existing projects don't need changing. Its web UI is also published
+on the host at `http://localhost:8025`.
+
+**Databases, started when a project needs one:**
+
+| Service | Hostname | Port | User | Password |
+|---|---|---|---|---|
+| MariaDB 12 (MySQL-compatible) | `zeltro-mariadb` | 3306 | `root` | *(empty)* |
+| PostgreSQL 17 | `zeltro-postgres` | 5432 | `root` | `password` |
+| MongoDB 8 | `zeltro-mongo` | 27017 | `root` | `password` |
+
+`zeltro new`, `clone`, `setup`, `install` and `up` work out which database a
+project uses and enable that server if it isn't running yet. You don't have to
+do anything. To turn one on by hand, use `zeltro enable-service mysql`,
+`postgres` or `mongo`.
+
+Use these hostnames and credentials directly when configuring a project — there's no need to inspect containers to discover them. Zeltro writes them into each project's `.env` automatically.
 
 ### Optional shared services
 
-Most projects need a database, which is what justifies the core services always running. Far fewer need object storage or a search engine, so those sit behind Docker Compose profiles and stay off until a machine asks for them — rather than every install paying that RAM to benefit a few.
+Everything except Redis, Memcached and the mail catcher is optional: the three databases above, plus object storage, a search engine and web admin UIs. They sit behind Docker Compose profiles and stay off until a machine asks for them, so a machine doesn't pay the RAM for services none of its projects use.
 
 ```bash
 zeltro enable-service minio
-zeltro enable-service meilisearch
+zeltro enable-service adminer
 zeltro disable-service minio      # data volume is kept
+zeltro enable-service --help      # list every optional service
 ```
 
-Once enabled they start with every `zeltro up` and resolve by hostname from inside any project container, exactly like the core services. The enabled list persists in `OPTIONAL_SERVICES` in `/etc/zeltro-cli/.env`.
+Once enabled they start with every `zeltro up` and resolve by hostname from inside any project container, exactly like the always-on services. The enabled list persists in `OPTIONAL_SERVICES` in `/etc/zeltro-cli/.env`.
 
-| Service | Host | Port | Credentials |
-|---|---|---|---|
-| MinIO | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |
-| Meilisearch | `zeltro-meilisearch` | 7700 | master key `zeltro-dev-master-key` |
+| Service | Slug | Host | Port | Credentials |
+|---|---|---|---|---|
+| MinIO (S3-compatible storage) | `minio` | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |
+| Meilisearch (full-text search) | `meilisearch` | `zeltro-meilisearch` | 7700 | master key `zeltro-dev-master-key` |
+| phpMyAdmin (MariaDB) | `phpmyadmin` | `zeltro-phpmyadmin` | 80 | `root`, no password |
+| Adminer (MariaDB, PostgreSQL, SQLite, MongoDB) | `adminer` | `zeltro-adminer` | 8080 | `root` and that database's password |
+| Mongo Express | `mongo-express` | `zeltro-mongo-express` | 8081 | none |
+| RedisInsight | `redisinsight` | `zeltro-redisinsight` | 5540 | none |
 
-Use these hostnames and credentials directly when configuring a project — there's no need to inspect containers to discover them. Zeltro writes them into each project's `.env` automatically.
+The admin UIs come already connected to the shared servers. RedisInsight shows the shared Redis only after you accept its first-run terms screen.
 
 ---
 
@@ -85,12 +114,14 @@ Two different mechanisms, and it is worth keeping them apart:
 | From | Address | Why |
 |---|---|---|
 | The machine running Zeltro | `http://10.x.x.219` | The container's own IP. No port — nothing else is on that address. |
-| Another device on the LAN | `http://192.168.1.20:219` | This machine's IP plus the project's published port. |
+| Another device on the LAN | `http://192.168.1.20:219` | This machine's IP plus the project's published port, which is the last number of its container IP. |
 
-On macOS and Windows, Docker runs containers inside a virtual machine and the container IP is not routable from the host, so the local address is `http://localhost:<port>` instead. `zeltro status` detects this and prints whichever one works.
+On macOS, Docker Desktop runs containers inside a virtual machine and cannot route traffic to container IPs from the host, so `zeltro status` prints `http://localhost:<port>` as the local address instead.
+
+On Windows, Zeltro runs inside WSL2. The local address works from inside WSL. From a Windows browser, use the LAN address, which is the WSL VM's IP and changes when WSL restarts.
 
 {: .note }
-> Zeltro does **not** write to `/etc/hosts`, and has not since the entries were removed. Nothing about running a project needs sudo. Earlier versions added a host entry so `http://my-api/` worked in the browser; that is gone, and the addresses above replace it.
+> Zeltro does **not** write to `/etc/hosts`, so `http://my-api/` does not work in a browser on the host. Use the addresses `zeltro status` prints. Earlier versions added a host entry for every project; that is gone, and creating or starting a project no longer needs sudo for it.
 
 ---
 
@@ -100,11 +131,14 @@ All Zeltro containers attach to the `zeltro-cli_vpc` Docker network (`${VPC_SUBN
 
 | Range | Purpose | Allocation |
 |---|---|---|
-| `.2`–`.15` | Shared services (core `.2`–`.8`, optional `.9`–`.15`) | Static |
+| `.2`–`.8` | Always-on services, databases and phpMyAdmin | Static |
 | `.32`–`.63` | Helper containers (workers, schedulers) | Dynamic |
-| `.100`–`.250` | Project entry points | Static, assigned per project |
+| `.100`–`.239` | Project entry points | Static, picked at random per project |
+| `.250`–`.254` | MinIO, Meilisearch, Adminer, Mongo Express, RedisInsight | Static |
 
-Writing a custom compose: give the web-facing service a static IP in `.100`–`.250`, leave helpers without `ipv4_address`, and never touch `.2`–`.8`.
+`.240`–`.249` is left free as headroom. Each project's web port is published on the host under its last octet, so a project at `.219` answers on port 219.
+
+Writing a custom compose: give the web-facing service a static IP in `.100`–`.239`, leave helpers without `ipv4_address`, and never touch `.2`–`.8` or `.250`–`.254`.
 
 ---
 
@@ -118,6 +152,7 @@ Override the default with `--image <ref>` on `new`, `clone`, `setup` or `install
 
 - nginx with FastCGI to `php-fpm8.3` over a Unix socket; web root `/usr/share/nginx/html/public`
 - PHP 8.3 with `pdo_mysql`, `pdo_pgsql`, `pdo_sqlite`, `redis`, `mongodb`, `gd`, `intl`, `mbstring`, `imagick`, `zip`, `soap`, `xdebug`, plus `php-codesniffer` and `phpmd`
+- Composer, WP-CLI and Node 22 (for Vite/npm builds) are included
 - Supervisor runs nginx, php-fpm and a Laravel queue worker (4 processes, autostart)
 
 ### `cbc:nginx-python3` — Python projects
@@ -167,4 +202,6 @@ Useful flags: `--no-startup` to review the adapted compose before it boots, `--o
 └── my-shop/
 ```
 
-Runtime configuration lives in `/etc/zeltro-cli/.env`.
+`~/zeltro-projects` is the default. `zeltro projects-dir` prints the one this machine uses. The projects directory also gets its own `AGENTS.md` with this machine's service names.
+
+Runtime configuration lives in `/etc/zeltro-cli/.env`. On a machine installed before the rename from Podium, containers and the network use `podium-*` names (`podium-cli_vpc`) instead of `zeltro-*`.

@@ -17,7 +17,7 @@ Describe what you want in plain English. Zeltro wraps your idea in platform inst
 
 From there the work is split, and the split is the point:
 
-- **Zeltro** creates the project, creates and wires the database, installs the framework or app, generates the `.env`, assigns the hostname, starts the container, and hands back a working URL.
+- **Zeltro** creates the project, creates and wires the database, installs the framework or app, generates the `.env`, assigns the project an address, starts the container, and hands back a working URL.
 - **The AI** only customizes what's on top — models, routes, templates, business logic — then updates the project README with the URL and any credentials.
 
 The agent never has to work out how to wire nginx, pick a port, or provision a database. It calls one Zeltro command and gets a running project back, which is where the prompt and token savings come from.
@@ -29,7 +29,7 @@ zeltro create "New Grafana"
 zeltro create "https://github.com/monicahq/monica"
 ```
 
-Run it bare and it asks what you want to build:
+Run it bare in a terminal and it asks what you want to build:
 
 ```bash
 zeltro create
@@ -77,7 +77,7 @@ zeltro install gitea
 zeltro install n8n
 ```
 
-Fully configured and reachable at the address `zeltro status` prints, in under two minutes. Browse all 200+: [App library](../app-library/).
+Each one comes up fully configured, at the address `zeltro status` prints. Browse all 200+: [App library](../app-library/).
 
 **`new` vs `install`:** `new` scaffolds an empty project *you write*. `install` deploys a finished app *someone else wrote*. If you guess wrong, Zeltro tells you the right command.
 
@@ -91,7 +91,7 @@ zeltro clone work-directly https://github.com/user/my-app
 zeltro clone fork https://github.com/user/my-app
 zeltro clone new-repo https://github.com/user/my-app my-app
 
-# already have the folder in ~/zeltro-projects/
+# already have the folder in your projects directory (~/zeltro-projects by default)
 zeltro setup my-project
 zeltro up my-project
 ```
@@ -111,4 +111,9 @@ zeltro status             # what's running
 zeltro stop-services      # stop the shared services too
 ```
 
-Your project is at `http://my-project/` in any browser on the machine.
+To open a project, run `zeltro status my-project`. It prints two addresses:
+
+- **LOCAL ACCESS**, for a browser on this machine. On Linux this is the container's own IP, such as `http://10.x.x.x`. On macOS it is `http://localhost:<port>`.
+- **LAN ACCESS**, for other machines on your network: `http://<this-machine's-IP>:<port>`.
+
+`http://my-project/` does not work from your browser. Zeltro doesn't write `/etc/hosts`, so project names only resolve between containers.

@@ -5,70 +5,50 @@ nav_order: 3
 
 # Downloads
 
-Zeltro is two pieces. The **CLI** does the work; the **GUI** is an optional
-desktop front end for it. Neither ships as a package — both install from source
-with one command, so the checkout you install from is the one that runs, and
-updating is a `git pull`.
+Zeltro comes in two pieces. The **CLI** does the work, and the **GUI** is an
+optional desktop app that runs on top of it. On Linux and macOS, both install
+from source with one command. The checkout you install from is the one that
+runs, and updating is a `git pull`.
+
+There is no packaged download yet: no `.exe`, `.deb`, `.rpm`, pacman package
+or `.dmg`.
+
+Run the commands below as your normal user, not as root.
 
 ---
 
-## Zeltro CLI
+## Zeltro GUI (and the CLI with it)
+
+This is the only command you need. It installs the CLI first if `zeltro` is
+missing, then the GUI.
 
 **Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-ubuntu.sh | bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 ```
 
-Swap the script for your distro: `install-fedora.sh` or `install-arch.sh`.
+For Fedora or Arch, replace `ubuntu` at the end of the link with `fedora` or
+`arch`.
 
 **macOS**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-mac.sh | bash
-```
-
-Installs the Xcode command line tools, Homebrew and Docker Desktop if any are
-missing.
-
-**Windows**
-
-Zeltro is a Linux tool; on Windows it runs inside WSL2. Right-click PowerShell
-and choose **Run as administrator**, then:
-
-```powershell
-irm https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-windows.ps1 | iex
-```
-
-Requires Windows 10 version 2004 (build 19041) or newer — the installer checks
-the build before it changes anything, rather than failing after the reboot.
-
-Then run `zeltro configure` once. Full details in **[Installation](../installation/)**.
-
----
-
-## Zeltro GUI
-
-Installed the same way as the CLI — one command, which clones the repo for you.
-On Linux and macOS it installs the CLI first if `zeltro` is missing, so this is
-the only thing you need to run:
-
-**Linux**
+Install [Homebrew](https://brew.sh) first, because the GUI installer stops if
+it is missing. Then run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-gui/master/install-ubuntu.sh | bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash
 ```
 
-Swap the script for your distro: `install-fedora.sh` or `install-arch.sh`.
+The installer pulls the npm dependencies, compiles the TypeScript, rebuilds the
+native terminal module against Electron, and adds a `zeltro-gui` launcher. On
+Linux it also adds a **Zeltro** entry to your applications menu. On macOS you
+start it with `zeltro-gui` from a terminal, because there is no `.app` bundle.
+The install takes a few minutes, mostly `npm install`, and you can safely run
+it again.
 
-**macOS**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-gui/master/install-mac.sh | bash
-```
-
-To install a checkout you already have rather than a fresh clone, run the script
-from inside it — it detects the local repository and builds that instead:
+To install a checkout you already have instead of a fresh clone, run the script
+from inside it. It detects the local repository and builds that:
 
 ```bash
 git clone https://github.com/CaneBayComputers/zeltro-gui.git
@@ -77,52 +57,101 @@ cd zeltro-gui && ./install-ubuntu.sh
 
 **Windows**
 
-```powershell
-irm https://raw.githubusercontent.com/CaneBayComputers/zeltro-gui/master/scripts/install-windows.ps1 | iex
-```
+An installer is coming. A Windows Setup `.exe` has been built and tested but
+isn't released yet. When it is, it will be at
+[zeltro.build/download/windows](https://zeltro.build/download/windows). See
+[Windows](#windows) below for what works today.
 
-The installer pulls the npm dependencies, compiles the TypeScript, rebuilds the
-native terminal module against Electron, and drops a launcher and a desktop
-entry. It takes a few minutes, mostly `npm install`. Re-running it is safe.
+### After installing
+
+- **Linux:** log out and back in (or reboot) so your user can use Docker.
+- **macOS:** the CLI installer puts in Docker Desktop. Open it once and accept
+  its licence. It has to be running whenever you use Zeltro.
+- **Everywhere:** on first launch the GUI shows a short setup form and runs
+  `zeltro configure` for you. Running `zeltro configure` in a terminal works
+  too.
 
 ### What's in it
 
 Create with AI, the full app library, new project and clone, start/stop of the
 shared services, embedded tabbed terminals for AI sessions, and a Settings panel
-with AI agent configuration and a theme picker. Five themes ship — Retro (the
-default), Dark, Light, Matrix and Zeltro — each with its own 16-colour terminal
-palette so output stays readable, including on Light.
+with AI agent configuration and a theme picker. Five themes ship: Retro (the
+default), Dark, Light, Matrix and Zeltro. Each has its own 16-colour terminal
+palette, so output stays readable, including on Light.
 
-### Windows works differently
+### Windows
 
-On Linux and macOS the GUI drives a Zeltro on the same machine. On Windows there
-is no local Zeltro and the installer does not try to add one — the GUI drives
-Zeltro on *other* machines over SSH: a Linux box, a Mac, a Raspberry Pi, an EC2
-instance. Add them under **Settings → SSH Hosts**; each needs Zeltro already
-installed and configured. Projects, containers and files live on the host that
-runs them.
+On Linux and macOS the GUI drives a Zeltro on the same machine. On Windows,
+Zeltro itself has to run in Linux, and there are two ways to do that:
 
-Remote hosts work from Linux and macOS too. Windows simply has no local option
-to fall back on.
+- **Another machine over SSH. This works today.** The GUI drives Zeltro on a
+  Linux box, a Mac, a Raspberry Pi or an EC2 instance. Add them under
+  **Settings → Remotes → Hosts**. Each host needs Zeltro already installed
+  and configured. Projects, containers and files live on the host that runs
+  them.
+- **This PC, through WSL2. In preview.** The GUI's own setup for running
+  Zeltro in WSL2 on the same PC is still in testing.
+
+Developers can set the GUI up on Windows from source today. The script checks
+out the development branch into `C:\zeltro-gui` (the WSL2 setup is part of
+that branch), builds it, and adds a desktop shortcut:
+
+```powershell
+irm https://raw.githubusercontent.com/CaneBayComputers/zeltro-gui/master/scripts/install-windows.ps1 | iex
+```
+
+Remote hosts work from Linux and macOS too.
+
+---
+
+## Zeltro CLI only
+
+If you don't want the GUI:
+
+**Linux**
+
+```bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/cli/ubuntu | bash
+```
+
+For Fedora or Arch, replace `ubuntu` at the end of the link with `fedora` or
+`arch`.
+
+**macOS**
+
+```bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/cli/mac | bash
+```
+
+This installs the Xcode Command Line Tools, Homebrew and Docker Desktop if any
+of them are missing.
+
+**Windows**
+
+See [Installation → Windows](../installation/#windows).
+
+Then run `zeltro configure` once. For supported distro versions and the other
+details, see **[Installation](../installation/)**.
+
+The short links redirect to the `install-<os>.sh` scripts in each repository
+on GitHub.
 
 ---
 
 ## Why no packages?
 
-There used to be `.deb`, `.rpm`, `.pkg.tar.zst` and `.dmg` builds of the GUI.
-They are gone, and the download links that pointed at them are gone with them.
+On Linux and macOS, installing from source gives you one path to maintain
+instead of one build per distro. It also means there's no version skew
+between what you downloaded and what's in the repository. The GUI repository
+can still build `.deb`, `.rpm`, pacman and `.dmg` packages, but none are
+published.
 
-Packaging an Electron app per distro meant maintaining five build paths and a
-release cycle for a project whose install is otherwise a `git pull`, and it made
-the CLI and GUI behave differently for no benefit to anyone using them. Building
-from source removes the whole category — no signing, no per-distro dependency
-declarations, no stale release assets, and no version skew between what you
-downloaded and what is in the repository.
+A source install also avoids the macOS Gatekeeper problem. Unsigned `.dmg`
+builds get blocked on first launch with an "unidentified developer" warning,
+and clearing it takes `xattr -dr com.apple.quarantine`. A source build doesn't
+carry the quarantine attribute, so there is nothing to work around.
 
-It also removes the macOS Gatekeeper problem. The `.dmg` builds were unsigned,
-so first launch was blocked with an "unidentified developer" warning that took a
-`xattr -dr com.apple.quarantine` to clear. A source build does not carry the
-quarantine attribute, so there is nothing to work around.
+Windows is the exception. It will get a Setup `.exe`.
 
 ---
 
@@ -130,25 +159,25 @@ quarantine attribute, so there is nothing to work around.
 
 `zeltro --version` reports the CLI version. The GUI's About panel shows both.
 
-**The two version independently and are not expected to match.** Compatibility is
-handled by feature detection, not by comparing version numbers — the GUI asks the
-installed CLI what it can do and hides anything it cannot, so an older CLI loses
-individual features rather than failing outright. Upgrade either one on its own
-whenever you like.
+**The CLI and GUI have separate version numbers, and they aren't expected to
+match.** The GUI checks what the installed CLI can do instead of comparing
+versions, and it hides any feature the CLI can't support. An older CLI loses
+individual features rather than failing outright. You can upgrade either one
+on its own.
 
 ---
 
 ## Source
 
-- [CaneBayComputers/zeltro-cli](https://github.com/CaneBayComputers/zeltro-cli) — MIT
-- [CaneBayComputers/zeltro-gui](https://github.com/CaneBayComputers/zeltro-gui) — MIT
+- [CaneBayComputers/zeltro-cli](https://github.com/CaneBayComputers/zeltro-cli) (MIT)
+- [CaneBayComputers/zeltro-gui](https://github.com/CaneBayComputers/zeltro-gui) (MIT)
 
 ## Support
 
-Zeltro is open source with no paid tier — both parts are MIT. If it saves you time and
-you want to chip in:
+Zeltro is open source under the MIT licence, with no paid tier and no account
+to create. You bring your own AI agent and pay for it yourself. If Zeltro saves you time and you want to chip in:
 
-- [GitHub Sponsors](https://github.com/sponsors/shrimpwagon) — GitHub covers the fees
-- [Ko-fi](https://ko-fi.com/canebaycomputers) — quickest, no account needed
-- [Patreon](https://patreon.com/canebaycomputers) — monthly
-- [Credit card](https://donate.zeltro.build) — direct, via Cane Bay Computers' processor
+- [GitHub Sponsors](https://github.com/sponsors/shrimpwagon): GitHub covers the fees
+- [Ko-fi](https://ko-fi.com/canebaycomputers): quickest, no account needed
+- [Patreon](https://patreon.com/canebaycomputers): monthly
+- [Credit card](https://donate.zeltro.build): direct, via Cane Bay Computers' processor
