@@ -26,8 +26,13 @@ run_project() {
     local code=$?
     echo "EXIT:$code" >> "$logfile"
 
-    local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://${name}/" 2>/dev/null)
+    # Probe the project's container IP. http://<name>/ resolves nowhere on the
+    # host: Zeltro does not write /etc/hosts.
+    local http_code projects_dir ip
+    projects_dir=$(grep '^PROJECTS_DIR=' /etc/zeltro-cli/.env 2>/dev/null | cut -d= -f2- | tr -d '"')
+    projects_dir="${projects_dir:-$HOME/zeltro-projects}"
+    ip=$(grep -m1 'ipv4_address:' "$projects_dir/$name/docker-compose.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://${ip:-$name}/" 2>/dev/null)
     echo "[$(date '+%H:%M:%S')] DONE: $name | exit=$code | HTTP $http_code" | tee -a "$LOG"
 }
 
@@ -71,15 +76,15 @@ Steps:
 3. cd ~/zeltro-projects/immich && zeltro setup immich --no-startup && zeltro up immich
 4. Wait 30s, then curl -sI http://immich/ — expect 200. First user becomes admin.'"$SUMMARY_SUFFIX"
 
-IDEA_TRILIUM='Deploy Trilium Notes on this Zeltro server. The project name is trilium — use this exact name, no changes.
+IDEA_TRILIUM='Deploy TriliumNext Notes on this Zeltro server. The project name is triliumnext — use this exact name, no changes.
 
-Trilium Notes is a hierarchical note-taking app (image: zadam/trilium:latest). It listens on port 8080. Use an nginx reverse proxy. No database needed — uses SQLite.
+TriliumNext is the maintained successor of Trilium Notes, a hierarchical note-taking app (image: ghcr.io/triliumnext/trilium:v0.104.1; the old zadam/trilium image is unmaintained). It listens on port 8080. Use an nginx reverse proxy. No database needed — uses SQLite.
 
 Steps:
-1. mkdir -p ~/zeltro-projects/trilium
-2. Write docker-compose.yaml: trilium-app service (persist /home/node/trilium-data) + nginx (container_name=trilium, static VPC IP). Write nginx.conf proxying to trilium-app:8080.
-3. cd ~/zeltro-projects/trilium && zeltro setup trilium --no-startup && zeltro up trilium
-4. curl -sI http://trilium/ — expect 200. Set password on first visit.'"$SUMMARY_SUFFIX"
+1. mkdir -p ~/zeltro-projects/triliumnext
+2. Write docker-compose.yaml: triliumnext-app service (persist /home/node/trilium-data) + nginx (container_name=triliumnext, static VPC IP). Write nginx.conf proxying to triliumnext-app:8080.
+3. cd ~/zeltro-projects/triliumnext && zeltro setup triliumnext --no-startup && zeltro up triliumnext
+4. curl -sI the address zeltro status triliumnext prints — expect 200. Set password on first visit.'"$SUMMARY_SUFFIX"
 
 IDEA_SEARXNG='Deploy SearXNG on this Zeltro server. The project name is searxng — use this exact name, no changes.
 
@@ -136,7 +141,7 @@ Steps:
 
 run_project "photoprism"  "$IDEA_PHOTOPRISM" &
 run_project "immich"      "$IDEA_IMMICH" &
-run_project "trilium"     "$IDEA_TRILIUM" &
+run_project "triliumnext" "$IDEA_TRILIUM" &
 run_project "searxng"     "$IDEA_SEARXNG" &
 run_project "glances"     "$IDEA_GLANCES" &
 run_project "wger"        "$IDEA_WGER" &

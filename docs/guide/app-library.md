@@ -26,8 +26,24 @@ Each installer captures one app's quirks once, so you (or your agent) never re-d
 - Creates the app's database on the shared service, plus a dedicated database user when the app refuses to run as root
 - Generates secrets and app keys
 - Writes a compose file wired to Zeltro's shared services instead of bundled databases
-- Gives the app a static IP on Zeltro's network and a container name other containers can reach it by
+- Gives the app a static IP on Zeltro's network, a container name other containers can reach it by, and a published host port (the IP's last number) for the LAN address
+- Points the app's own URL at that IP before it first starts (see below)
 - Starts the container and waits until it answers over HTTP
+
+### The app's own URL
+
+Most apps need to know their public URL (`APP_URL`, `ROOT_URL`, `NEXTAUTH_URL` and so on), and many redirect you to it or refuse any other address. Zeltro doesn't write `/etc/hosts`, so the project name isn't a URL your browser can open. Before the app's first start, `zeltro install` sets that URL to the project's container IP: `http://grafana/` becomes `http://10.247.177.124/`.
+
+The IP is used, not a `localhost` port, because it works both from your browser on Linux and from other containers on every OS. Apps that check the hostname itself (Nextcloud and ownCloud trusted domains, Kimai, Readeck, ESPHome, Baby Buddy, Healthchecks) accept both the IP and the project name.
+
+{: .note }
+> The LAN address (`http://<this-machine>:<port>`) reaches the same container. But an app that redirects to its own URL, or accepts only that host, will send a LAN visitor to the container IP, which only this machine can reach. FreeScout, for example, answers the LAN address with *403 Untrusted Host*. On macOS and Windows, where the container IP isn't reachable from the host, these apps need their URL changed by hand to `http://localhost:<port>`.
+
+A few apps have an address that is part of their permanent identity, so Zeltro leaves it as the project name:
+
+- **Mastodon** keeps `LOCAL_DOMAIN` and `WEB_DOMAIN` as the name, and lists the IP in `ALTERNATE_DOMAINS` so it answers there. Its home and explore pages load at the IP, but Mastodon assumes HTTPS in production: its cookies are marked Secure, which a browser won't send over plain `http://`, and some redirects (sign-up to sign-in, for example) point at `https://`. To sign in, you need HTTPS in front of it.
+- **Lemmy** keeps `hostname` in `lemmy.hjson` as the name. Its web UI talks to the API at the IP.
+- **Pixelfed** is the exception: it serves pages only on `APP_DOMAIN`, so that is set to the IP.
 
 Newer installers **pin image tags to specific versions**, not `:latest`, so an install that worked yesterday works the same today and upgrades are deliberate. Some older installers still use floating tags; see [Available apps](#available-apps).
 
@@ -44,6 +60,15 @@ Newer installers **pin image tags to specific versions**, not `:latest`, so an i
 zeltro install livewire sign-tools
 zeltro install livewire sign-tools --image canebaycomputers/cbc:nginx-php8-vector
 ```
+
+## Removing an app
+
+```bash
+zeltro remove grafana                    # stop it and trash the files; data is kept
+zeltro remove grafana --force-db-delete  # also drop its databases, DB users and volumes
+```
+
+`--force-db-delete` drops what the app actually uses, not a database named after the project. It reads the database names and users from the project's compose and `.env` files, and from the `CREATE DATABASE` / `CREATE USER` lines of the installer that created it. So removing `zeltro install freescout helpdesk` drops the `freescout` database and the `freescout` MariaDB user. A database or user that another project's files also name is kept, and the output says so.
 
 ## Keeping installers current
 
@@ -77,7 +102,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 >
 > - **Whoogle Search** has been removed. Its maintainer ended the project on 24 July 2026 after Google blocked searches made without JavaScript, and it no longer returns results. `zeltro install searxng` is a self-hosted alternative.
 > - **MinIO**'s open-source repository is archived, and its images have been removed from Docker Hub and Quay. `zeltro install minio`, the storage containers in **Plane** and **Langfuse**, and the optional shared `minio` service now run **[Silo](https://github.com/pgsty/silo)** (`pgsty/silo`), the maintained MinIO fork. It keeps MinIO's S3 API, `MINIO_*` settings, ports and data format, so the slug, hostname and credentials are unchanged.
-> - **FreeScout**'s image moved from `tiredofit/` to `nfrastack/freescout` (2.x), and the installer now uses it. FreeScout only answers for the host in its `APP_URL`, so opening it by IP address returns *403 Untrusted Host* until you set `APP_URL` in the project's `docker-compose.yaml` to that address.
+> - **FreeScout**'s image moved from `tiredofit/` to `nfrastack/freescout` (2.x), and the installer now uses it. FreeScout only answers for the host in its `APP_URL`, which `zeltro install` sets to the project IP.
 > - **Readeck** now installs 0.23.4; the 0.22.3 image the installer used is no longer published.
 > - **Karakeep**'s headless-Chrome sidecar now comes from Docker Hub (`zenika/alpine-chrome`); the `gcr.io` copy is gone.
 > - **Maybe Finance** is no longer maintained (final release v0.6.0, July 2025). **Sure** is the community fork and is in the list.

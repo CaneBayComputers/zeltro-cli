@@ -29,7 +29,7 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 | `zeltro up <name>` / `zeltro up-all` | Start one project, or every project. Shared services always start. |
 | `zeltro down <name>` / `zeltro down-all` | Stop one project, or every project. Shared services keep running — use `zeltro stop-services` for those. |
 | `zeltro setup <name>` | Adapt a project directory in `~/zeltro-projects/`. |
-| `zeltro remove <name>` | Tear down a project. DB is **preserved** by default — pass `--force-db-delete` to drop it. |
+| `zeltro remove <name>` | Tear down a project. DB is **preserved** by default — pass `--force-db-delete` to drop its databases, the database users its installer created, and its volumes (anything another project also uses is kept). |
 | `zeltro status [name] [--all]` | Show running state. Lists only active (running) projects by default; `--all` includes stopped projects. |
 | `zeltro exec <cmd>` | Run a command inside the project container, no TTY (automation-friendly). Run from the project directory. |
 
@@ -213,6 +213,9 @@ COMPOSE
 - **Helper services** (workers, schedulers, sidekiq) attach to the default network without `ipv4_address` — they land in `.32`–`.63`.
 - **Generate secrets** via `openssl rand -hex 32` (or whatever the upstream expects).
 - **Pick a slug**: lowercase hyphenated. Becomes the filename, the container name, and DB name (with hyphens → underscores).
+- **Write the app's own URL as `http://<slug>`** (`APP_URL`, `ROOT_URL`, `NEXTAUTH_URL`, `PUBLIC_URL`, ...). After setup assigns the project its IP and before the first start, `zeltro install` rewrites every `http://`, `https://`, `ws://` or `wss://` followed by the project name or the slug — whole name only, so `http://<slug>-api` is untouched — to the container IP in every file the installer wrote. The IP works from the host on Linux and from inside the network on every OS. A `http://<slug>:<port>` that names a *different* compose service (a backend behind nginx) is left alone.
+- **Bare hostnames** (trusted-domain lists, `DOMAIN` settings) have no scheme, so they are not rewritten. Use the placeholders `__ZELTRO_IP__` (container IP) and `__ZELTRO_PROJECT__` (project name), filled in at the same moment. List both where the app accepts a list (`NEXTCLOUD_TRUSTED_DOMAINS: "__ZELTRO_PROJECT__ __ZELTRO_IP__"`), so browsers by IP and containers by name both get in. Where a setting is the instance's permanent identity (Mastodon `LOCAL_DOMAIN`), keep the name and allow the IP as an alternate if the app has one (`ALTERNATE_DOMAINS=__ZELTRO_IP__`); use the IP itself only when the app serves nothing on any other host (Pixelfed binds its routes to `APP_DOMAIN`).
+- **Name every database and user you create in the compose or `.env`** (`DB_DATABASE`, `POSTGRES_DB`, `DB_USER`, a `postgres://user@host/db` URL, ...). `zeltro remove --force-db-delete` finds them there and in `pre_install`'s `CREATE DATABASE` / `CREATE USER` lines (install records the installer in the compose `x-metadata`).
 
 ### Source-based installers
 
@@ -252,6 +255,7 @@ When `zeltro clone` or `zeltro setup` encounters a `docker-compose.yaml` with mo
 - Bundled DB/cache services (`postgres`, `mysql`/`mariadb`, `redis`/`valkey`, `mongodb`) are removed.
 - Env var references are rewritten to the Zeltro shared hostnames.
 - The web-facing service gets a static IP on `zeltro-cli_vpc` and a `container_name` matching the project name.
+- The web-facing service publishes one host port, the IP's last octet (`"219:80"`), exactly like Zeltro's own templates. Its upstream port mappings are replaced (their container port is kept, else 80), so `zeltro status` shows LOCAL and LAN addresses and macOS/Windows can reach it on `localhost:<port>`.
 - Other services (workers, schedulers) attach to `zeltro-cli_vpc` without a fixed IP.
 - Image type only affects this compose adaptation. **Framework steps (composer install, `.env` wiring, storage symlink, migrations) are driven by framework detection** — they run for adapted projects too, and the project is started + wired up automatically. Pass `--no-startup` to defer and review the compose first.
 - For an existing app that ships its own populated `.env`, pass `--overwrite-env` to repoint its connection settings (`DB_HOST`, `DB_DATABASE`, `REDIS_HOST`, …) at the shared services while preserving `APP_KEY`; `--db-name <name>` sets the DB name. Migrations run by default (non-destructive `migrate` for adopted apps); `--no-migration` skips them (e.g. when importing a DB dump).
