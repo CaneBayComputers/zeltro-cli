@@ -62,6 +62,40 @@ _install_real_urls() {
     printf '%s' "$text" | sed -E "s#http://${esc}([^A-Za-z0-9_.-]|\$)#${url}\\1#g"
 }
 
+# Point the app's own base URL at the project's container IP.
+#
+# Installers write APP_URL / ROOT_URL / NEXTAUTH_URL / PUBLIC_URL and friends as
+# http://<name>, and the app then redirects the browser there or refuses any
+# other Host (FreeScout: 403 "Untrusted Host"). Nothing resolves that name on the
+# host, so rewrite http://<project> and http://<app slug> -- whole names only --
+# to http://<ip> in every file write_files produced, and fill in the
+# __ZELTRO_IP__ / __ZELTRO_PROJECT__ placeholders installers use for hostname
+# lists that have no scheme (Nextcloud trusted_domains and the like).
+#
+# The IP, not localhost:<port>: it works from the host on Linux and from inside
+# the Docker network on every OS, so the app's own calls to its public URL keep
+# working. Runs after setup (which assigns the IP) and before the first start.
+# Prints the files it changed; extra args go to the helper (--top-level-only).
+_install_point_urls_at_ip() {
+    local ip changed
+    ip="$(zeltro_project_ip "$PROJECT_NAME")"
+    [ -n "$ip" ] || return 0
+    changed="$(python3 "$DEV_DIR/scripts/rewrite_project_urls.py" "$PROJECT_DIR" "$ip" "$PROJECT_NAME" "$APP" "$@" 2>/dev/null)" || true
+    if [ -n "$changed" ]; then
+        echo-cyan "Pointed $INSTALL_DISPLAY's own URL at http://$ip ($(printf '%s' "$changed" | tr '\n' ',' | sed 's/,$//; s/,/, /g'))" >&2
+    fi
+    printf '%s' "$changed"
+}
+
+# Remember which installer made this project. `zeltro remove --force-db-delete`
+# reads it to find the databases and users the installer's pre_install created,
+# which are named after the app (freescout), not after the project.
+_install_record_installer() {
+    local f
+    f="$(zeltro_project_compose "$PROJECT_NAME")"
+    [ -n "$f" ] && set_x_metadata_key "$f" "$PROJECT_NAME" "installer" "$APP" >/dev/null 2>&1 || true
+}
+
 SKIP_INTERACTIVE=0
 APP=""
 PROJECT_NAME=""
@@ -229,6 +263,24 @@ echo-return
 _needed="$(services_referenced_in "$(cat "$INSTALLER" 2>/dev/null)")"
 [ -n "$_needed" ] && ensure_services_running $_needed
 
+# Running is not ready. A database container started just now -- the first
+# time a machine needs Postgres, say -- spends several seconds initialising,
+# and pre_install's CREATE DATABASE (errors silenced, as most installers do)
+# failed into that window. Mastodon then crash-looped on "database
+# mastodon_production does not exist" with nothing in the install output.
+for _svc in $_needed; do
+    _c="$(zeltro_service_container "$_svc")"
+    case "$_svc" in
+        postgres) _probe=(pg_isready -h 127.0.0.1 -U root) ;;
+        mysql|mariadb) _probe=(mariadb -u root -e "SELECT 1") ;;
+        *) continue ;;
+    esac
+    for _i in $(seq 1 60); do
+        docker exec "$_c" "${_probe[@]}" >/dev/null 2>&1 && break
+        sleep 1
+    done
+done
+
 # Pre-install hook (DB creation, key generation, etc.)
 if declare -f pre_install > /dev/null 2>&1; then
     pre_install
@@ -267,10 +319,23 @@ SETUP_ARGS=("$PROJECT_NAME")
 ZELTRO_BIN="$DEV_DIR/zeltro"
 
 # The ${arr[@]+...} guard keeps an empty array from tripping bash 3.2 (macOS).
+#
+# Between setup and the first start, the app's own URL is pointed at the
+# project's address (_install_point_urls_at_ip). Setup is what assigns the IP,
+# so this is the earliest it can happen; for prebuilt-image apps it is also
+# before any container exists, so the app never boots with the wrong URL. A
+# full-pipeline install has already started by then, so it gets a restart when
+# something changed.
 if [ "${INSTALL_SETUP_FULL:-0}" = "1" ]; then
     "$ZELTRO_BIN" setup "${SETUP_ARGS[@]}" ${IMAGE_ARGS[@]+"${IMAGE_ARGS[@]}"} ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
+    _install_record_installer
+    if [ -n "$(_install_point_urls_at_ip --top-level-only)" ]; then
+        (cd "$PROJECT_DIR" && docker compose restart >/dev/null 2>&1) || true
+    fi
 else
     "$ZELTRO_BIN" setup "${SETUP_ARGS[@]}" --no-startup ${IMAGE_ARGS[@]+"${IMAGE_ARGS[@]}"} ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
+    _install_record_installer
+    _install_point_urls_at_ip >/dev/null
     "$ZELTRO_BIN" up "$PROJECT_NAME" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
 fi
 
@@ -286,8 +351,12 @@ PROJECT_PORT="$(zeltro_project_port "$PROJECT_NAME")"
 LAN_IP="$(_install_lan_ip)"
 LAN_URL=""
 [ -n "$LAN_IP" ] && [ -n "$PROJECT_PORT" ] && LAN_URL="http://$LAN_IP:$PROJECT_PORT"
-INSTALL_CREDENTIALS="$(_install_real_urls "$INSTALL_CREDENTIALS" "$PROJECT_NAME" "$PROJECT_URL")"
-INSTALL_NOTES="$(_install_real_urls "$INSTALL_NOTES" "$PROJECT_NAME" "$PROJECT_URL")"
+# Both names, as in _install_point_urls_at_ip: many installers write the slug
+# literally, so a project installed under another name still says http://<slug>.
+for _n in "$PROJECT_NAME" "$APP"; do
+    INSTALL_CREDENTIALS="$(_install_real_urls "$INSTALL_CREDENTIALS" "$_n" "$PROJECT_URL")"
+    INSTALL_NOTES="$(_install_real_urls "$INSTALL_NOTES" "$_n" "$PROJECT_URL")"
+done
 
 echo-return
 echo-white "Waiting for $INSTALL_DISPLAY to be ready at ${PROJECT_URL:-(no address found)} ..."

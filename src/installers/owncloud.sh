@@ -13,8 +13,10 @@ services:
     image: owncloud/server:10.16.4
     restart: unless-stopped
     environment:
-      OWNCLOUD_DOMAIN: owncloud
-      OWNCLOUD_TRUSTED_DOMAINS: owncloud
+      # __ZELTRO_IP__ / __ZELTRO_PROJECT__ are filled in by zeltro install once
+      # the project has its address: the IP for browsers, the name for containers.
+      OWNCLOUD_DOMAIN: __ZELTRO_IP__
+      OWNCLOUD_TRUSTED_DOMAINS: "__ZELTRO_PROJECT__,__ZELTRO_IP__"
       OWNCLOUD_DB_TYPE: pgsql
       OWNCLOUD_DB_HOST: zeltro-postgres
       OWNCLOUD_DB_NAME: owncloud

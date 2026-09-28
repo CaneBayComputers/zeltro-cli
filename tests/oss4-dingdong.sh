@@ -22,8 +22,13 @@ run_project() {
     local code=$?
     echo "EXIT:$code" >> "$logfile"
 
-    local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://${name}/" 2>/dev/null)
+    # Probe the project's container IP. http://<name>/ resolves nowhere on the
+    # host: Zeltro does not write /etc/hosts.
+    local http_code projects_dir ip
+    projects_dir=$(grep '^PROJECTS_DIR=' /etc/zeltro-cli/.env 2>/dev/null | cut -d= -f2- | tr -d '"')
+    projects_dir="${projects_dir:-$HOME/zeltro-projects}"
+    ip=$(grep -m1 'ipv4_address:' "$projects_dir/$name/docker-compose.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://${ip:-$name}/" 2>/dev/null)
     echo "[$(date '+%H:%M:%S')] DONE: $name | exit=$code | HTTP $http_code" | tee -a "$LOG"
 }
 
@@ -152,15 +157,15 @@ Steps:
 4. cd ~/zeltro-projects/nocodb && zeltro setup nocodb --no-startup && zeltro up nocodb
 5. Wait 15 seconds, then curl -sI http://nocodb/ — expect 200 or 302. Default admin: admin@nocodb.com / Admin1234@ (set on first login).'"$SUMMARY_SUFFIX"
 
-IDEA_MINIO='Deploy MinIO on this Zeltro server. The project name is minio — use this exact name, no changes.
+IDEA_MINIO='Deploy MinIO-compatible storage on this Zeltro server. The project name is minio — use this exact name, no changes.
 
-MinIO is an S3-compatible object storage server (image: quay.io/minio/minio:latest). The web console listens on port 9001; the API is on port 9000. Use an nginx reverse proxy pointing to the console (port 9001). No external database needed.
+MinIO has been archived and its images removed from Docker Hub and Quay, so use Silo, the maintained MinIO fork (image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z). It keeps the MinIO command line, MINIO_ROOT_* variables and ports: the web console listens on port 9001; the S3 API is on port 9000. Use an nginx reverse proxy pointing to the console (port 9001). No external database needed.
 
 Steps:
 1. mkdir -p ~/zeltro-projects/minio
-2. Write docker-compose.yaml: minio-app service (image: quay.io/minio/minio:latest; command: server /data --console-address ":9001"; env: MINIO_ROOT_USER=minioadmin, MINIO_ROOT_PASSWORD=minioadmin123; volumes: minio-data:/data) + nginx service (container_name=minio, static VPC IP). Write nginx.conf proxying to minio-app:9001.
+2. Write docker-compose.yaml: minio-app service (image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z; command: server /data --console-address ":9001"; env: MINIO_ROOT_USER=minioadmin, MINIO_ROOT_PASSWORD=minioadmin123; volumes: minio-data:/data) + nginx service (container_name=minio, static VPC IP). Write nginx.conf proxying to minio-app:9001.
 3. cd ~/zeltro-projects/minio && zeltro setup minio --no-startup && zeltro up minio
-4. Wait 10 seconds, then curl -sI http://minio/ — expect 200 or 302. Log in at http://minio/ with minioadmin / minioadmin123.'"$SUMMARY_SUFFIX"
+4. Wait 10 seconds, then curl -sI the address zeltro status minio prints — expect 200 or 302. Log in there with minioadmin / minioadmin123.'"$SUMMARY_SUFFIX"
 
 run_project "open-webui" "$IDEA_OPENWEBUI" &
 run_project "yourls"     "$IDEA_YOURLS" &

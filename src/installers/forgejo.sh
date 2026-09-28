@@ -19,10 +19,10 @@ services:
       FORGEJO__database__NAME: forgejo
       FORGEJO__database__USER: root
       FORGEJO__database__PASSWD: ""
-      FORGEJO__server__DOMAIN: forgejo
+      FORGEJO__server__DOMAIN: __ZELTRO_IP__
       FORGEJO__server__ROOT_URL: http://forgejo/
       FORGEJO__server__HTTP_PORT: 3000
-      FORGEJO__server__SSH_DOMAIN: forgejo
+      FORGEJO__server__SSH_DOMAIN: __ZELTRO_IP__
       FORGEJO__mailer__ENABLED: "true"
       FORGEJO__mailer__PROTOCOL: smtp
       FORGEJO__mailer__SMTP_ADDR: zeltro-mailhog

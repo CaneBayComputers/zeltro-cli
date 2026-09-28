@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
     environment:
       CMD_DB_URL: postgres://root:password@zeltro-postgres:5432/codimd
-      CMD_DOMAIN: codimd
+      CMD_DOMAIN: __ZELTRO_IP__
       CMD_URL_ADDPORT: "false"
       CMD_PROTOCOL_USESSL: "false"
       CMD_HSTS_ENABLE: "false"

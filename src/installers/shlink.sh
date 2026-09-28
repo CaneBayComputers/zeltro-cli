@@ -15,7 +15,7 @@ services:
     image: shlinkio/shlink:stable
     restart: unless-stopped
     environment:
-      DEFAULT_DOMAIN: shlink
+      DEFAULT_DOMAIN: __ZELTRO_IP__
       IS_HTTPS_ENABLED: "false"
       SKIP_INITIAL_GEOLITE_DOWNLOAD: "true"
       INITIAL_API_KEY: $api_key

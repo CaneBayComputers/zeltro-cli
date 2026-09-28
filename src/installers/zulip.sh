@@ -30,7 +30,7 @@ services:
       DB_HOST_PORT: "5432"
       DB_USER: root
       DB_NAME: zulip
-      SETTING_EXTERNAL_HOST: zulip
+      SETTING_EXTERNAL_HOST: __ZELTRO_IP__
       SETTING_ZULIP_ADMINISTRATOR: admin@zulip.local
       SETTING_EMAIL_HOST: ""
       SETTING_EMAIL_HOST_USER: noreply@zulip.local

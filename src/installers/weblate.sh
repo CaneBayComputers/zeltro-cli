@@ -21,7 +21,7 @@ services:
       WEBLATE_DEBUG: "0"
       WEBLATE_LOGLEVEL: INFO
       WEBLATE_SITE_TITLE: Weblate
-      WEBLATE_SITE_DOMAIN: weblate
+      WEBLATE_SITE_DOMAIN: __ZELTRO_IP__
       WEBLATE_ALLOWED_HOSTS: "*"
       WEBLATE_ADMIN_NAME: Weblate Admin
       WEBLATE_ADMIN_EMAIL: admin@example.com

@@ -20,6 +20,7 @@ services:
       GITEA__database__USER: root
       GITEA__database__PASSWD: ""
       GITEA__server__ROOT_URL: http://gitea/
+      GITEA__server__DOMAIN: __ZELTRO_IP__
       GITEA__server__HTTP_PORT: 3000
     volumes:
       - gitea-data:/data

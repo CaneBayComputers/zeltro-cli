@@ -1,6 +1,6 @@
 INSTALL_DISPLAY="FreeScout"
 INSTALL_CREDENTIALS="admin@freescout.local / freescout-admin"
-INSTALL_NOTES="Help desk / shared inbox. First boot takes a few minutes. FreeScout answers 403 Untrusted Host unless the browser host matches APP_URL in docker-compose.yaml: set APP_URL to the address zeltro status prints, then zeltro down + up."
+INSTALL_NOTES="Help desk / shared inbox. First boot takes a few minutes. FreeScout answers 403 Untrusted Host on any address other than APP_URL, which zeltro install sets to the project IP, so open it there (not the LAN address)."
 INSTALL_READY_RETRIES=60
 
 pre_install() {

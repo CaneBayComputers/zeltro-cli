@@ -18,8 +18,10 @@ services:
       MYSQL_PASSWORD: ""
       REDIS_HOST: zeltro-redis
       REDIS_HOST_PORT: 6379
-      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud
-      OVERWRITEHOST: nextcloud
+      # Space-separated. The IP is how a browser on this machine reaches it,
+      # the project name is how other containers do. No OVERWRITEHOST: it made
+      # every generated link (and the post-login redirect) http://nextcloud/.
+      NEXTCLOUD_TRUSTED_DOMAINS: "__ZELTRO_PROJECT__ __ZELTRO_IP__"
       OVERWRITEPROTOCOL: http
     volumes:
       - nextcloud-data:/var/www/html

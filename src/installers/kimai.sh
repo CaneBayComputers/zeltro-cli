@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: prod
-      TRUSTED_HOSTS: kimai
+      TRUSTED_HOSTS: "__ZELTRO_PROJECT__,__ZELTRO_IP__,localhost,127.0.0.1"
       ADMINMAIL: admin@example.com
       ADMINPASS: admin123
       DATABASE_URL: mysql://root:@zeltro-mariadb:3306/kimai
