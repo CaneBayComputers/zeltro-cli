@@ -11,7 +11,7 @@ services:
     environment:
       ESPHOME_USERNAME: admin
       ESPHOME_PASSWORD: admin123
-      ESPHOME_TRUSTED_DOMAINS: esphome
+      ESPHOME_TRUSTED_DOMAINS: "__ZELTRO_PROJECT__,__ZELTRO_IP__"
       TZ: UTC
     volumes:
       - esphome-config:/config

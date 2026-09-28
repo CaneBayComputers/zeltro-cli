@@ -15,7 +15,7 @@ write_files() {
 
     cat > .env << EOF
 APP_RELEASE=stable
-APP_DOMAIN=plane
+APP_DOMAIN=__ZELTRO_IP__
 WEB_URL=http://plane
 CORS_ALLOWED_ORIGINS=http://plane
 

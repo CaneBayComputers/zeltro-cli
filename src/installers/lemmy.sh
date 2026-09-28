@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
     environment:
       LEMMY_UI_LEMMY_INTERNAL_HOST: lemmy-backend:8536
-      LEMMY_UI_LEMMY_EXTERNAL_HOST: lemmy
+      LEMMY_UI_LEMMY_EXTERNAL_HOST: __ZELTRO_IP__
       LEMMY_UI_HTTPS: "false"
     depends_on:
       - lemmy-backend

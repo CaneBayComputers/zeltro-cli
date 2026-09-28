@@ -8,9 +8,12 @@ services:
     image: n8nio/n8n:latest
     restart: unless-stopped
     environment:
-      N8N_HOST: n8n
+      N8N_HOST: __ZELTRO_IP__
       N8N_PORT: 5678
       N8N_PROTOCOL: http
+      # The auth cookie is Secure by default, which a browser never sends back
+      # over plain http://<ip>/, so the owner could not stay signed in.
+      N8N_SECURE_COOKIE: "false"
       WEBHOOK_URL: http://n8n/
       GENERIC_TIMEZONE: UTC
     volumes:

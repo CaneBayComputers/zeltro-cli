@@ -23,7 +23,7 @@ services:
       DB_PASSWORD: password
       SECRET_KEY: $secret_key
       DEBUG: "False"
-      ALLOWED_HOSTS: healthchecks,localhost,127.0.0.1
+      ALLOWED_HOSTS: __ZELTRO_PROJECT__,__ZELTRO_IP__,localhost,127.0.0.1
       SITE_ROOT: http://healthchecks
       SITE_NAME: Healthchecks
       SUPERUSER_EMAIL: admin@example.com

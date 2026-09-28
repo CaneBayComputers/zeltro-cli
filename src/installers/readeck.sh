@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     environment:
       READECK_LOG_LEVEL: info
-      READECK_ALLOWED_HOSTS: readeck
+      READECK_ALLOWED_HOSTS: "__ZELTRO_PROJECT__,__ZELTRO_IP__"
     volumes:
       - readeck-data:/readeck
 

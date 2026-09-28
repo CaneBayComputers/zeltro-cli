@@ -26,7 +26,7 @@ services:
       DB_USER: root
       DB_PASSWORD: password
       CSRF_TRUSTED_ORIGINS: http://babybuddy
-      ALLOWED_HOSTS: babybuddy,localhost,127.0.0.1
+      ALLOWED_HOSTS: __ZELTRO_PROJECT__,__ZELTRO_IP__,localhost,127.0.0.1
       EMAIL_HOST: zeltro-mailhog
       EMAIL_PORT: 1025
     volumes:

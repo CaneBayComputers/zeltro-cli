@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
     environment:
       CMD_DB_URL: postgres://root:password@zeltro-postgres:5432/hedgedoc
-      CMD_DOMAIN: hedgedoc
+      CMD_DOMAIN: __ZELTRO_IP__
       CMD_URL_ADDPORT: "false"
       CMD_PROTOCOL_USESSL: "false"
       CMD_SESSION_SECRET: "$session_secret"
