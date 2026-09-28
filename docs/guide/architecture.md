@@ -93,7 +93,7 @@ Once enabled they start with every `zeltro up` and resolve by hostname from insi
 
 | Service | Slug | Host | Port | Credentials |
 |---|---|---|---|---|
-| MinIO (S3-compatible storage) | `minio` | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |
+| MinIO-compatible S3 storage ([Silo](https://github.com/pgsty/silo), the maintained MinIO fork) | `minio` | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |
 | Meilisearch (full-text search) | `meilisearch` | `zeltro-meilisearch` | 7700 | master key `zeltro-dev-master-key` |
 | phpMyAdmin (MariaDB) | `phpmyadmin` | `zeltro-phpmyadmin` | 80 | `root`, no password |
 | Adminer (MariaDB, PostgreSQL, SQLite, MongoDB) | `adminer` | `zeltro-adminer` | 8080 | `root` and that database's password |

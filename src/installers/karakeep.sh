@@ -36,7 +36,7 @@ services:
       - karakeep-meili:/meili_data
 
   chrome:
-    image: gcr.io/zenika-hub/alpine-chrome:124
+    image: zenika/alpine-chrome:124
     restart: unless-stopped
     command:
       - --no-sandbox

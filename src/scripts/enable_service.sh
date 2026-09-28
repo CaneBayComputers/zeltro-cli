@@ -41,7 +41,7 @@ phpmyadmin|admin-ui|Web admin for MariaDB/MySQL|http://zeltro-phpmyadmin
 adminer|admin-ui|Web admin for MariaDB/MySQL, PostgreSQL, SQLite and MongoDB|http://zeltro-adminer:8080
 mongo-express|admin-ui|Web admin for MongoDB|http://zeltro-mongo-express:8081
 redisinsight|admin-ui|Web admin for Redis|http://zeltro-redisinsight:5540
-minio|storage-search|S3-compatible object storage|http://zeltro-minio:9000
+minio|storage-search|S3-compatible object storage (Silo, the maintained MinIO fork)|http://zeltro-minio:9000
 meilisearch|storage-search|Full-text search engine|http://zeltro-meilisearch:7700"
 # A box installed under the Podium name runs podium-* containers, and zeltro-*
 # does not resolve there, so show the names this machine actually uses.

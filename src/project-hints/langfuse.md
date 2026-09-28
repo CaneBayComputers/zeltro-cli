@@ -2,7 +2,7 @@
 
 Open-source LLM observability: traces, evals, prompt management and cost tracking for AI apps.
 
-**Image**: `langfuse/langfuse:4.4.0` (web) + `langfuse/langfuse-worker:4.4.0` + `clickhouse/clickhouse-server:25.12` + `minio/minio:RELEASE.2025-09-07T16-13-09Z` + `nginx:1.30.4-alpine`
+**Image**: `langfuse/langfuse:4.4.0` (web) + `langfuse/langfuse-worker:4.4.0` + `clickhouse/clickhouse-server:25.12` + `pgsty/silo:RELEASE.2026-09-03T13-18-01Z` (Silo, the maintained MinIO fork) + `nginx:1.30.4-alpine`
 **Port**: 3000 on the web container (behind the nginx reverse proxy on 80)
 **Database**: PostgreSQL (`zeltro-postgres`, database `langfuse`) + Redis (`zeltro-redis`, DB 6); ClickHouse and MinIO run as sidecars
 **Credentials**: `admin@example.com` / `admin123` (seeded via the `LANGFUSE_INIT_*` vars)
@@ -14,5 +14,6 @@ Open-source LLM observability: traces, evals, prompt management and cost trackin
 - `zeltro-redis` runs `maxmemory-policy noeviction`, which is what BullMQ requires — do not change it.
 - The `LANGFUSE_INIT_*` block only seeds on a genuinely empty database. Wipe the `langfuse` Postgres DB if you need to re-seed.
 - Browser-side media uploads point at the internal `http://langfuse-minio:9000`, which the browser cannot reach — trace ingestion and the UI work, but attaching media from the UI does not.
+- The `langfuse-minio` sidecar runs Silo because MinIO's own images are gone. Its binary is `silo`, not `minio`: the `sh -c` command that pre-creates the `langfuse` bucket directory must hand off via `exec docker-entrypoint.sh server ...` (or `silo server ...`). `minio server` fails with "not found".
 - ClickHouse migrations run at first boot; allow 2-3 minutes before the proxy returns 200.
 - The installer exists: run `zeltro install langfuse`.

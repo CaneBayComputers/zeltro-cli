@@ -1,12 +1,17 @@
-INSTALL_DISPLAY="MinIO"
+INSTALL_DISPLAY="MinIO (Silo)"
 INSTALL_CREDENTIALS="minioadmin / minioadmin123"
-INSTALL_NOTES="S3-compatible object storage. API port 9000 is internal; the web console is at http://$PROJECT_NAME/."
+INSTALL_NOTES="S3-compatible object storage. Runs Silo, the maintained MinIO fork: same S3 API, MINIO_* settings and data format. API port 9000 is internal; the web console is at http://$PROJECT_NAME/."
 
+# MinIO's own images are gone: the project was archived, minio/minio returns
+# 404 on Docker Hub and the quay.io tags no longer resolve. pgsty/silo (formerly
+# pgsty/minio) is the maintained community fork. Its entrypoint maps the
+# `server` subcommand onto its `silo` binary, so MinIO's usual command line,
+# ports and MINIO_ROOT_* variables work unchanged.
 write_files() {
     cat > docker-compose.yaml << 'EOF'
 services:
   minio-app:
-    image: quay.io/minio/minio:latest
+    image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
