@@ -3128,14 +3128,16 @@ zeltro_project_ip() {
 
 # The project's published host port, from its compose file. Empty if unknown.
 #
-# Reads the left-hand side of the first "HOST:CONTAINER" mapping. Zeltro's own
-# templates publish exactly one, and the port is the same number wherever you
+# Reads the left-hand side of the first "HOST:CONTAINER" mapping, quoted either
+# way (PyYAML single-quotes a mapping like '120:50' that looks like base 60).
+# Zeltro's own templates, and the adapter for multi-service composes, publish
+# exactly one, and the port is the same number wherever you
 # ask from — unlike the IP, which is only meaningful on the host itself.
 zeltro_project_port() {
     local f
     f="$(zeltro_project_compose "$1")"
     [ -n "$f" ] || return 0
-    grep -E '^[[:space:]]*-[[:space:]]*"?[0-9]+:[0-9]+"?' "$f" 2>/dev/null \
+    grep -E "^[[:space:]]*-[[:space:]]*[\"']?[0-9]+:[0-9]+" "$f" 2>/dev/null \
         | head -1 | sed 's/[^0-9]*\([0-9]*\):.*/\1/'
 }
 
@@ -3170,7 +3172,7 @@ zeltro_port_in_use() {
         [ -d "$p" ] || continue
         for f in "$p/docker-compose.yaml" "$p/docker-compose.yml"; do
             [ -f "$f" ] || continue
-            if grep -qE "^[[:space:]]*-[[:space:]]*\"?${port}:[0-9]+\"?" "$f" 2>/dev/null; then
+            if grep -qE "^[[:space:]]*-[[:space:]]*[\"']?${port}:[0-9]+" "$f" 2>/dev/null; then
                 return 0
             fi
         done
