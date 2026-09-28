@@ -129,6 +129,12 @@ debug "JSON output mode: $JSON_OUTPUT"
 DB_ENGINE="mysql"
 HAS_SHARED_DB=false
 _DB_HINTS=""
+# Shared DB hostnames as this machine names them (podium-* on a box installed
+# before the rename), plus both product prefixes so a project folder copied
+# from another box is still recognised. Matching only "zeltro-*" made every
+# project on a podium-* box look DB-less, so --force-db-delete silently kept
+# the database.
+_SHARED_DB_RE="(zeltro|podium)-(postgres|mongo|mariadb)|$(zeltro_service_container postgres)|$(zeltro_service_container mongo)|$(zeltro_service_container mariadb)"
 if [ -f "$PROJECT_DIR/.env" ]; then
     _DB_HINTS=$(grep -E "^(DB_HOST|DB_CONNECTION)=" "$PROJECT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr '\n' ' ')
 fi
@@ -136,7 +142,7 @@ if [ -z "$_DB_HINTS" ]; then
     # No root .env or no DB_HOST/DB_CONNECTION in it — scan env files (the root
     # .env too: installers like langfuse and plane name the host in DATABASE_URL or
     # PGHOST there) and docker-compose.yaml for Zeltro shared service hostnames
-    _DB_HINTS=$(grep -rhE "(zeltro|podium)-(postgres|mongo|mariadb)" \
+    _DB_HINTS=$(grep -rhE "$_SHARED_DB_RE" \
         "$PROJECT_DIR"/.env "$PROJECT_DIR"/*.env "$PROJECT_DIR"/.env.* "$PROJECT_DIR"/env/ \
         "$PROJECT_DIR"/docker-compose.yaml "$PROJECT_DIR"/docker-compose.yml \
         2>/dev/null | head -5 | tr '\n' ' ')
@@ -151,7 +157,7 @@ fi
 # zeltro-* hostnames (podium-* on a box installed before the rename). Bundled-DB
 # projects (e.g. budibase) don't, so we should
 # skip the start-services + DROP DATABASE step entirely for those.
-if echo "$_DB_HINTS" | grep -qE "(zeltro|podium)-(postgres|mongo|mariadb)"; then
+if echo "$_DB_HINTS" | grep -qE "$_SHARED_DB_RE"; then
     HAS_SHARED_DB=true
 fi
 debug "Detected database engine: $DB_ENGINE, uses shared DB: $HAS_SHARED_DB"

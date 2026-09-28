@@ -24,9 +24,9 @@ framework_scaffold() {
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.0",
-    "dotenv": "^16.4.0",
-    "hono": "^4.6.0"
+    "@hono/node-server": "^2.1.0",
+    "dotenv": "^18.0.0",
+    "hono": "^4.13.0"
   }
 }
 EOF

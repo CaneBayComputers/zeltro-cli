@@ -1,5 +1,9 @@
 #!/bin/bash
 # Express framework hooks
+#
+# Express 5. Route paths use path-to-regexp v8 syntax: a wildcard needs a name
+# ('/*splat', not '/*') and optional segments use braces ('/:file{.:ext}').
+# Rejected promises from async handlers reach the error handler on their own.
 
 FRAMEWORK_IS_PYTHON=0
 FRAMEWORK_IS_NODE=1
@@ -18,8 +22,8 @@ framework_scaffold() {
     "start": "node server.js"
   },
   "dependencies": {
-    "dotenv": "^16.0.0",
-    "express": "^4.18.0"
+    "dotenv": "^18.0.0",
+    "express": "^5.2.0"
   }
 }
 EOF
@@ -40,7 +44,12 @@ app.get('/', (req, res) => {
     });
 });
 
-app.listen(port, '0.0.0.0', () => {
+// Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead of
+// throwing them, so they have to be rethrown or the process idles silently.
+app.listen(port, '0.0.0.0', (error) => {
+    if (error) {
+        throw error;
+    }
     console.log(`Server running on 0.0.0.0:${port}`);
 });
 EOF

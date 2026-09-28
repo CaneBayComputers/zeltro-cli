@@ -201,19 +201,30 @@ framework_run_migrations() {
             cat >> public/sites/default/settings.php << EOF
 
 /**
- * Added by Zeltro — the project is served at http://$PROJECT_NAME/.
+ * Added by Zeltro. The browser reaches this project by IP address (the
+ * container IP, or the machine's LAN IP with the project's port), or as
+ * localhost on macOS/Windows, so allow any IPv4 literal rather than one
+ * address that changes if the project is recreated. The project name stays
+ * for container-to-container requests.
  */
 \$settings['trusted_host_patterns'] = [
   '^${PROJECT_NAME//./\\.}\$',
   '^localhost\$',
+  '^\\d{1,3}(\\.\\d{1,3}){3}\$',
 ];
 EOF
         fi
     fi
 
+    # Zeltro does not write /etc/hosts, so http://<project>/ does not resolve
+    # from the host. Print the address that does.
+    local site_url
+    site_url="$(zeltro_project_url "$PROJECT_NAME")"
+    [ -n "$site_url" ] || site_url="<address from 'zeltro status $PROJECT_NAME'>"
+
     echo-green "Drupal installed."; echo-white
-    echo-white "  Site:  http://$PROJECT_NAME/"
-    echo-white "  Admin: http://$PROJECT_NAME/user/login  ($DRUPAL_ADMIN_USER / $DRUPAL_ADMIN_PASS)"
+    echo-white "  Site:  $site_url/"
+    echo-white "  Admin: $site_url/user/login  ($DRUPAL_ADMIN_USER / $DRUPAL_ADMIN_PASS)"
     echo-white "  Change the password with: zeltro drush user:password $DRUPAL_ADMIN_USER '<new>'"
 }
 

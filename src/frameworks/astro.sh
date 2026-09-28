@@ -2,11 +2,21 @@
 # Astro framework hooks#
 # Serves on port 3000 inside the container. nginx runs in the same container and
 # proxies 127.0.0.1:3000 with Upgrade headers already set, so websockets work
-# without extra configuration and binding to localhost is sufficient.#
-# HMR clientPort is pinned to 80. Vite defaults its HMR socket to the dev
-# server's own port, but 3000 is never published — the browser reaches the app
-# on port 80 through nginx. Without this the page loads and hot reload silently
-# never connects.
+# without extra configuration. The dev server binds 127.0.0.1 explicitly:
+# Vite 8 resolves "localhost" to ::1 in this image, which nginx never tries.#
+# HMR clientPort is pinned to 80 (server.ws.clientPort; Vite 8.1 renamed it
+# from server.hmr.clientPort, which now logs a deprecation). Vite defaults its
+# HMR socket to the dev server's own port, but 3000 is never published — the
+# browser reaches the app on port 80 through nginx. Without this the page loads
+# and hot reload silently never connects.
+#
+# --ignore-lock: Astro 7 writes .astro/dev.json with the dev server's PID and
+# refuses to start while that PID looks alive. The file lives in the
+# bind-mounted project, so it survives a container restart, and in the new
+# container the old PID can belong to another process; the dev server then
+# exits with "Another astro dev server is already running" until supervisor's
+# retries happen to land on a free PID. Supervisor already guarantees there is
+# only one dev server per container, so the lock adds nothing here.
 
 FRAMEWORK_IS_PYTHON=0
 FRAMEWORK_IS_NODE=1
@@ -24,12 +34,12 @@ framework_scaffold() {
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev --port 3000",
+    "dev": "astro dev --port 3000 --ignore-lock",
     "build": "astro build",
     "preview": "astro preview --port 3000"
   },
   "dependencies": {
-    "astro": "^5.1.0"
+    "astro": "^7.3.5"
   }
 }
 EOF
@@ -38,10 +48,12 @@ EOF
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  server: { port: 3000 },
+  // nginx in this container proxies to 127.0.0.1:3000. Left at "localhost",
+  // Vite 8 binds only ::1 here and nginx gets connection refused (502).
+  server: { port: 3000, host: '127.0.0.1' },
   // The browser reaches this app on port 80 through nginx; the dev server's own
   // port is never published, so the HMR socket has to be told where to connect.
-  vite: { server: { hmr: { clientPort: 80 } } },
+  vite: { server: { ws: { clientPort: 80 } } },
 });
 EOF
 

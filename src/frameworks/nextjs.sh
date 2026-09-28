@@ -3,6 +3,10 @@
 # Serves on port 3000 inside the container. nginx runs in the same container and
 # proxies 127.0.0.1:3000 with Upgrade headers already set, so websockets work
 # without extra configuration and binding to localhost is sufficient.
+#
+# Next.js 16: Turbopack is the default for dev and build, and dev-only
+# resources are blocked for any Origin not listed in allowedDevOrigins, which
+# is why next.config.mjs allows the private IPv4 ranges (see the comment there).
 
 FRAMEWORK_IS_PYTHON=0
 FRAMEWORK_IS_NODE=1
@@ -24,16 +28,27 @@ framework_scaffold() {
     "start": "next start -p 3000"
   },
   "dependencies": {
-    "next": "^15.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "next": "^16.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }
 EOF
 
     cat > next.config.mjs << 'EOF'
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // Next.js 16 refuses dev-only requests (the hot-reload websocket among them)
+  // whose Origin is not localhost. The browser reaches this dev server by IP:
+  // the container address, or the machine's LAN address and the project port.
+  // Allow the private IPv4 ranges rather than one address, which changes when
+  // the project is recreated or the machine moves networks.
+  allowedDevOrigins: [
+    '10.*.*.*',
+    '192.168.*.*',
+    ...Array.from({ length: 16 }, (_, i) => `172.${16 + i}.*.*`),
+  ],
+};
 
 export default nextConfig;
 EOF
