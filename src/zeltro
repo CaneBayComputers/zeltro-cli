@@ -24,6 +24,15 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 # added to fix. The `:-$0` fallback is what hid it.
 export ZELTRO_CMD="zeltro${1:+ $1}"
 
+# `zeltro gui event` runs as an agent hook after every turn. It must be quick,
+# print nothing and never fail, so it skips functions.sh, the update check and
+# the projects-dir setup below and goes straight to the script, which always
+# exits 0.
+if [ "$1" = "gui" ] && [ "$2" = "event" ]; then
+    python3 "$SCRIPT_DIR/scripts/gui.py" "${@:2}" </dev/null >/dev/null 2>&1 || true
+    exit 0
+fi
+
 # Source functions
 source "$SCRIPT_DIR/scripts/functions.sh"
 
@@ -148,6 +157,8 @@ show_help() {
     echo "  zeltro send <p>[@host] ... -- <msg>"
     echo "                            - Message other agent sessions (--all for everyone else;"
     echo "                              - reads the message from stdin). Run it from your project."
+    echo "  zeltro gui <action>       - Ask the Zeltro app to show a question, collect a secret into"
+    echo "                              .env, notify, or open a URL (see: zeltro gui --help)"
     echo "  zeltro update [--full]    - Update Zeltro CLI (--full also re-pulls Docker images)"
     echo "  zeltro start-services     - Start shared services"
     echo "  zeltro enable-service <n> - Enable an optional shared service (run it bare to list them)"
@@ -743,6 +754,9 @@ case "$1" in
         ;;
     "send")
         "$SCRIPT_DIR/scripts/bus.sh" send "${@:2}"
+        ;;
+    "gui")
+        "$SCRIPT_DIR/scripts/bus.sh" gui "${@:2}"
         ;;
     "set-metadata")
         "$SCRIPT_DIR/scripts/set_metadata.sh" "${@:2}"

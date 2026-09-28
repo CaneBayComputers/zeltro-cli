@@ -105,6 +105,8 @@ AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
 # ZELTRO_AI_LANGUAGE: a system-level instruction where the agent has one (see
 # zeltro_ai_language_args). Gemini has none, so it rides on the prompt.
 zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
+# In a session the Zeltro app started, report turn ends to it (no-op otherwise).
+zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
 if [[ "$AI_AGENT_CLI_NAME" == "gemini" && -n "${AI_LANGUAGE:-}" ]]; then
     INIT_PROMPT="$(zeltro_ai_language_instruction)
 
@@ -123,6 +125,7 @@ case "$AI_AGENT_CLI_NAME" in
         codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && codex_args+=(--dangerously-bypass-approvals-and-sandbox)
         codex_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        codex_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             codex exec "${codex_args[@]}" "$INIT_PROMPT"
         else
@@ -141,6 +144,7 @@ case "$AI_AGENT_CLI_NAME" in
         _export_agent_key ANTHROPIC_API_KEY "sk-ant-"
         _export_agent_base ANTHROPIC_BASE_URL
         claude_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        claude_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         claude_args+=("$INIT_PROMPT")
         claude "${claude_args[@]}"
         ;;
@@ -195,6 +199,7 @@ case "$AI_AGENT_CLI_NAME" in
     aider)
         build_aider_args
         AIDER_ARGS+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        AIDER_ARGS+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             aider "${AIDER_ARGS[@]}" --message "$INIT_PROMPT"
         else
