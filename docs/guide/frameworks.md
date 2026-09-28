@@ -24,12 +24,13 @@ For ready-made third-party apps you *run* rather than write, see [App library](.
 | `laravel` | PHP 8.3 | MySQL |
 | `kavera` | PHP 8.3 | MySQL |
 | `octobercms` | PHP 8.3 | MySQL |
+| `drupal` | PHP 8.3 | MySQL |
 | `wordpress` | PHP 8.3 | MySQL |
 | `php` | PHP 8.3 | MySQL |
-| `fastapi` | Python 3 | PostgreSQL |
-| `flask` | Python 3 | PostgreSQL |
-| `django` | Python 3 | PostgreSQL |
-| `python` | Python 3 | PostgreSQL |
+| `fastapi` | Python 3.12 | PostgreSQL |
+| `flask` | Python 3.12 | PostgreSQL |
+| `django` | Python 3.12 | PostgreSQL |
+| `python` | Python 3.12 | PostgreSQL |
 | `express` | Node 22 | MySQL |
 | `nestjs` | Node 22 | MySQL |
 | `fastify` | Node 22 | MySQL |
@@ -41,6 +42,10 @@ For ready-made third-party apps you *run* rather than write, see [App library](.
 | `hono` | Node 22 | SQLite |
 | `react` | Node 22 | SQLite |
 | `vue` | Node 22 | SQLite |
+
+Each runtime is one of Zeltro's base images: `canebaycomputers/cbc:nginx-php8` (PHP 8.3 behind nginx and php-fpm), `canebaycomputers/cbc:nginx-python3` (Python 3.12; your app listens on port 8000 and nginx proxies it) or `canebaycomputers/cbc:nginx-node` (Node 22; your app listens on port 3000 and nginx proxies it). Every project answers on port 80.
+
+If you ask for a database the framework can't use, Zeltro warns and switches to one it can. WordPress is MySQL only, and Laravel, Kavera, October CMS, Drupal and Django don't get MongoDB.
 
 ---
 
@@ -63,10 +68,12 @@ zeltro new nextjs my-app --database postgres
 because it shares the same Node base image.
 
 {: .note }
-> Hot reload is wired for you. The dev server's own port is never published —
-> the browser reaches the app on port 80 through nginx — so each project's Vite
-> config pins the HMR socket to port 80. Change that and hot reload stops
-> connecting while the page still loads, which is a confusing failure.
+> Hot reload is wired for you. The dev server's own port is never published.
+> The browser reaches the app on port 80 through nginx, so the Vite-based
+> projects (`nuxt`, `sveltekit`, `astro`, `react`, `vue`) pin the HMR socket to
+> port 80 in their config. Change that and hot reload stops connecting while
+> the page still loads, which is a confusing failure. `nextjs` needs no such
+> setting: its dev server connects back through the same address as the page.
 
 ### Kavera
 
@@ -84,13 +91,20 @@ Pages live in `resources/views/content`. After adding or removing one, refresh t
 zeltro art app:update-content-list
 ```
 
+### October CMS and Drupal
+
+Both are CMSs with an admin UI, installed from source so they use Zeltro's shared databases.
+
+- **October CMS** (`zeltro new octobercms my-site`) is Laravel-based. Themes and plugins live in the project, so an agent can edit them. The admin is at `/backend`; create the admin user with `zeltro art october:passwd <email> <password>`. It is free for local development, but production use needs a licence from [octobercms.com](https://octobercms.com/pricing).
+- **Drupal** (`zeltro new drupal my-site`) installs Drupal 11 with Composer, then runs `drush site:install`. The docroot is `public/` instead of Drupal's usual `web/`. It is the slowest framework to create, so expect several minutes. Run Drush with `zeltro drush <args>`.
+
 ## Options
 
 | Option | Description | Values |
 |---|---|---|
-| `--database <type>` | Database engine | `auto` (default), `mysql`, `postgres`, `mongodb`, `sqlite` |
+| `--database <type>` | Database engine | `auto` (default: see the table above), `mysql`, `postgres`, `mongodb`, `sqlite` |
 | `--db-name <name>` | Database name | Default: project name, dashes → underscores |
-| `--version <ver>` | Framework version | Laravel / WordPress: `latest` or a version tag |
+| `--version <ver>` | Framework version | Laravel and WordPress only: `latest` (default) or a version number. Other frameworks ignore it |
 | `--image <ref>` | Override the Docker image | Default: the framework's base image |
 | `--no-migration` | Skip migrations | Migrations run by default |
 | `--one-off` | Skip the AI hand-off after creation | |
@@ -118,7 +132,8 @@ The file always lives **inside the project directory**:
 | Framework | Path |
 |---|---|
 | Django | `db.sqlite3` |
-| Laravel | `database/database.sqlite` |
+| Laravel, Kavera, October CMS | `database/database.sqlite` |
+| Drupal | `public/sites/default/files/.ht.sqlite` |
 | Everything else | `database.sqlite` |
 
 That location is deliberate. The project directory is the only path bind-mounted into the container, so a database anywhere else would be destroyed every time the container is recreated on `zeltro up`. It is also gitignored by default.
@@ -141,6 +156,7 @@ Run these **from the project directory**. They execute inside the container, wit
 zeltro composer install
 zeltro art migrate
 zeltro wp plugin list --status=active
+zeltro drush status
 zeltro php script.php
 zeltro tinker
 ```
@@ -172,7 +188,7 @@ zeltro shell
 zeltro exec <cmd>              # run a command, no TTY — good for scripts and CI
 zeltro exec-root <cmd>         # as root
 zeltro bash                    # interactive shell
-zeltro shell                   # framework-aware REPL (tinker / django shell / node / python3)
+zeltro shell                   # framework-aware REPL (tinker / django shell / node / python3; bash otherwise)
 zeltro supervisor restart all  # restart in-container processes
 zeltro supervisor-status
 ```
@@ -201,4 +217,4 @@ zeltro setup my-project --overwrite-env          # repoint an existing .env at s
 zeltro setup my-project --no-startup             # register without starting, to review the compose
 ```
 
-Framework detection reads the project's files — `artisan`, `manage.py`, `main.py`, `app.py`, `package.json`, `wp-config.php`. Flask and FastAPI are distinguished by which one the file actually imports, not by filename.
+Framework detection reads the project's files: `artisan`, `manage.py`, `main.py`, `app.py`, `package.json`, `wp-config.php`, and a `composer.json` that requires `drupal/core`. A `main.py` or `app.py` that imports Flask is Flask; any other `main.py` is treated as FastAPI. For Node projects, the dependencies in `package.json` decide between Next.js, Nuxt, SvelteKit, Astro, Hono, Fastify, Express, NestJS, React, Vue and plain Node.
