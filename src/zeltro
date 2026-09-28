@@ -184,7 +184,7 @@ show_help() {
     echo
     echo-white "CLONE PROJECT OPTIONS:"
     echo "  --overwrite-docker-compose - Overwrite existing docker-compose.yaml without prompting"
-    echo "  --framework NAME          - Force framework (laravel, kavera, octobercms, drupal, wordpress, php, fastapi, flask, django, python, express, nestjs, fastify, node)"
+    echo "  --framework NAME          - Force framework (laravel, kavera, octobercms, drupal, wordpress, php, fastapi, flask, django, python, express, nestjs, fastify, node, nextjs, nuxt, sveltekit, astro, hono, react, vue)"
     echo "  --image <ref>             - Override the project's Docker image (default: framework cbc base image)"
     echo "  --no-github               - Skip GitHub repository creation (default)"
     echo "  --no-startup              - Register project without starting the container (useful for verifying adapted docker-compose)"
@@ -193,7 +193,7 @@ show_help() {
     echo
     echo-white "SETUP PROJECT OPTIONS:"
     echo "  --overwrite-docker-compose - Overwrite existing docker-compose.yaml without prompting"
-    echo "  --framework NAME          - Force framework (laravel, kavera, octobercms, drupal, wordpress, php, fastapi, flask, django, python, express, nestjs, fastify, node)"
+    echo "  --framework NAME          - Force framework (laravel, kavera, octobercms, drupal, wordpress, php, fastapi, flask, django, python, express, nestjs, fastify, node, nextjs, nuxt, sveltekit, astro, hono, react, vue)"
     echo "  --image <ref>             - Override the project's Docker image (default: framework cbc base image)"
     echo "  --no-startup              - Register project without starting the container"
     echo "  --json-output             - Output results in JSON format"

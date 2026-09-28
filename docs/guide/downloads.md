@@ -145,7 +145,7 @@ whenever you like.
 
 ## Support
 
-Zeltro is free and always will be — both parts are MIT. If it saves you time and
+Zeltro is open source with no paid tier — both parts are MIT. If it saves you time and
 you want to chip in:
 
 - [GitHub Sponsors](https://github.com/sponsors/shrimpwagon) — GitHub covers the fees
