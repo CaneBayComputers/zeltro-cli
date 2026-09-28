@@ -172,23 +172,15 @@ on its own.
 
 ---
 
-## Source
+## Source and licensing
 
-- [CaneBayComputers/zeltro-cli](https://github.com/CaneBayComputers/zeltro-cli) (MIT)
-- [CaneBayComputers/zeltro-gui](https://github.com/CaneBayComputers/zeltro-gui) ([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0): free for personal and noncommercial use; releases up to 1.0.0-beta.2 are MIT)
+The command line tool is open source under the MIT licence:
+[CaneBayComputers/zeltro-cli](https://github.com/CaneBayComputers/zeltro-cli).
 
-## Licensing and support
-
-The CLI is open source under the MIT licence. The desktop app is free for personal
-use, hobby projects, learning and noncommercial organizations. A business using it,
+The desktop app is proprietary. It's free for personal use. A business using it,
 including for paid client work, needs a
-[commercial license](https://zeltro.build/commercial): US$49 per business per year,
-on trust, with no license keys. There's no account to create either way, and you
-bring and pay for your own AI agent.
-
-If Zeltro saves you time and you want to chip in:
-
-- [GitHub Sponsors](https://github.com/sponsors/shrimpwagon): GitHub covers the fees
-- [Ko-fi](https://ko-fi.com/canebaycomputers): quickest, no account needed
-- [Patreon](https://patreon.com/canebaycomputers): monthly
-- [Credit card](https://donate.zeltro.build): direct, via Cane Bay Computers' processor
+[lifetime commercial license](https://zeltro.build/commercial): US$99.99, paid once,
+covering everyone in the business and every future version. There's no account to
+create either way, and you bring and pay for your own AI agent. The app sends
+anonymous usage counts and scrubbed error reports; see
+[what it collects](https://zeltro.build/privacy).
