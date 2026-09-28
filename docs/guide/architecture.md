@@ -80,14 +80,14 @@ Use these hostnames and credentials directly when configuring a project — ther
 Two different mechanisms, and it is worth keeping them apart:
 
 - **Container → container: by name.** Docker's embedded DNS resolves container names on the shared network. Code inside a project can `psql -h zeltro-postgres` or `fetch('http://other-project/')` with no extra configuration. This is how projects share databases and call each other.
-- **Host or LAN → project: by address.** Your browser is not on the Docker network, so it uses an address. `zeltro ps` prints two for every project:
+- **Host or LAN → project: by address.** Your browser is not on the Docker network, so it uses an address. `zeltro status` prints two for every project:
 
 | From | Address | Why |
 |---|---|---|
 | The machine running Zeltro | `http://10.x.x.219` | The container's own IP. No port — nothing else is on that address. |
 | Another device on the LAN | `http://192.168.1.20:219` | This machine's IP plus the project's published port. |
 
-On macOS and Windows, Docker runs containers inside a virtual machine and the container IP is not routable from the host, so the local address is `http://localhost:<port>` instead. `zeltro ps` detects this and prints whichever one works.
+On macOS and Windows, Docker runs containers inside a virtual machine and the container IP is not routable from the host, so the local address is `http://localhost:<port>` instead. `zeltro status` detects this and prints whichever one works.
 
 {: .note }
 > Zeltro does **not** write to `/etc/hosts`, and has not since the entries were removed. Nothing about running a project needs sudo. Earlier versions added a host entry so `http://my-api/` worked in the browser; that is gone, and the addresses above replace it.

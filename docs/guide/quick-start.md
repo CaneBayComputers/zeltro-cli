@@ -77,7 +77,7 @@ zeltro install gitea
 zeltro install n8n
 ```
 
-Fully configured and reachable at the address `zeltro ps` prints, in under two minutes. Browse all 200+: [App library](../app-library/).
+Fully configured and reachable at the address `zeltro status` prints, in under two minutes. Browse all 200+: [App library](../app-library/).
 
 **`new` vs `install`:** `new` scaffolds an empty project *you write*. `install` deploys a finished app *someone else wrote*. If you guess wrong, Zeltro tells you the right command.
 

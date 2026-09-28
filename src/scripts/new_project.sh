@@ -107,7 +107,8 @@ usage() {
     echo-white ""
     echo-white "Arguments:"
     echo-white "  framework       laravel, kavera, octobercms, drupal, wordpress, php, fastapi, flask,"
-    echo-white "                  django, python, express, nestjs, fastify, node"
+    echo-white "                  django, python, express, nestjs, fastify, node, nextjs, nuxt,"
+    echo-white "                  sveltekit, astro, hono, react, vue"
     echo-white "  name            Name of the project to create (directory and hostname)"
     echo-white ""
     echo-white "Options:"
@@ -260,7 +261,7 @@ debug "Script started: new_project.sh with args: $ORIGINAL_ARGS"
 # --- Required arguments (no interactive prompts; 'configure' is the only wizard) ---
 if [ -z "$FRAMEWORK" ]; then
     error "Error: framework is required. Usage: zeltro new <framework> <name> [--database <type>] [--version X]
-Frameworks: laravel kavera octobercms wordpress php fastapi flask django python express nestjs fastify node nextjs nuxt sveltekit astro hono react vue"
+Frameworks: laravel kavera octobercms drupal wordpress php fastapi flask django python express nestjs fastify node nextjs nuxt sveltekit astro hono react vue"
 fi
 case "$FRAMEWORK" in
     laravel|kavera|octobercms|drupal|wordpress|php|fastapi|flask|django|python|express|nestjs|fastify|node|nextjs|nuxt|sveltekit|astro|hono|react|vue) ;;

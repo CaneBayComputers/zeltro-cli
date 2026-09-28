@@ -15,8 +15,8 @@ It does three things, and they reinforce each other.
 
 One `zeltro-postgres`, one `zeltro-mariadb`, one `zeltro-redis`, one `zeltro-mongo`, one `zeltro-memcached` — used by every Zeltro project on the machine. Run ten projects, you still have one of each.
 
-- **Projects talk to each other for free.** Every project joins one Docker network and resolves by name on it, so a container can `fetch('http://my-api/')` or `psql -h zeltro-postgres` with no networking configuration.
-- **No port roulette.** You never choose a port. Each project is assigned its own address when it is created, and `zeltro ps` prints it — no `localhost:3001` vs `:3002` vs `:3003`, no `host.docker.internal` hacks.
+- **Projects talk to each other by name.** Every project joins one Docker network and resolves by name on it, so a container can `fetch('http://my-api/')` or `psql -h zeltro-postgres` with no networking configuration.
+- **No port roulette.** You never choose a port. Each project is assigned its own address when it is created, and `zeltro status` prints it — no `localhost:3001` vs `:3002` vs `:3003`, no `host.docker.internal` hacks.
 - **Resource consolidation.** Seven duplicate Postgres containers eating ~700MB becomes one eating ~100MB.
 - **No conflicts.** Upstream compose files binding `5432:5432` or `80:80` get rewired to the shared services automatically.
 
