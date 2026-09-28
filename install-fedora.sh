@@ -104,7 +104,10 @@ fi
 # Redirecting stdin in place will not work: bash is still reading the script
 # from it. So fetch a real copy and re-exec with stdin on the terminal.
 ZELTRO_INSTALLER_URL="${ZELTRO_INSTALLER_URL:-https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-fedora.sh}"
-if [ ! -t 0 ] && [ -z "${ZELTRO_INSTALLER_REEXEC:-}" ] && [ -e /dev/tty ]; then
+# /dev/tty must be OPENABLE, not merely present: over `ssh host cmd` with no -t
+# the device node exists but there is no controlling terminal, so the redirect
+# below failed and, under set -e, killed the install before it started.
+if [ ! -t 0 ] && [ -z "${ZELTRO_INSTALLER_REEXEC:-}" ] && ( exec < /dev/tty ) 2>/dev/null; then
     _self="$(mktemp -t zeltro-install.XXXXXX)" || _self=""
     if [ -n "$_self" ] && curl -fsSL "$ZELTRO_INSTALLER_URL" -o "$_self" 2>/dev/null && [ -s "$_self" ]; then
         export ZELTRO_INSTALLER_REEXEC=1
