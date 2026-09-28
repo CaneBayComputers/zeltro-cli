@@ -137,4 +137,4 @@ PC (in preview). Packages for every platform are on the
 
 ---
 
-Runs on Linux and macOS, and on Windows through the desktop app. Open source, MIT licensed.
+Runs on Linux and macOS, and on Windows through the desktop app. The CLI is open source (MIT); the desktop app is free for personal use, with a [commercial license](https://zeltro.build/commercial) for businesses.
