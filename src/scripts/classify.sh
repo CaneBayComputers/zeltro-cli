@@ -46,6 +46,13 @@ for f in fws:
 PYEOF
 }
 
+# With ZELTRO_AI_LANGUAGE set, the user reads the "reason" sentences in that
+# language. Everything the parser matches on stays English.
+_classifier_language_line() {
+    [[ -n "${AI_LANGUAGE:-}" ]] || return 0
+    printf '\nWrite every "reason" in %s. Keep every JSON key, slug, and the values of\n"recommended" and "customization_requested" exactly as specified, in English.\n' "$AI_LANGUAGE"
+}
+
 _classifier_prompt() {
     local idea="$1"
     cat << PROMPTEOF
@@ -82,7 +89,7 @@ Judge only what the user actually wrote; do not invent extra work.
 Give every option a "reason": one short sentence saying why it fits this
 specific idea. The user sees these side by side and decides from them, so make
 them concrete and comparative, not generic praise.
-
+$(_classifier_language_line)
 Recommend ONE database for the framework you chose, from that framework's
 allowed list only, and say why in one short sentence. Judge it on the actual
 workload the user described: sqlite for a small single-user or low-traffic tool

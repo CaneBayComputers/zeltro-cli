@@ -16,6 +16,11 @@ ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen"
 #       so it never appears in a process list. When non-empty it wins over
 #       ZELTRO_AI_API_KEY. The file must stay in place for the whole session:
 #       nested zeltro calls re-read it.
+#   ZELTRO_AI_LANGUAGE
+#       A plain-English language name ("Spanish", "Simplified Chinese"). When
+#       set, the agent is told to reply to the user in it; see
+#       zeltro_ai_language_args. Unset or empty = no instruction. It has no .env
+#       counterpart: Zeltro's own output stays English.
 #
 # Nothing here writes the .env. ai-set and configure set ZELTRO_AI_NO_OVERRIDE=1
 # before sourcing this file, so they can never persist an override. A bad
@@ -25,7 +30,9 @@ ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen"
 zeltro_apply_ai_overrides() {
     ZELTRO_AI_OVERRIDE_ACTIVE=0
     ZELTRO_AI_OVERRIDE_ERROR=""
+    AI_LANGUAGE=""
     [ "${ZELTRO_AI_NO_OVERRIDE:-0}" = "1" ] && return 0
+    AI_LANGUAGE="${ZELTRO_AI_LANGUAGE:-}"
 
     if [ -n "${ZELTRO_AI_AGENT+x}" ]; then AI_AGENT="$ZELTRO_AI_AGENT"; ZELTRO_AI_OVERRIDE_ACTIVE=1; fi
     if [ -n "${ZELTRO_AI_MODEL+x}" ]; then AI_MODEL="$ZELTRO_AI_MODEL"; ZELTRO_AI_OVERRIDE_ACTIVE=1; fi
@@ -51,6 +58,35 @@ zeltro_apply_ai_overrides() {
             *) ZELTRO_AI_OVERRIDE_ERROR="Unknown AI agent '$ZELTRO_AI_AGENT' in ZELTRO_AI_AGENT. Known agents: $ZELTRO_KNOWN_AI_AGENTS." ;;
         esac
     fi
+    return 0
+}
+
+# The sentence that tells an agent which language to reply in, or nothing.
+zeltro_ai_language_instruction() {
+    [ -n "${AI_LANGUAGE:-}" ] || return 0
+    printf 'Reply to the user in %s. Keep code, commands, file names and identifiers as they are.' "$AI_LANGUAGE"
+}
+
+# Sets ZELTRO_LANG_ARGS to the flags that carry ZELTRO_AI_LANGUAGE to agent $1
+# as a system-level instruction, so it also holds on a resumed session:
+#   claude, qwen  --append-system-prompt
+#   codex         -c developer_instructions=... (per-run config override)
+#   aider         --chat-language, aider's own reply-language setting
+#   gemini        nothing: it can only REPLACE its whole system prompt
+#                 (GEMINI_SYSTEM_MD). `zeltro ai` prepends the instruction to
+#                 the prompt instead; a resumed gemini session gets none.
+# Expand with ${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"} (bash 3.2 + set -u).
+zeltro_ai_language_args() {
+    ZELTRO_LANG_ARGS=()
+    local instr; instr="$(zeltro_ai_language_instruction)"
+    [ -n "$instr" ] || return 0
+    case "$1" in
+        claude|qwen) ZELTRO_LANG_ARGS=(--append-system-prompt "$instr") ;;
+        # -c values are parsed as TOML; a JSON string literal is a valid TOML
+        # basic string, so quotes and non-ASCII names survive intact.
+        codex)  ZELTRO_LANG_ARGS=(-c "developer_instructions=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False))' "$instr")") ;;
+        aider)  ZELTRO_LANG_ARGS=(--chat-language "$AI_LANGUAGE") ;;
+    esac
     return 0
 }
 

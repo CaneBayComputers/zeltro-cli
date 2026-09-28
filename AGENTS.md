@@ -64,8 +64,9 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 | `ZELTRO_AI_API_BASE` | `AI_API_BASE` |
 | `ZELTRO_AI_API_KEY` | `AI_API_KEY` |
 | `ZELTRO_AI_API_KEY_FILE` | `AI_API_KEY`, read from the file's first line. Wins over `ZELTRO_AI_API_KEY` when non-empty. Keep the file until the session ends: nested `zeltro` calls re-read it. |
+| `ZELTRO_AI_LANGUAGE` | *(no .env setting)* A plain-English language name, e.g. `Spanish` or `Simplified Chinese`. The agent is told to reply to the user in it and keep code, commands and identifiers as they are, and `create --classify-only` writes its `reason` text in it. Zeltro's own output stays English. How it reaches each agent: claude and qwen `--append-system-prompt`; codex `-c developer_instructions=…`; aider `--chat-language`. All of these also apply to `zeltro resume`. gemini has no way to add to its system prompt, so `zeltro ai` puts the instruction at the top of the prompt, and a resumed gemini session gets none. |
 
-Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true` plus `"installed_agents": [...]`.
+Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true`, `"ai_language": true` and `"installed_agents": [...]`.
 
 ### Messaging other agent sessions
 

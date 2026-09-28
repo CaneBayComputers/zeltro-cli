@@ -91,6 +91,11 @@ notify_resume_fallback() {
     echo-return
 }
 
+# ZELTRO_AI_LANGUAGE rides on each agent's system-level flag, which applies to
+# the resumed session too. Gemini has none and a resume has no prompt to carry
+# it, so a resumed gemini session gets no language instruction.
+zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
+
 case "$AI_AGENT_CLI_NAME" in
     codex)
         common_args=()
@@ -100,6 +105,7 @@ case "$AI_AGENT_CLI_NAME" in
         _export_agent_key OPENAI_API_KEY "sk-"
         _export_agent_base OPENAI_BASE_URL
         common_args+=(--dangerously-bypass-approvals-and-sandbox)
+        common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         if ! codex resume --last "${common_args[@]}"; then
             notify_resume_fallback
             exec codex "${common_args[@]}"
@@ -112,6 +118,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         _export_agent_key ANTHROPIC_API_KEY "sk-ant-"
         _export_agent_base ANTHROPIC_BASE_URL
+        common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         if ! claude --continue "${common_args[@]}"; then
             notify_resume_fallback
             exec claude "${common_args[@]}"
@@ -122,6 +129,7 @@ case "$AI_AGENT_CLI_NAME" in
         _export_agent_base OPENAI_BASE_URL
         export QWEN_CODE_SUPPRESS_YOLO_WARNING=1
         common_args=(--yolo --auth-type openai)
+        common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
@@ -148,6 +156,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     aider)
         build_aider_args
+        AIDER_ARGS+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         # --restore-chat-history replays this directory's .aider.chat.history.md.
         # There's nothing to fall back to: with no history aider just opens a
         # fresh session, which is the fallback behavior anyway.
