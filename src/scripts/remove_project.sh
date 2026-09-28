@@ -133,9 +133,11 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     _DB_HINTS=$(grep -E "^(DB_HOST|DB_CONNECTION)=" "$PROJECT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr '\n' ' ')
 fi
 if [ -z "$_DB_HINTS" ]; then
-    # No root .env or no DB vars — scan env files and docker-compose.yaml for Zeltro shared service hostnames
+    # No root .env or no DB_HOST/DB_CONNECTION in it — scan env files (the root
+    # .env too: installers like langfuse and plane name the host in DATABASE_URL or
+    # PGHOST there) and docker-compose.yaml for Zeltro shared service hostnames
     _DB_HINTS=$(grep -rhE "(zeltro|podium)-(postgres|mongo|mariadb)" \
-        "$PROJECT_DIR"/*.env "$PROJECT_DIR"/.env.* "$PROJECT_DIR"/env/ \
+        "$PROJECT_DIR"/.env "$PROJECT_DIR"/*.env "$PROJECT_DIR"/.env.* "$PROJECT_DIR"/env/ \
         "$PROJECT_DIR"/docker-compose.yaml "$PROJECT_DIR"/docker-compose.yml \
         2>/dev/null | head -5 | tr '\n' ' ')
 fi
