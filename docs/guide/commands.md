@@ -142,7 +142,7 @@ Only Redis, Memcached and MailHog always run. Everything else is off until enabl
 | `adminer` | Adminer | `http://zeltro-adminer:8080` |
 | `mongo-express` | mongo-express | `http://zeltro-mongo-express:8081` |
 | `redisinsight` | RedisInsight | `http://zeltro-redisinsight:5540` |
-| `minio` | MinIO (S3-compatible) | `http://zeltro-minio:9000`, console `:9001` |
+| `minio` | S3 storage (Silo, the maintained MinIO fork) | `http://zeltro-minio:9000`, console `:9001` |
 | `meilisearch` | Meilisearch | `http://zeltro-meilisearch:7700` |
 
 ```bash
@@ -684,7 +684,7 @@ Optional — enabled automatically when a project needs one, or with `zeltro ena
 
 - **MariaDB** (`zeltro-mariadb`), **PostgreSQL** (`zeltro-postgres`), **MongoDB** (`zeltro-mongo`)
 - **phpMyAdmin**, **Adminer**, **mongo-express**, **RedisInsight** - Database admin UIs
-- **MinIO** (S3-compatible storage), **Meilisearch** (full-text search)
+- **MinIO** (S3-compatible storage, served by Silo, the maintained MinIO fork), **Meilisearch** (full-text search)
 
 ### Project Structure
 

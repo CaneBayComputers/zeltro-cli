@@ -59,15 +59,15 @@ Both emit a prepared prompt telling an agent to fetch upstream, diff against the
 
 ## Available apps
 
-There are **216 apps**. Being straight about what has and has not been checked, because "200+ apps" is easy to say and hard to stand behind:
+There are **214 apps**. Being straight about what has and has not been checked, because "200+ apps" is easy to say and hard to stand behind:
 
-- **126 have been installed on a real machine**, checked over HTTP, and removed — 115 added in the 2026-08 catalogue expansion, plus 11 older ones spot-checked since. Every one of those pins its images to specific versions.
-- **90 are older entries that predate that process.** They were written and used, but have not been through it, and most still track floating tags like `:latest`. They may well work; nobody has recently proved it.
+- **125 have been installed on a real machine**, checked over HTTP, and removed — 114 added in the 2026-08 catalogue expansion, plus 11 older ones spot-checked since. Every one of those pins its images to specific versions.
+- **89 are older entries that predate that process.** They were written and used, but have not been through it, and most still track floating tags like `:latest`. They may well work; nobody has recently proved it.
 
 If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-cli/issues) — that is the fastest way for it to get fixed.
 
 {: .note }
-> A few apps (Karakeep, Open Archiver, Langfuse, Plane) bring their own Meilisearch or MinIO container. Those two are *optional* shared services and off by default, so each app ships what it needs rather than assuming you enabled them. If you have enabled the shared one, you will have two — harmless, just not shared.
+> A few apps (Karakeep, Open Archiver, Langfuse, Plane) bring their own Meilisearch or S3 (MinIO-compatible) container. Those two are *optional* shared services and off by default, so each app ships what it needs rather than assuming you enabled them. If you have enabled the shared one, you will have two — harmless, just not shared.
 
 {: .warning }
 > **Verified means "installs and responds", not "usable".** A handful of apps need a browser *secure context* for `crypto.subtle` or service workers, which a plain `http://` address cannot provide — those were deliberately left out rather than shipped as something that boots and then fails in the browser.
@@ -75,12 +75,14 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 {: .warning }
 > **Upstream changes to know about** (checked 2026-09-28):
 >
-> - **Whoogle Search** no longer returns results. Its maintainer ended the project on 24 July 2026 after Google blocked searches made without JavaScript.
-> - **MinIO**'s open-source repository is archived, and its images have been removed from Docker Hub and Quay. `zeltro install minio` fails to pull on a machine that doesn't already have the image, and so can **Plane** and **Langfuse**, which bundle it.
-> - **FreeScout** and **Readeck**: the image tags these installers use are no longer published (FreeScout's image moved from `tiredofit/` to `nfrastack/`), so a fresh install fails to pull.
+> - **Whoogle Search** has been removed. Its maintainer ended the project on 24 July 2026 after Google blocked searches made without JavaScript, and it no longer returns results. `zeltro install searxng` is a self-hosted alternative.
+> - **MinIO**'s open-source repository is archived, and its images have been removed from Docker Hub and Quay. `zeltro install minio`, the storage containers in **Plane** and **Langfuse**, and the optional shared `minio` service now run **[Silo](https://github.com/pgsty/silo)** (`pgsty/silo`), the maintained MinIO fork. It keeps MinIO's S3 API, `MINIO_*` settings, ports and data format, so the slug, hostname and credentials are unchanged.
+> - **FreeScout**'s image moved from `tiredofit/` to `nfrastack/freescout` (2.x), and the installer now uses it. FreeScout only answers for the host in its `APP_URL`, so opening it by IP address returns *403 Untrusted Host* until you set `APP_URL` in the project's `docker-compose.yaml` to that address.
+> - **Readeck** now installs 0.23.4; the 0.22.3 image the installer used is no longer published.
+> - **Karakeep**'s headless-Chrome sidecar now comes from Docker Hub (`zenika/alpine-chrome`); the `gcr.io` copy is gone.
 > - **Maybe Finance** is no longer maintained (final release v0.6.0, July 2025). **Sure** is the community fork and is in the list.
 > - **Pingvin Share** was archived in June 2025.
-> - **Trilium Notes** (`trilium`) runs the last `zadam/trilium` image from 2024. Use `triliumnext` for the maintained version.
+> - **Trilium Notes**: the `trilium` installer, which ran the last `zadam/trilium` image from 2024, has been removed. Use `triliumnext`, the maintained version; `zeltro install trilium` points you there.
 > - **LobeChat** is now called LobeHub. The installer runs the final 1.x LobeChat image.
 
 
@@ -217,7 +219,7 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Metabase | `zeltro install metabase` | Analytics |
 | MindsDB | `zeltro install mindsdb` | AI |
 | Miniflux | `zeltro install miniflux` | RSS |
-| MinIO | `zeltro install minio` | Storage |
+| MinIO (Silo) | `zeltro install minio` | Storage |
 | Mixpost Lite | `zeltro install mixpost` | Social |
 | Monica CRM | `zeltro install monica` | CRM |
 | Moodle | `zeltro install moodle` | Learning |
@@ -281,7 +283,6 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Tooljet | `zeltro install tooljet` | Low-code |
 | Traccar | `zeltro install traccar` | Tracking |
 | TrailBase | `zeltro install trailbase` | Backend |
-| Trilium Notes | `zeltro install trilium` | Notes |
 | Trilium Notes (TriliumNext) | `zeltro install triliumnext` | Notes |
 | Twenty CRM | `zeltro install twenty` | CRM |
 | Typebot | `zeltro install typebot` | Forms |
@@ -295,7 +296,6 @@ If an older app misbehaves, [say so](https://github.com/CaneBayComputers/zeltro-
 | Web-Check | `zeltro install web-check` | Utilities |
 | Weblate | `zeltro install weblate` | Localization |
 | wger | `zeltro install wger` | Fitness |
-| Whoogle Search | `zeltro install whoogle` | Search |
 | Wiki.js | `zeltro install wikijs` | Wiki |
 | Yamtrack | `zeltro install yamtrack` | Media |
 | YOURLS | `zeltro install yourls` | URL Shortener |
