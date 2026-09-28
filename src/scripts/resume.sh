@@ -68,7 +68,7 @@ echo-return
 echo-return
 echo-cyan "============================================"
 echo-cyan "  Project : $PROJECT_NAME"
-echo-cyan "  URL     : http://$PROJECT_NAME/"
+echo-cyan "  URL     : $(zeltro_project_url "$PROJECT_NAME" || true)/"
 echo-cyan "============================================"
 echo-return
 echo-white "Ctrl+click (or right-click) the URL above to open it in your browser."
@@ -96,6 +96,13 @@ notify_resume_fallback() {
 # it, so a resumed gemini session gets no language instruction.
 zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
 
+# Approval bypass follows the same rule as `zeltro ai`: whether an agent may act
+# without asking is the user's choice, recorded in the agent's own config
+# (`zeltro ai-unattended`). ZELTRO_AI_AUTO_APPROVE=1 adds the bypass flags for one
+# run. Resume used to force them on every time, so a resumed session could skip
+# approvals the user never agreed to skip.
+AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
+
 case "$AI_AGENT_CLI_NAME" in
     codex)
         common_args=()
@@ -104,7 +111,9 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         _export_agent_key OPENAI_API_KEY "sk-"
         _export_agent_base OPENAI_BASE_URL
-        common_args+=(--dangerously-bypass-approvals-and-sandbox)
+        zeltro_codex_base_args
+        common_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-bypass-approvals-and-sandbox)
         common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         if ! codex resume --last "${common_args[@]}"; then
             notify_resume_fallback
@@ -112,7 +121,8 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         ;;
     claude)
-        common_args=(--dangerously-skip-permissions)
+        common_args=()
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-skip-permissions)
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
@@ -128,7 +138,9 @@ case "$AI_AGENT_CLI_NAME" in
         _export_agent_key OPENAI_API_KEY ""
         _export_agent_base OPENAI_BASE_URL
         export QWEN_CODE_SUPPRESS_YOLO_WARNING=1
-        common_args=(--yolo --auth-type openai)
+        # --auth-type is required for headless runs; --yolo is the approval bypass.
+        common_args=(--auth-type openai)
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo)
         common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
@@ -142,7 +154,8 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         ;;
     gemini)
-        common_args=(--yolo --skip-trust)
+        common_args=()
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo --skip-trust)
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
@@ -164,7 +177,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, aider"
+        echo-white "Supported agents: codex, claude, gemini, qwen, aider"
         exit 1
         ;;
 esac

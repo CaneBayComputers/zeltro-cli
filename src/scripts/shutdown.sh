@@ -51,7 +51,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            echo-white "Usage: ${ZELTRO_CMD:-$0} [OPTIONS] <project_name>"
+            echo-white "Usage: zeltro down [OPTIONS] <project_name>"
             echo-white "Shut down a project container. Shared services keep running."
             echo-white ""
             echo-white "Arguments:"

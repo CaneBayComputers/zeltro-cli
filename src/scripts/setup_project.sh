@@ -24,10 +24,8 @@ source "$DEV_DIR/scripts/pre_check.sh"
 
 # Function to display usage
 usage() {
-    echo-white "Usage: ${ZELTRO_CMD:-$0} [project_name] [database_engine] [options]"
+    echo-white "Usage: zeltro setup <project_name> [database_engine] [options]"
     echo-white "Sets up a project in the projects directory"
-    echo-white ""
-    echo-white "With no project name, shows an interactive picker (skipped in --json-output mode)."
     echo-white ""
     echo-white "Arguments:"
     echo-white "  project_name     Name of the project to setup"

@@ -45,7 +45,7 @@ setting that CLI reads:
 | `qwen` | `OPENAI_BASE_URL` | `OPENAI_API_KEY` | OpenAI-compatible |
 | `aider` | `--openai-api-base` | `--api-key <provider>=<key>` | OpenAI-compatible |
 | `claude` | `ANTHROPIC_BASE_URL` | `ANTHROPIC_API_KEY`, only if it starts with `sk-ant-` | **Anthropic-compatible** |
-| `codex` | `OPENAI_BASE_URL`, which current Codex ignores (see below) | `OPENAI_API_KEY`, only if it starts with `sk-` | OpenAI Responses API |
+| `codex` | `-c openai_base_url=…` (Zeltro passes it for you) | `OPENAI_API_KEY`, only if it starts with `sk-` | OpenAI Responses API |
 | `gemini` | nothing | nothing | Its own Google sign-in, or a `GEMINI_API_KEY` you export |
 
 "OpenAI-compatible" covers OpenRouter, DeepInfra, Together, Fireworks, Ollama,
@@ -123,12 +123,13 @@ zeltro ai-set --agent qwen --model <model> \
 
 ## Codex against another endpoint
 
-Current Codex CLI no longer reads `OPENAI_BASE_URL`, so `zeltro ai-set --agent codex
---api-base ...` has no effect: Codex still talks to OpenAI. Codex also only speaks
-OpenAI's Responses API, which not every compatible server implements. To point it
-elsewhere, configure Codex itself in `~/.codex/config.toml`: set `openai_base_url`,
-or add a `[model_providers]` entry. For Ollama or LM Studio, Codex has its own
-`--oss` mode (`oss_provider` in the same file). See
+Current Codex CLI no longer reads `OPENAI_BASE_URL`, so Zeltro passes the endpoint
+from `zeltro ai-set --agent codex --api-base ...` (or `ZELTRO_AI_API_BASE`) as
+Codex's own setting, `-c openai_base_url="…"`, on every run. The catch is that
+Codex only speaks OpenAI's Responses API, which not every compatible server
+implements. For anything more involved, configure Codex itself in
+`~/.codex/config.toml` with a `[model_providers]` entry. For Ollama or LM Studio,
+Codex has its own `--oss` mode (`oss_provider` in the same file). See
 [Codex's advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced).
 For cheap or local models, `qwen` or `aider` is less work.
 

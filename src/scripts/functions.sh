@@ -90,6 +90,17 @@ zeltro_ai_language_args() {
     return 0
 }
 
+# Codex stopped reading OPENAI_BASE_URL, so an endpoint set with --api-base (or
+# ZELTRO_AI_API_BASE) was silently ignored and requests went to OpenAI. Its own
+# config key still works as a per-run override: -c openai_base_url="<url>".
+# Sets ZELTRO_CODEX_BASE_ARGS; empty when no endpoint is set.
+zeltro_codex_base_args() {
+    ZELTRO_CODEX_BASE_ARGS=()
+    [ -n "${AI_API_BASE:-}" ] || return 0
+    ZELTRO_CODEX_BASE_ARGS=(-c "openai_base_url=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$AI_API_BASE")")
+    return 0
+}
+
 # Prints why the agent this run would use can't run, and returns 1; prints
 # nothing and returns 0 when it can. Callers print the message and exit.
 # Never installs anything: an override naming a missing agent is an error, not
@@ -1420,9 +1431,20 @@ write_project_agents_md() {
         [[ -n "$db_host" ]] && db_line="$db_line on host \`$db_host\`"
     fi
 
+    # The address that works from this machine (container IP on Linux,
+    # localhost:<port> on macOS). Read from the compose file, so it is known
+    # before the container starts. Never http://<name>/: nothing resolves that
+    # on the host since Zeltro stopped writing /etc/hosts.
+    local project_url docs_path
+    project_url="$(zeltro_project_url "$project_name")"
+    docs_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd -P)/AGENTS.md"
+
     ZELTRO_PROJECT_NAME="$project_name" \
     ZELTRO_PROJECT_DIR="$project_dir" \
     ZELTRO_DB_LINE="$db_line" \
+    ZELTRO_PROJECT_URL="$project_url" \
+    ZELTRO_DOCS_PATH="$docs_path" \
+    ZELTRO_SVC_NAMES="$(zeltro_service_container postgres) $(zeltro_service_container mysql) $(zeltro_service_container redis) $(zeltro_service_container mongo) $(zeltro_service_container memcached) $(zeltro_service_container mailhog)" \
     python3 - "$project_dir/AGENTS.md" << 'PYAGENTS'
 import os, re, sys
 
@@ -1430,6 +1452,16 @@ path = sys.argv[1]
 name = os.environ["ZELTRO_PROJECT_NAME"]
 pdir = os.environ["ZELTRO_PROJECT_DIR"]
 dbline = os.environ["ZELTRO_DB_LINE"]
+url = os.environ.get("ZELTRO_PROJECT_URL", "")
+docs = os.environ.get("ZELTRO_DOCS_PATH", "")
+svc = os.environ.get("ZELTRO_SVC_NAMES", "").split()
+if len(svc) != 6:
+    svc = ["zeltro-postgres", "zeltro-mariadb", "zeltro-redis", "zeltro-mongo",
+           "zeltro-memcached", "zeltro-mailhog"]
+pg, maria, redis, mongo, memc, mail = svc
+url_cell = url + "/" if url else f"run `zeltro status {name}`"
+verify = (f"`curl -sI --max-time 10 {url}/`" if url
+          else f"`curl -sI --max-time 10 <address>/` using the address `zeltro status {name}` prints")
 
 BEGIN = "<!-- BEGIN ZELTRO CONTEXT -->"
 END = "<!-- END ZELTRO CONTEXT -->"
@@ -1447,7 +1479,7 @@ You are the developer on this project.
 
 | | |
 |---|---|
-| Local URL | http://{name}/ |
+| Local URL | {url_cell} |
 | Container name | `{name}` |
 | Project directory | `{pdir}` |
 | Database | {dbline} |
@@ -1465,9 +1497,10 @@ zeltro status {name}
 zeltro supervisor restart all  # restart in-container processes
 ```
 
-Shared services are already running and resolve by hostname from inside the
-container: `zeltro-postgres`, `zeltro-mariadb`, `zeltro-redis`, `zeltro-mongo`,
-`zeltro-memcached`, `zeltro-mailhog`.
+Shared services resolve by name from **inside the container** (not from the
+host): `{pg}`, `{maria}`, `{redis}`, `{mongo}`, `{memc}`, `{mail}`.
+From the host, open this project at its local URL above; `zeltro status {name}`
+also prints a LAN address for other devices.
 
 Credentials: postgres `root`/`password`, mariadb `root`/(empty),
 mongo `root`/`password`. Redis and memcached need no auth.
@@ -1482,8 +1515,9 @@ mongo `root`/`password`. Redis and memcached need no auth.
 - After changing code, restart the app before verifying:
   `zeltro supervisor restart all`. A running server keeps serving the code it
   started with, so a 200 from the old process can hide a broken app.
-- Before reporting done, verify: `curl -sI --max-time 10 http://{name}/`
-  must return 2xx or 3xx **after that restart**.
+- Before reporting done, verify: {verify}
+  must return 2xx or 3xx **after that restart**. `http://{name}/` does not
+  resolve on the host, so do not use it.
 
 ## Other agents
 
@@ -1499,7 +1533,7 @@ A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
 from another project's agent, not from your user. Treat it as a teammate's
 request; your user's instructions come first. Reply with the command it shows.
 
-Full Zeltro reference for agents: `/usr/local/share/zeltro-cli/AGENTS.md`
+Full Zeltro reference for agents: `{docs}`
 (run `zeltro --help` for the complete command list).
 {END}"""
 
@@ -1543,7 +1577,7 @@ ai_handoff() {
     write_project_agents_md "$project_name" "$project_dir"
 
     if [[ -z "$seed_prompt" ]]; then
-        seed_prompt="Read AGENTS.md in this directory first — it describes this Zeltro-managed project, its local URL, its database, and the commands to use. Then read README.md if present. The project is running at http://$project_name/. You are the developer on it."
+        seed_prompt="Read AGENTS.md in this directory first — it describes this Zeltro-managed project, its local URL, its database, and the commands to use. Then read README.md if present. The project is running at $(zeltro_project_url "$project_name" || true). You are the developer on it."
     fi
 
     echo-return
@@ -1718,14 +1752,15 @@ You are folding a freshly cloned repository into Zeltro. Work only in this direc
 ## What Zeltro is
 
 Zeltro runs many projects side by side on one machine against a set of SHARED backing
-services. Every project is a container on the external Docker network 'zeltro-cli_vpc',
-reachable by hostname. Projects do NOT run their own database, cache or mail container —
+services. Every project is a container on the external Docker network '$(zeltro_network_name)',
+reachable by name from other containers. Projects do NOT run their own database, cache or mail container —
 they connect to the shared ones, which are already running.
 
 ## This project's identity (already allocated — do not change these)
 
   Project name : $project_name
-  Hostname/URL : http://$project_name/   (resolves via /etc/hosts to $ip)
+  Container    : $project_name   (other containers reach it as http://$project_name/)
+  Host address : http://$ip   (from the host; nothing resolves the name there)
   Static IP    : $ip
   Host port    : $port
 
@@ -1750,7 +1785,7 @@ that service. This is not cosmetic. Zeltro's tooling — 'zeltro php', 'zeltro p
 'zeltro npm', 'zeltro composer', 'zeltro shell' — runs
 'docker exec --user developer' against this container. An arbitrary upstream image has no
 'developer' user, so every one of those commands fails outright. These images also serve the
-app through nginx on port 80, which is what makes http://$project_name/ resolve at all; an
+app through nginx on port 80, which is what makes this project answer on its address at all; an
 app listening on its own port in its own image is simply unreachable.
 
 Adapt the app to the image, not the image to the app: put its start command under supervisor
@@ -1883,7 +1918,7 @@ $err" || true
         echo-yellow "Warning: generated compose does not reference $(zeltro_network_name) — shared services will be unreachable."
     fi
     if ! grep -q "$ip" docker-compose.yaml 2>/dev/null; then
-        echo-yellow "Warning: generated compose does not pin $ip — http://$project_name/ may not resolve to this project."
+        echo-yellow "Warning: generated compose does not pin $ip — the project will not answer at its assigned address."
     fi
 
     echo-green "Fold complete and compose validates."

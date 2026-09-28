@@ -9,10 +9,10 @@
 | **Standing up an OSS app** | Re-derives the image, compose and env vars | `zeltro install grafana` |
 | ↳ prompts | Several rounds of fixes | One |
 | ↳ tokens | ~10–15k, lands *almost* right | ~800 |
-| ↳ time | An afternoon | Under two minutes |
+| ↳ time | An afternoon | Minutes |
 | **Databases** | One bundled per project | One shared — ~700MB → ~100MB |
-| **URLs** | `localhost:3002`? `:3003`? | `http://grafana/` |
-| **Project layout** | Reinvented every session | Fixed hostnames, IPs, images, credentials |
+| **Addresses** | `localhost:3002`? `:3003`? | One per project, printed by `zeltro status` |
+| **Project layout** | Reinvented every session | Fixed names, addresses, images, credentials |
 | **Other machines** | "Worked on my laptop" | Identical |
 
 📖 **[Full documentation →](https://zeltro.build/guide/)**
@@ -21,11 +21,11 @@
 
 ## Why
 
-- **It's a project manager.** Every project gets a name, a hostname, and the same shared services. Ten projects, one Postgres.
+- **It's a project manager.** Every project gets a name, its own address, and the same shared services. Ten projects, one Postgres.
 - **It keeps AI in bounds.** Left alone, an agent invents its own ports, database and compose file, ignoring everything else on your machine. Zeltro hands it a fixed environment instead.
 - **It saves tokens.** Networking, scaffolding, secrets and 200+ app installs are pre-baked. The agent builds your app, not the plumbing.
-- **The containers are already built.** PHP 8.3, Python 3, Node 22 — nginx, supervisor and every database driver compiled in. No image hunting, no Dockerfiles.
-- **Nothing to configure.** No YAML, no env spelunking, no per-project setup.
+- **The containers are already built.** PHP 8.3 and Python 3 with their database drivers, and Node 22, each with nginx and supervisor. No image hunting, no Dockerfiles.
+- **Configure once.** One `zeltro configure`, then no per-project YAML or env spelunking.
 
 ---
 
@@ -34,15 +34,16 @@
 **Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-ubuntu.sh | bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/cli/ubuntu | bash
 ```
 
-Swap the script for your distro: `install-fedora.sh` or `install-arch.sh`.
+Swap `ubuntu` for `fedora` or `arch`. Run it as your normal user, then log out
+and back in so your user can use Docker.
 
 **macOS**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-mac.sh | bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/cli/mac | bash
 ```
 
 Installs the Xcode command line tools, Homebrew and Docker Desktop if they are
@@ -51,17 +52,12 @@ reach a project by the port `zeltro status` prints rather than by container IP.
 
 **Windows**
 
-Zeltro is a Linux tool. On Windows it runs inside WSL2, which is a real Linux
-kernel — so container IPs are directly routable, exactly as on a Linux host.
-Right-click PowerShell and choose **Run as administrator**, then:
-
-```powershell
-irm https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-windows.ps1 | iex
-```
-
-It enables the WSL features, asks for one reboot, then resumes and finishes on
-its own. Requires Windows 10 version 2004 (build 19041) or newer; older builds
-are refused up front with an explanation.
+Zeltro is a Linux tool. On Windows, install the desktop app
+([download](https://zeltro.build/download/windows)) and point it at a Linux or
+Mac machine over SSH, or let it set up Zeltro inside WSL2 on the same PC (in
+preview). The older `install-windows.ps1` script, run from an administrator
+PowerShell, also sets up WSL2 with Zeltro inside it; it is lightly tested and will
+be retired once the desktop app's WSL2 setup is verified.
 
 Then, once:
 
@@ -118,10 +114,10 @@ desktop front end — same projects, same shared services, same URLs, just visib
 and clickable. It installs the same way this does — one command, which clones the repo for you:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CaneBayComputers/zeltro-gui/master/install-ubuntu.sh | bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 ```
 
-Swap for `install-fedora.sh`, `install-arch.sh` or `install-mac.sh`. On Linux and
+Swap `ubuntu` for `fedora`, `arch` or `mac`. On Linux and
 macOS it installs this CLI first if `zeltro` is missing, so it is the only thing
 you need to run.
 
@@ -133,14 +129,12 @@ git clone https://github.com/CaneBayComputers/zeltro-gui.git
 cd zeltro-gui && ./install-ubuntu.sh
 ```
 
-On **Windows** the GUI runs natively, but there is no local Zeltro for it to
-drive — it connects over SSH to machines that do have one (a Linux box, a Mac, a
-Pi, an EC2 instance), added under **Settings → SSH Hosts**:
-
-```powershell
-irm https://raw.githubusercontent.com/CaneBayComputers/zeltro-gui/master/scripts/install-windows.ps1 | iex
-```
+On **Windows**, [download the installer](https://zeltro.build/download/windows)
+(beta). The app drives Zeltro on machines you add under **Settings → Remotes →
+Hosts** (a Linux box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same
+PC (in preview). Packages for every platform are on the
+[releases page](https://github.com/CaneBayComputers/zeltro-gui/releases/latest).
 
 ---
 
-Runs on Linux, macOS, and Windows via WSL2. Open source. Stop configuring, start building.
+Runs on Linux and macOS, and on Windows through the desktop app. Open source, MIT licensed.

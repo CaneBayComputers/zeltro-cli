@@ -99,7 +99,11 @@ else
     echo "Searching for Zeltro containers by name pattern..."
     
     # Fallback: find containers by common Zeltro names
-FALLBACK_CONTAINERS=$(docker ps -a --format "{{.Names}}" | grep -E "(zeltro-mariadb|zeltro-redis|mariadb|redis|postgres|mongo|memcached|phpmyadmin|mailhog)" 2>/dev/null || true)
+    # Exact Zeltro shared-service names only (either product prefix). The old
+    # pattern matched any container whose name merely CONTAINED "redis",
+    # "postgres" and so on, so uninstalling Zeltro could delete other people's
+    # containers on the same machine.
+FALLBACK_CONTAINERS=$(docker ps -a --format "{{.Names}}" | grep -E "^(zeltro|podium)-(mariadb|redis|postgres|mongo|memcached|phpmyadmin|mailhog|minio|meilisearch|adminer|mongo-express|redisinsight)$" 2>/dev/null || true)
     
     if [ -n "$FALLBACK_CONTAINERS" ]; then
         echo "Found containers by pattern: $FALLBACK_CONTAINERS"
@@ -296,10 +300,6 @@ fi
 
 echo-return
 
-# 5. Leave /etc/hosts entries in place
-echo-white "Leaving /etc/hosts entries in place."
-echo-white "  Project URLs will simply stop resolving until Zeltro is reinstalled."
-echo-return
 
 # 7. Backup project docker-compose.yaml files
 echo-white "💾 Backing up project docker-compose.yaml files..."
@@ -364,7 +364,6 @@ echo-return
 echo-white "What was kept:"
 echo "  • Your projects folder and all project code"
 echo "  • /etc/zeltro-cli configuration (reinstall will pick it up automatically)"
-echo "  • /etc/hosts entries (project URLs simply won't resolve until reinstalled)"
 if [ "$DELETE_IMAGES" = "no" ]; then
     echo "  • Zeltro Docker images (will speed up reinstall)"
 fi

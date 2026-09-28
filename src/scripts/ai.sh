@@ -119,6 +119,8 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         _export_agent_key OPENAI_API_KEY "sk-"
         _export_agent_base OPENAI_BASE_URL
+        zeltro_codex_base_args
+        codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && codex_args+=(--dangerously-bypass-approvals-and-sandbox)
         codex_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
@@ -203,7 +205,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, aider"
+        echo-white "Supported agents: codex, claude, gemini, qwen, aider"
         echo-white "Run 'zeltro ai-set' to choose a supported agent."
         exit 1
         ;;
