@@ -903,6 +903,22 @@ handle_docker_compose_conflict() {
     esac
 }
 
+# True only when DIR is the top of its OWN git repository.
+#
+# `git rev-parse --is-inside-work-tree` is not that question: it is also true
+# anywhere under an enclosing repo. A projects directory inside a git-backed home
+# (dotfile-managed homes are common) made every project look like "already a
+# repo", and create_github_repo then re-pointed and pushed the HOME repo
+# (2026-09-28: a whole home backup, credentials included, pushed to a new project
+# repo). Check for DIR/.git itself, and that git's toplevel is DIR.
+zeltro_is_own_git_repo() {
+    local dir="${1:-.}" top real
+    [ -e "$dir/.git" ] || return 1
+    top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || return 1
+    real="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
+    [ "$(cd "$top" 2>/dev/null && pwd -P)" = "$real" ]
+}
+
 # GitHub repository creation function
 # Usage: create_github_repo PROJECT_NAME CREATE_GITHUB ORGANIZATION [EXISTING_REPO_URL] [VISIBILITY]
 # VISIBILITY defaults to "private". Falls back to $GITHUB_VISIBILITY if unset.
@@ -938,6 +954,32 @@ create_github_repo() {
         return 1
     fi
     
+    # Everything below acts on the project directory (the caller cd's into it),
+    # never on whatever repo happens to enclose it.
+    local proj_dir
+    proj_dir="$(pwd -P)"
+    if [ "$(basename "$proj_dir")" != "$project_name" ]; then
+        echo-red "Refusing to create a GitHub repository: expected to be in the '$project_name' project directory, but the current directory is $proj_dir."
+        return 1
+    fi
+    if ! zeltro_is_own_git_repo "$proj_dir"; then
+        if git -C "$proj_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo-cyan "The projects directory is inside another git repository; giving $project_name its own."
+        fi
+        if ! git -C "$proj_dir" init -q >/dev/null 2>&1 || ! zeltro_is_own_git_repo "$proj_dir"; then
+            echo-red "Could not create a git repository in $proj_dir. Skipping GitHub repository creation."
+            return 1
+        fi
+        # A fresh repo must not pick up secrets or dependencies on its first
+        # commit. Most scaffolds ship no .gitignore, and setup writes .env later.
+        local ignore_line
+        for ignore_line in .env node_modules/ vendor/ __pycache__/ .venv/; do
+            if ! grep -qxF "$ignore_line" "$proj_dir/.gitignore" 2>/dev/null; then
+                printf '%s\n' "$ignore_line" >> "$proj_dir/.gitignore"
+            fi
+        done
+    fi
+
     # Build repository name
     local repo_name="$project_name"
     if [ "$create_github" = "org" ] && [ -n "$organization" ]; then
@@ -976,22 +1018,23 @@ create_github_repo() {
         fi
     fi
     
-    # Ensure we are in a git repository
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo-yellow "Current directory is not a Git repository. Skipping initial push."
+    # Re-check right before committing: nothing below may ever run against an
+    # enclosing repository.
+    if ! zeltro_is_own_git_repo "$proj_dir"; then
+        echo-red "Refusing to push: $proj_dir is not the top of its own git repository."
         return 1
     fi
-    
+
     # Ensure there is at least one commit; if not, create an initial commit
-    if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    if ! git -C "$proj_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
         # Only create a commit if there are changes to commit
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        if [ -n "$(git -C "$proj_dir" status --porcelain 2>/dev/null)" ]; then
             echo-cyan "Creating initial commit before pushing to GitHub..."
-            if ! git add . >/dev/null 2>&1; then
-                git add .
+            if ! git -C "$proj_dir" add -A . >/dev/null 2>&1; then
+                git -C "$proj_dir" add -A .
             fi
-            if ! git commit -m "Initial commit" >/dev/null 2>&1; then
-                git commit -m "Initial commit"
+            if ! git -C "$proj_dir" commit -m "Initial commit" >/dev/null 2>&1; then
+                git -C "$proj_dir" commit -m "Initial commit"
             fi
         else
             echo-yellow "No commits and no changes to commit. Skipping initial push."
@@ -1002,12 +1045,12 @@ create_github_repo() {
     # Ensure a Git remote is configured for this repository
     local remote_name="origin"
     local current_origin_url
-    current_origin_url=$(git remote get-url "$remote_name" 2>/dev/null || true)
+    current_origin_url=$(git -C "$proj_dir" remote get-url "$remote_name" 2>/dev/null || true)
     
     # If this project was cloned from another repository, preserve that remote as 'upstream'
     if [ -n "$existing_repo_name" ] && [ -n "$current_origin_url" ]; then
         if [[ "$current_origin_url" == *"$existing_repo_name"* ]]; then
-            git remote rename "$remote_name" upstream >/dev/null 2>&1 || true
+            git -C "$proj_dir" remote rename "$remote_name" upstream >/dev/null 2>&1 || true
             current_origin_url=""
         fi
     fi
@@ -1019,15 +1062,20 @@ create_github_repo() {
         repo_url="git@github.com:${repo_name}.git"
     fi
     
+    # Last check before the two operations that did the damage.
+    if ! zeltro_is_own_git_repo "$proj_dir"; then
+        echo-red "Refusing to change remotes or push: $proj_dir is not the top of its own git repository."
+        return 1
+    fi
     if [ -n "$current_origin_url" ]; then
-        git remote set-url "$remote_name" "$repo_url" >/dev/null 2>&1 || true
+        git -C "$proj_dir" remote set-url "$remote_name" "$repo_url" >/dev/null 2>&1 || true
     else
-        git remote add "$remote_name" "$repo_url" >/dev/null 2>&1 || true
+        git -C "$proj_dir" remote add "$remote_name" "$repo_url" >/dev/null 2>&1 || true
     fi
     
     # Push local commits separately so push failures are not masked by creation success
     echo-cyan "Pushing local repository to GitHub..."
-    if git push -u "$remote_name" HEAD >/dev/null 2>&1; then
+    if git -C "$proj_dir" push -u "$remote_name" HEAD >/dev/null 2>&1; then
         echo-green "Repository pushed successfully to GitHub: $repo_name"
         return 0
     else
@@ -1383,7 +1431,7 @@ build_aider_args() {
     # --yes-always answers "yes" to aider's "create a git repo?" prompt, which
     # would silently git-init a project that deliberately isn't one. Only let
     # aider use git when there's already a repo here.
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if ! zeltro_is_own_git_repo .; then
         AIDER_ARGS+=(--no-git)
     fi
 
@@ -2528,7 +2576,8 @@ github_latest_tag() {
 # all their other work, not ours to rewrite.
 github_remotes_to_ssh() {
     github_ssh_works || return 0
-    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    # Only this directory's own repo, never one that merely encloses it.
+    zeltro_is_own_git_repo . || return 0
 
     local remote url ssh_url
     for remote in $(git remote 2>/dev/null); do
