@@ -121,7 +121,8 @@ It works on Ubuntu/Debian, Fedora/RHEL and Arch. On **Windows**,
 [download the installer](https://zeltro.build/download/windows) (beta). The app
 drives Zeltro on machines you add under **Settings → Remotes → Hosts** (a Linux
 box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same PC (in preview).
-A Mac app is coming soon. Packages are on the
+On a **Mac** (Apple Silicon or Intel), `curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash`
+installs it through Homebrew. Packages are on the
 [releases page](https://github.com/CaneBayComputers/zeltro-releases/releases).
 
 ---

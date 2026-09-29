@@ -199,8 +199,9 @@ installs this CLI first if `zeltro` is missing:
 curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 ```
 
-It works on Ubuntu/Debian, Fedora/RHEL and Arch. Windows has a Setup `.exe`, and
-a Mac app is coming soon. On first launch the app shows a short setup form and
+It works on Ubuntu/Debian, Fedora/RHEL and Arch. On a Mac, use
+`curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash` instead, and
+Windows has a Setup `.exe`. On first launch the app shows a short setup form and
 runs `zeltro configure` for you; if you have already configured Zeltro in a
 terminal, it skips the form.
 

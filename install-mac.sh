@@ -111,18 +111,30 @@ ZELTRO_INSTALLER_URL="${ZELTRO_INSTALLER_URL:-https://raw.githubusercontent.com/
 # /dev/tty must be OPENABLE, not merely present: over `ssh host cmd` with no -t
 # the device node exists but there is no controlling terminal, so the redirect
 # below failed and, under set -e, killed the install before it started.
-if [ ! -t 0 ] && [ -z "${ZELTRO_INSTALLER_REEXEC:-}" ] && ( exec < /dev/tty ) 2>/dev/null; then
-    _self="$(mktemp -t zeltro-install)" || _self=""
-    if [ -n "$_self" ] && curl -fsSL "$ZELTRO_INSTALLER_URL" -o "$_self" 2>/dev/null && [ -s "$_self" ]; then
-        export ZELTRO_INSTALLER_REEXEC=1
-        exec bash "$_self" "$@" < /dev/tty
+if [ ! -t 0 ] && [ -z "${ZELTRO_INSTALLER_REEXEC:-}" ]; then
+    # Where the run's stdin comes from: the terminal if one can be opened,
+    # otherwise nothing. With no terminal (ssh without -t, a CI job, the app
+    # installing on a remote) this used to skip the re-exec, so brew/apt read
+    # the rest of this script from the pipe; bash then hit EOF and exited 0
+    # with nothing installed.
+    if ( exec < /dev/tty ) 2>/dev/null; then _stdin=/dev/tty; else _stdin=/dev/null; fi
+    if [ -f "${BASH_SOURCE[0]:-}" ]; then
+        # Run from a file, not a pipe: stdin is not the script, so replace it
+        # in place (and keep running this copy, not the one on master).
+        exec < "$_stdin"
+    else
+        _self="$(mktemp -t zeltro-install)" || _self=""
+        if [ -n "$_self" ] && curl -fsSL "$ZELTRO_INSTALLER_URL" -o "$_self" 2>/dev/null && [ -s "$_self" ]; then
+            export ZELTRO_INSTALLER_REEXEC=1
+            exec bash "$_self" "$@" < "$_stdin"
+        fi
+        # Could not re-exec (offline, or no mktemp). Carry on rather than refuse,
+        # but say what will happen, because the failure is otherwise baffling.
+        echo "Warning: running from a pipe. If anything asks for a password it may fail." >&2
+        echo "         If that happens, download and run instead:" >&2
+        echo "           curl -fsSL $ZELTRO_INSTALLER_URL -o /tmp/install-mac.sh" >&2
+        echo "           bash /tmp/install-mac.sh" >&2
     fi
-    # Could not re-exec (offline, or no terminal). Carry on rather than refuse,
-    # but say what will happen, because the failure is otherwise baffling.
-    echo "Warning: running from a pipe. If anything asks for a password it may fail." >&2
-    echo "         If that happens, download and run instead:" >&2
-    echo "           curl -fsSL $ZELTRO_INSTALLER_URL -o /tmp/install-mac.sh" >&2
-    echo "           bash /tmp/install-mac.sh" >&2
 fi
 
 if [[ $EUID -eq 0 ]]; then
