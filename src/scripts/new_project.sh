@@ -746,6 +746,10 @@ cd "$PROJECT_NAME"
 
 framework_scaffold
 
+# Zeltro filled this directory itself, so the first AI session can skip the
+# agent's "do you trust this folder?" question (see the function for scope).
+zeltro_trust_project_for_agents "$PWD"
+
 
 # GitHub repository creation
 # Skip repository creation when we already created a fork via GitHub CLI

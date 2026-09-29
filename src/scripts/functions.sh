@@ -915,6 +915,69 @@ handle_docker_compose_conflict() {
     esac
 }
 
+# Tell the AI agents that a project Zeltro just created is trusted, so the first
+# interactive session goes straight to work instead of asking "Is this a project
+# you created or one you trust?". Claude Code preselects "No, exit" there, so
+# Create with AI's build step ended on Enter for every new project
+# (2026-09-28). Claude asks whenever the project is its own git repo.
+#
+# ONLY for directories Zeltro itself filled (zeltro new / install / create):
+# the files come from the framework's official source or a curated installer,
+# so "a project you created" is literally true. Never call it for `zeltro clone`:
+# a cloned repo can carry hooks or MCP servers, which is exactly what that
+# dialog protects against, so a clone keeps its one-time question.
+#
+# Claude Code: projects[DIR].hasTrustDialogAccepted in ~/.claude.json, written
+#   atomically (temp file + rename), retried if Claude rewrote the file
+#   meanwhile, and skipped (never truncated) if the file doesn't parse.
+# Codex: [projects."DIR"] trust_level = "trusted" in config.toml, the entry
+#   Codex writes itself; appended only if the project has no entry.
+# Best effort: never fails the caller. Set ZELTRO_NO_AGENT_TRUST=1 to skip.
+zeltro_trust_project_for_agents() {
+    [ "${ZELTRO_NO_AGENT_TRUST:-0}" = "1" ] && return 0
+    local dir projects
+    dir="$(cd "${1:-.}" 2>/dev/null && pwd -P)" || return 0
+    projects="$(get_projects_dir 2>/dev/null)"
+    projects="$(cd "$projects" 2>/dev/null && pwd -P)" || return 0
+    case "$dir" in "$projects"/*) ;; *) return 0 ;; esac
+
+    if [ -f "$HOME/.claude.json" ]; then
+        python3 - "$HOME/.claude.json" "$dir" <<'PYTRUST' >/dev/null 2>&1 || true
+import json, os, sys, tempfile, time
+path, proj = sys.argv[1], sys.argv[2]
+for _ in range(5):
+    try:
+        before = os.stat(path).st_mtime_ns
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        sys.exit(0)                      # unreadable or mid-write: leave it alone
+    entry = data.setdefault("projects", {}).setdefault(proj, {})
+    if entry.get("hasTrustDialogAccepted") is True:
+        sys.exit(0)
+    entry["hasTrustDialogAccepted"] = True
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".claude.json.zeltro-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    os.chmod(tmp, os.stat(path).st_mode & 0o777)
+    if os.stat(path).st_mtime_ns != before:  # Claude wrote it meanwhile: redo on the new copy
+        os.unlink(tmp); time.sleep(0.2); continue
+    os.replace(tmp, path)
+    sys.exit(0)
+PYTRUST
+    fi
+
+    local codex_cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
+    if [ -f "$codex_cfg" ] && command -v codex >/dev/null 2>&1; then
+        local header
+        header="[projects.$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$dir")]"
+        if ! grep -qF "$header" "$codex_cfg" 2>/dev/null; then
+            printf '\n%s\ntrust_level = "trusted"\n' "$header" >> "$codex_cfg" 2>/dev/null || true
+        fi
+    fi
+    return 0
+}
+
 # True only when DIR is the top of its OWN git repository.
 #
 # `git rev-parse --is-inside-work-tree` is not that question: it is also true
