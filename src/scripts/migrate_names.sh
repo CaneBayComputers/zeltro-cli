@@ -72,6 +72,10 @@ as_root_if_needed() { if [ -w "$1" ]; then shift; "$@"; else shift; sudo "$@"; f
 compose_services() { # <action...>: run docker compose for the shared services with every profile
     ( cd /etc/zeltro-cli && docker compose --profile '*' "$@" )
 }
+all_project_dirs() { # every directory in the projects folder (files are rewritten even without a compose file)
+    local d
+    for d in "$PROJECTS_DIR_PATH"/*/; do basename "${d%/}"; done
+}
 projects() { # every project directory with a compose file
     local d
     for d in "$PROJECTS_DIR_PATH"/*/; do
@@ -88,7 +92,7 @@ mode, root, backup = sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 
 names = sys.argv[4].split() if len(sys.argv) > 4 else []
 # Longest first so podium-mongo-express is not taken as podium-mongo + "-express".
 names.sort(key=len, reverse=True)
-tok = re.compile(r"(?<![\w.-])podium-(cli_vpc|" + "|".join(map(re.escape, names)) + r")(?![\w-])")
+tok = re.compile(r"(?<![\w.-])podium-(cli_vpc|project|" + "|".join(map(re.escape, names)) + r")(?![\w-])")
 skip_dirs = {".git", "node_modules", "vendor", ".venv", "venv", "__pycache__", ".next", ".nuxt", "dist", "build", "storage", "cache"}
 out = []
 for dirpath, dirs, files in os.walk(root):
@@ -136,7 +140,7 @@ if [ "$MODE" = "projects-only" ]; then
     BACKUP="$HOME/.zeltro/migrate-names-projects-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$BACKUP"; chmod 700 "$BACKUP"
     total=0
-    for p in $(projects); do
+    for p in $(all_project_dirs); do
         json="$(python3 -c "$REWRITE_PY" apply "$PROJECTS_DIR_PATH/$p" "$BACKUP/$p" "$SUFFIXES")"
         n="$(printf '%s' "$json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
         [ "$n" = "0" ] || { echo-white "  $p: $n file(s)"; total=$((total + n)); }
@@ -238,7 +242,7 @@ echo-white "  total $((total_kb / 1024)) MB to copy; $((${free_kb:-0} / 1024)) M
 
 echo-white "Project files that name the old hosts or network:"
 running=""; plan_count=0
-for p in $(projects); do
+for p in $(all_project_dirs); do
     json="$(python3 -c "$REWRITE_PY" scan "$PROJECTS_DIR_PATH/$p" "" "$SUFFIXES")"
     n="$(printf '%s' "$json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
     if [ "$n" != "0" ]; then
@@ -355,7 +359,7 @@ as_root_if_needed "$ENV_FILE" cp "$tmp_env" "$ENV_FILE"; rm -f "$tmp_env"
 grep -qiE "^[A-Z_]*=\"?${OLD_PREFIX}" "$ENV_FILE" && echo-yellow "  some podium values remain in $ENV_FILE; check them"
 
 echo-cyan "Rewriting project files ..."
-for p in $(projects); do
+for p in $(all_project_dirs); do
     python3 -c "$REWRITE_PY" apply "$PROJECTS_DIR_PATH/$p" "$BACKUP/projects/$p" "$SUFFIXES" >/dev/null
 done
 
