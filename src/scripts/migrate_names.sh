@@ -50,12 +50,15 @@ usage() {
     echo-white "  --yes                  Do it. Stops all projects and the shared services while it runs."
     echo-white "  --rollback DIR         Undo a migration from its backup directory (printed by --yes)."
     echo-white "  --remove-old-volumes   Delete the old podium-cli_* volumes after a successful migration."
+    echo-white "  --projects-only        Only rewrite project files (podium-* hosts and podium-cli_vpc -> zeltro-*),"
+    echo-white "                         e.g. after reinstalling Zeltro fresh instead of migrating. No Docker changes."
 }
 while [ $# -gt 0 ]; do
     case "$1" in
         --yes) MODE="run"; shift ;;
         --rollback) MODE="rollback"; ROLLBACK_DIR="${2:-}"; [ -n "$ROLLBACK_DIR" ] || error "--rollback needs the backup directory"; shift 2 ;;
         --remove-old-volumes) MODE="remove-old"; shift ;;
+        --projects-only) MODE="projects-only"; shift ;;
         --help|-h) usage; exit 0 ;;
         *) error "Unknown option: $1 (see --help)" ;;
     esac
@@ -127,6 +130,20 @@ print(json.dumps(out))
 SUFFIXES=""; for pair in $SERVICES; do SUFFIXES="$SUFFIXES ${pair#*:}"; done
 
 current_project="$(env_get COMPOSE_PROJECT_NAME)"
+
+# ---------------------------------------------------------------- projects-only -
+if [ "$MODE" = "projects-only" ]; then
+    BACKUP="$HOME/.zeltro/migrate-names-projects-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BACKUP"; chmod 700 "$BACKUP"
+    total=0
+    for p in $(projects); do
+        json="$(python3 -c "$REWRITE_PY" apply "$PROJECTS_DIR_PATH/$p" "$BACKUP/$p" "$SUFFIXES")"
+        n="$(printf '%s' "$json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+        [ "$n" = "0" ] || { echo-white "  $p: $n file(s)"; total=$((total + n)); }
+    done
+    echo-green "Rewrote $total project file(s). Originals: $BACKUP"
+    exit 0
+fi
 
 # ---------------------------------------------------------------- remove-old ----
 if [ "$MODE" = "remove-old" ]; then
