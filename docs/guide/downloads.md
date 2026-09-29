@@ -136,7 +136,7 @@ The command line tool is open source under the MIT licence:
 
 The desktop app is proprietary. It's free for personal use. A business using it,
 including for paid client work, needs a
-[lifetime commercial license](https://zeltro.build/commercial): US$99.99, paid once,
+[lifetime commercial license](https://zeltro.build/commercial), paid once,
 covering everyone in the business and every future version. There's no account to
 create either way, and you bring and pay for your own AI agent. The app sends
 anonymous usage counts and scrubbed error reports; see
