@@ -7,7 +7,7 @@ Maintainer: Cane Bay Computers <canebaycomputers@gmail.com>
 Installed-Size: @INSTALLED_SIZE@
 Depends: bash (>= 4.4), coreutils, git, curl, python3, jq, sed, gawk, openssl, acl
 Recommends: docker.io | docker-ce
-Homepage: https://zeltro.build
+Homepage: https://zeltro.ai
 Description: Pre-plumbed PHP, Python and Node dev environments for AI agents
  Zeltro is a Docker-based local development environment manager. Every project
  gets a fixed hostname, a shared database, cache and storage layer, and a

@@ -40,7 +40,7 @@ system, because Arch doesn't support partial upgrades.
 **Windows**
 
 Download the installer from
-[zeltro.build/download/windows](https://zeltro.build/download/windows). It is a
+[zeltro.ai/download/windows](https://zeltro.ai/download/windows). It is a
 normal Setup `.exe` (beta) that installs for your account only, so it needs no
 admin rights. It is not code-signed yet, so Windows may say it "protected your
 PC": choose **More info → Run anyway**. See [Windows](#windows) below for how to
@@ -66,7 +66,7 @@ Update with **Updates** in the app, or `brew upgrade --cask zeltro`.
 ### After installing
 
 On first launch the app asks you to accept its [license
-terms](https://zeltro.build/terms), shows a short setup form and runs
+terms](https://zeltro.ai/terms), shows a short setup form and runs
 `zeltro configure` for you. Running `zeltro configure` in a terminal works too.
 
 **Upgrading from 1.0.0-beta.4 or earlier:** those builds can't update
@@ -153,8 +153,8 @@ The command line tool is open source under the MIT licence:
 
 The desktop app is proprietary. It's free for personal use. A business using it,
 including for paid client work, needs a
-[lifetime commercial license](https://zeltro.build/commercial), paid once,
+[lifetime commercial license](https://zeltro.ai/commercial), paid once,
 covering everyone in the business and every future version. There's no account to
 create either way, and you bring and pay for your own AI agent. The app sends
 usage counts and scrubbed error reports, and our servers record the IP address
-they come from; see [what it collects](https://zeltro.build/privacy).
+they come from; see [what it collects](https://zeltro.ai/privacy).
