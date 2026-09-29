@@ -77,8 +77,12 @@ projects() { # every project directory with a compose file
         basename "$d"
     done
 }
-volume_sig() { # <volume>: a signature of every file's path, size and mode
-    docker run --rm -v "$1":/v:ro alpine:3 sh -c 'cd /v && find . -printf "%P %s %m %y\n" 2>/dev/null | sort | md5sum | cut -c1-32; du -sk . | cut -f1' | tr '\n' ' '
+volume_sig() { # <volume>: a fingerprint of every file's CONTENT, plus every path's type, mode and owner
+    # Busybox (alpine) has no find -printf, and du differs between a volume and a
+    # faithful copy (directory blocks), so neither is used. A volume that can't be
+    # read gives an empty result, which never matches.
+    docker run --rm -v "$1":/v:ro alpine:3 sh -c 'cd /v || exit 1
+        { find . -type f -exec md5sum {} + | sort; find . -exec stat -c "%n %F %a %u %g" {} + | sort; } | md5sum | cut -c1-32'
 }
 
 # Rewrite (or, with "scan", just list) project files that name the old hosts or network.
@@ -238,14 +242,29 @@ if docker network inspect "${OLD_PROJECT}_vpc" >/dev/null 2>&1; then
     docker network rm "${OLD_PROJECT}_vpc" >/dev/null
 fi
 
+# Until the .env is switched, nothing has been renamed: a failure here removes
+# the half-made copies and brings the old setup back up by itself.
+created_vols=""
+undo_copy() {
+    echo-yellow "Putting things back the way they were ..."
+    for nv in $created_vols; do docker volume rm "$nv" >/dev/null 2>&1 || true; done
+    "$SCRIPT_DIR/start_services.sh" >/dev/null 2>&1 || true
+    for p in $running; do "$ZELTRO_BIN" up "$p" >/dev/null 2>&1 || echo-yellow "  $p did not start; try: zeltro up $p"; done
+}
+
 echo-cyan "Copying volumes ..."
 for v in $old_vols; do
     nv="${NEW_PROJECT}_${v#${OLD_PROJECT}_}"
     docker volume create --label "com.docker.compose.project=${NEW_PROJECT}" --label "com.docker.compose.volume=${v#${OLD_PROJECT}_}" "$nv" >/dev/null
-    docker run --rm -v "$v":/from:ro -v "$nv":/to alpine:3 sh -c 'cp -a /from/. /to/'
+    created_vols="$created_vols $nv"
+    if ! docker run --rm -v "$v":/from:ro -v "$nv":/to alpine:3 sh -c 'cp -a /from/. /to/'; then
+        undo_copy; error "Copying $v failed. Nothing was renamed; the old setup is running again."
+    fi
     a="$(volume_sig "$v")"; b="$(volume_sig "$nv")"
-    [ "$a" = "$b" ] || error "Copy of $v does not match ($a vs $b). Stopped before changing any names; roll back with: zeltro migrate-names --rollback $BACKUP"
-    echo-white "  $v -> $nv  verified"
+    if [ -z "$a" ] || [ "$a" != "$b" ]; then
+        undo_copy; error "The copy of $v does not match the original (${a:-unreadable} vs ${b:-unreadable}). Nothing was renamed; the old setup is running again."
+    fi
+    echo-white "  $v -> $nv  verified (${a:0:12})"
 done
 
 echo-cyan "Switching names in $ENV_FILE ..."
