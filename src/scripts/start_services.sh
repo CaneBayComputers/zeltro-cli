@@ -79,6 +79,8 @@ source "$DEV_DIR/scripts/pre_check.sh"
 #
 # check-mariadb is no longer the right probe: MariaDB not running is normal on a
 # Postgres-only machine. Check the always-on trio plus whatever is enabled.
+zeltro_fix_postgres_data_volume || true
+
 _services_up=1
 for _svc in redis memcached mailhog ${OPTIONAL_SERVICES:-}; do
     _cname="$(zeltro_service_container "$_svc")"

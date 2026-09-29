@@ -77,13 +77,6 @@ projects() { # every project directory with a compose file
         basename "$d"
     done
 }
-volume_sig() { # <volume>: a fingerprint of every file's CONTENT, plus every path's type, mode and owner
-    # Busybox (alpine) has no find -printf, and du differs between a volume and a
-    # faithful copy (directory blocks), so neither is used. A volume that can't be
-    # read gives an empty result, which never matches.
-    docker run --rm -v "$1":/v:ro alpine:3 sh -c 'cd /v || exit 1
-        { find . -type f -exec md5sum {} + | sort; find . -exec stat -c "%n %F %a %u %g" {} + | sort; } | md5sum | cut -c1-32'
-}
 
 # Rewrite (or, with "scan", just list) project files that name the old hosts or network.
 REWRITE_PY='
@@ -309,7 +302,7 @@ for v in $old_vols; do
     if ! docker run --rm -v "$v":/from:ro -v "$nv":/to alpine:3 sh -c 'cp -a /from/. /to/'; then
         undo_copy; error "Copying $v failed. Nothing was renamed; the old setup is running again."
     fi
-    a="$(volume_sig "$v")"; b="$(volume_sig "$nv")"
+    a="$(zeltro_volume_fingerprint "$v")"; b="$(zeltro_volume_fingerprint "$nv")"
     if [ -z "$a" ] || [ "$a" != "$b" ]; then
         undo_copy; error "The copy of $v does not match the original (${a:-unreadable} vs ${b:-unreadable}). Nothing was renamed; the old setup is running again."
     fi
