@@ -181,6 +181,32 @@ for pair in $SERVICES; do
 done
 docker network inspect "${NEW_PROJECT}_vpc" >/dev/null 2>&1 && error "A network named ${NEW_PROJECT}_vpc already exists."
 
+# Every service is recreated from the CURRENT compose file. If a container runs a
+# different image, or keeps its data at a different path, the recreated one
+# would not read the copied data: a Postgres 18 volume under a Postgres 17
+# container starts an EMPTY database. Refuse rather than migrate into that.
+mismatch="$( cd /etc/zeltro-cli && docker compose --profile '*' config --format json 2>/dev/null | python3 -c '
+import json, subprocess, sys
+cfg = json.load(sys.stdin)
+for name, svc in cfg.get("services", {}).items():
+    c = svc.get("container_name") or name
+    want_img = svc.get("image", "")
+    want = sorted(v["target"] for v in svc.get("volumes", []) if v.get("type") == "volume" and v.get("source"))
+    r = subprocess.run(["docker", "inspect", "-f", "{{.Config.Image}}|{{range .Mounts}}{{if eq .Type \"volume\"}}{{.Name}}={{.Destination}},{{end}}{{end}}", c], capture_output=True, text=True)
+    if r.returncode:
+        continue                                    # not created: nothing to carry over
+    img, mnts = r.stdout.strip().split("|", 1)
+    have = sorted(m.split("=", 1)[1] for m in mnts.strip(",").split(",") if m and "_" in m.split("=", 1)[0])
+    if img != want_img or have != want:
+        print("  %s runs %s with data at %s; the current setup would recreate it as %s with data at %s"
+              % (c, img, ", ".join(have) or "-", want_img, ", ".join(want) or "-"))
+' )" || error "Couldn't read the shared-services compose file in /etc/zeltro-cli."
+if [ -n "$mismatch" ]; then
+    echo-red "Some shared services don't match what Zeltro would recreate them as:"
+    echo "$mismatch"
+    error "Migrating now could start them with empty data. Nothing was changed. Bring them in line first (e.g. dump and restore the database across the version change), then run this again."
+fi
+
 echo-cyan "Migrating $(hostname) from podium-* to zeltro-* names"
 echo-white ""
 echo-white "Shared-service containers (recreated under the new names):"
@@ -228,9 +254,32 @@ cp -p "$ENV_FILE" "$BACKUP/etc-zeltro-cli.env"
 python3 -c 'import json,sys; json.dump({"running_projects": sys.argv[1].split(), "old_volumes": sys.argv[2].split()}, open(sys.argv[3],"w"))' "$running" "$old_vols" "$BACKUP/manifest.json"
 echo-cyan "Backup: $BACKUP   (undo with: zeltro migrate-names --rollback $BACKUP)"
 
-# Database listings to compare after the move.
-before_mysql="$(docker exec "${OLD_PREFIX}-mariadb" mariadb -uroot -Nse 'show databases' 2>/dev/null | sort | tr '\n' ' ' || true)"
-before_pg="$(docker exec "${OLD_PREFIX}-postgres" psql -U root -d postgres -Atc 'select datname from pg_database order by 1' 2>/dev/null | tr '\n' ' ' || true)"
+# Database listings to compare after the move. An engine that is running must
+# answer, or the comparison would pass vacuously on two empty lists.
+db_list() { # <engine> <container>: sorted database names, or nothing
+    case "$1" in
+        mariadb)  docker exec "$2" mariadb -uroot -Nse 'show databases' 2>/dev/null | sort | tr '\n' ' ' ;;
+        postgres) docker exec "$2" psql -U root -d postgres -Atc 'select datname from pg_database order by 1' 2>/dev/null | tr '\n' ' ' ;;
+        mongo)    docker exec "$2" mongosh --quiet -u root -p password --authenticationDatabase admin --eval 'db.adminCommand({listDatabases:1}).databases.map(d=>d.name).sort().join(" ")' 2>/dev/null | tr -d '\r' ;;
+    esac
+}
+db_wait_list() { # <engine> <container>: wait up to ~90s for the engine to answer
+    local i out=""
+    for i in $(seq 1 45); do
+        out="$(db_list "$1" "$2")"; [ -n "$out" ] && { printf '%s' "$out"; return 0; }
+        sleep 2
+    done
+    return 1
+}
+DB_ENGINES=""
+for eng in mariadb postgres mongo; do
+    if docker container inspect -f '{{.State.Running}}' "${OLD_PREFIX}-$eng" 2>/dev/null | grep -q true; then
+        lst="$(db_wait_list "$eng" "${OLD_PREFIX}-$eng")" || error "Couldn't list the databases in ${OLD_PREFIX}-$eng, so the move couldn't be verified. Nothing was changed."
+        DB_ENGINES="$DB_ENGINES $eng"
+        eval "before_$eng=\"\$lst\""
+        echo-white "  $eng: $(echo "$lst" | wc -w | tr -d ' ') databases to carry over"
+    fi
+done
 
 echo-cyan "Stopping projects and shared services ..."
 for p in $(projects); do ( cd "$PROJECTS_DIR_PATH/$p" && docker compose down >/dev/null 2>&1 ) || true; done
@@ -304,11 +353,21 @@ echo-cyan "Starting shared services under the new names ..."
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 "$SCRIPT_DIR/start_services.sh" >/dev/null
-for i in $(seq 1 30); do docker exec "${NEW_PREFIX}-mariadb" mariadb -uroot -e 'select 1' >/dev/null 2>&1 && break; docker container inspect "${NEW_PREFIX}-mariadb" >/dev/null 2>&1 || break; sleep 2; done
-after_mysql="$(docker exec "${NEW_PREFIX}-mariadb" mariadb -uroot -Nse 'show databases' 2>/dev/null | sort | tr '\n' ' ' || true)"
-after_pg="$(docker exec "${NEW_PREFIX}-postgres" psql -U root -d postgres -Atc 'select datname from pg_database order by 1' 2>/dev/null | tr '\n' ' ' || true)"
-[ "$before_mysql" = "$after_mysql" ] && echo-white "  MariaDB databases match" || echo-red "  MariaDB databases differ! before: $before_mysql / after: $after_mysql"
-[ "$before_pg" = "$after_pg" ] && echo-white "  Postgres databases match" || echo-red "  Postgres databases differ! before: $before_pg / after: $after_pg"
+db_bad=""
+for eng in $DB_ENGINES; do
+    eval "b=\"\$before_$eng\""
+    a="$(db_wait_list "$eng" "${NEW_PREFIX}-$eng" || true)"
+    if [ -n "$a" ] && [ "$a" = "$b" ]; then
+        echo-white "  $eng: all $(echo "$a" | wc -w | tr -d ' ') databases present"
+    else
+        echo-red "  $eng databases differ!"; echo-red "    before: $b"; echo-red "    after:  ${a:-(no answer)}"
+        db_bad="$db_bad $eng"
+    fi
+done
+if [ -n "$db_bad" ]; then
+    # Don't start projects against missing data. The old volumes are untouched.
+    error "The databases in:$db_bad don't match after the move. Projects were NOT started. Undo with: zeltro migrate-names --rollback $BACKUP"
+fi
 
 echo-cyan "Starting the projects that were running ..."
 failed=""
