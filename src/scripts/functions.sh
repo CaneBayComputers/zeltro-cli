@@ -2,6 +2,17 @@
 # Zeltro - Internal Functions
 # This file provides functions needed by Zeltro scripts without polluting user's shell
 
+# Where Zeltro lives: the src/ directory (holding the `zeltro` script and scripts/).
+#
+# Resolved ONCE, now, while this file is being sourced. Callers source it by a
+# RELATIVE path (resume.sh and ai.sh cd to the checkout, then `source
+# scripts/...`) and cd elsewhere afterwards, so resolving "${BASH_SOURCE[0]}"
+# later, inside a function, points at a directory that no longer exists
+# relative to the cwd. That broke `zeltro resume` for every GUI session
+# (2026-09-28). A re-source from somewhere that can't resolve keeps the value.
+_zeltro_src_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)" && ZELTRO_SRC_DIR="$_zeltro_src_dir"
+unset _zeltro_src_dir
+
 # Agents Zeltro knows how to drive. The agent name is also its binary name.
 ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen"
 
@@ -128,8 +139,9 @@ zeltro_gui_event_agents_json() {
 zeltro_gui_hook_args() {
     ZELTRO_GUI_HOOK_ARGS=()
     [ -n "${ZELTRO_GUI_SESSION:-}" ] || return 0
-    local zeltro_bin
-    zeltro_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)/zeltro"
+    # Best effort: the hooks are a convenience, so nothing here may abort the run.
+    [ -n "${ZELTRO_SRC_DIR:-}" ] || return 0
+    local zeltro_bin="$ZELTRO_SRC_DIR/zeltro"
     [ -x "$zeltro_bin" ] || return 0
     case "$1" in
         claude)
@@ -186,8 +198,7 @@ fi
 # Get the projects directory (configurable)
 get_projects_dir() {
     # Get the directory where this script is located
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-    local zeltro_root="$(dirname "$script_dir" 2>/dev/null)"
+    local zeltro_root="${ZELTRO_SRC_DIR:-}"
     
     # First check /etc/zeltro-cli/.env file (primary config location)
     if [ -f "/etc/zeltro-cli/.env" ]; then
@@ -260,7 +271,8 @@ init_projects_dir() {
 # user's and is kept; a file with no markers gets the block added above it.
 zeltro_sync_projects_agents_md() {
     local dir="$1"
-    local root; root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd -P)" || return 0
+    [ -n "${ZELTRO_SRC_DIR:-}" ] || return 0
+    local root; root="$(dirname "$ZELTRO_SRC_DIR")"
     local tpl="$root/src/templates/projects-AGENTS.md"
     [ -f "$tpl" ] && [ -d "$dir" ] && [ -w "$dir" ] || return 0
 
@@ -1532,7 +1544,7 @@ write_project_agents_md() {
     # on the host since Zeltro stopped writing /etc/hosts.
     local project_url docs_path
     project_url="$(zeltro_project_url "$project_name")"
-    docs_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd -P)/AGENTS.md"
+    docs_path="$(dirname "${ZELTRO_SRC_DIR:-/usr/local/share/zeltro-cli/src}")/AGENTS.md"
 
     ZELTRO_PROJECT_NAME="$project_name" \
     ZELTRO_PROJECT_DIR="$project_dir" \
