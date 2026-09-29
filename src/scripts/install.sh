@@ -291,6 +291,10 @@ mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 write_files
 
+# Written by a curated installer, so the first AI session can skip the agent's
+# "do you trust this folder?" question (see the function for scope).
+zeltro_trust_project_for_agents "$PROJECT_DIR"
+
 # Setup and start.
 # Prebuilt-image apps (the default) only need their compose adapted, then a start —
 # so setup runs with --no-startup and 'zeltro up' brings the container online.
