@@ -145,5 +145,5 @@ including for paid client work, needs a
 [lifetime commercial license](https://zeltro.build/commercial), paid once,
 covering everyone in the business and every future version. There's no account to
 create either way, and you bring and pay for your own AI agent. The app sends
-anonymous usage counts and scrubbed error reports; see
-[what it collects](https://zeltro.build/privacy).
+usage counts and scrubbed error reports, and our servers record the IP address
+they come from; see [what it collects](https://zeltro.build/privacy).
