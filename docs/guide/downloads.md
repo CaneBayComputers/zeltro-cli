@@ -27,7 +27,7 @@ curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 The same command works on Ubuntu/Debian, Fedora/RHEL and Arch (the `fedora` and
 `arch` links go to the same installer). It installs the CLI first if `zeltro` is
 missing, then adds Zeltro's signed package repository
-([packages.zeltro.build](https://packages.zeltro.build)) and installs the app
+([packages.zeltro.ai](https://packages.zeltro.ai)) and installs the app
 from it with apt, dnf or pacman. The app then appears in your applications menu.
 Afterwards, log out and back in once so your user can use Docker.
 
