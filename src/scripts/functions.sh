@@ -2931,6 +2931,62 @@ os.replace(tmp, path)
 PYEOF
 }
 
+# Fingerprint of a Docker volume: every file's CONTENT, plus every path's type,
+# mode and owner. Busybox has no find -printf, and du differs between a volume
+# and a faithful copy (directory blocks), so neither is used. Empty output means
+# the volume couldn't be read, which never equals a real fingerprint.
+zeltro_volume_fingerprint() {
+    docker run --rm -v "$1":/v:ro alpine:3 sh -c 'cd /v || exit 1
+        { find . -type f -exec md5sum {} + | sort; find . -exec stat -c "%n %F %a %u %g" {} + | sort; } | md5sum | cut -c1-32' 2>/dev/null
+}
+
+# One-time repair of where the shared Postgres keeps its data.
+#
+# The services compose used to mount postgres_data at /var/lib/postgresql. The
+# postgres:17 image keeps its data in /var/lib/postgresql/data, which it declares
+# as its own ANONYMOUS volume, so the data never reached the named volume. Any
+# `compose down` (stop-services does one) orphaned it, and the next start came
+# up EMPTY. The compose now mounts postgres_data at /var/lib/postgresql/data;
+# this moves a running install's live data into the named volume first, so the
+# change doesn't swap in an empty (or months-old) database.
+#
+# Run before the shared services are stopped or started. No-op unless the
+# postgres container exists and still keeps its data in an anonymous volume.
+# On any failure the old container is started again, untouched.
+zeltro_fix_postgres_data_volume() {
+    local c project named anon ts backup a b
+    c="$(zeltro_service_container postgres)"
+    docker container inspect "$c" >/dev/null 2>&1 || return 0
+    project="${COMPOSE_PROJECT_NAME:-zeltro-cli}"
+    named="${project}_postgres_data"
+    anon="$(docker inspect -f '{{range .Mounts}}{{if and (eq .Type "volume") (eq .Destination "/var/lib/postgresql/data")}}{{.Name}}{{end}}{{end}}' "$c" 2>/dev/null)"
+    [ -n "$anon" ] && [ "$anon" != "$named" ] || return 0
+
+    echo-cyan "One-time fix: moving Postgres data into its named volume ($named) ..."
+    docker stop "$c" >/dev/null 2>&1 || true
+    docker volume create "$named" >/dev/null
+    ts="$(date +%Y%m%d%H%M%S)"
+    # Keep whatever the named volume held (often an older cluster) instead of deleting it.
+    # Non-empty = anything besides the (empty) mount-point directory "data".
+    if docker run --rm -v "$named":/n:ro alpine:3 sh -c '[ -n "$(ls -A /n | grep -vx data)" ] || [ -n "$(ls -A /n/data 2>/dev/null)" ]'; then
+        backup="${named}_before_fix_${ts}"
+        docker volume create "$backup" >/dev/null
+        docker run --rm -v "$named":/from:ro -v "$backup":/to alpine:3 sh -c 'cp -a /from/. /to/' || { docker start "$c" >/dev/null 2>&1; echo-red "  Postgres fix: backing up $named failed; left as it was."; return 1; }
+        echo-white "  previous contents of $named kept in $backup"
+    fi
+    if ! docker run --rm -v "$named":/n -v "$anon":/a:ro alpine:3 sh -c 'find /n -mindepth 1 -delete && cp -a /a/. /n/'; then
+        docker start "$c" >/dev/null 2>&1; echo-red "  Postgres fix: copying the data failed; the old container is running again."; return 1
+    fi
+    a="$(zeltro_volume_fingerprint "$anon")"; b="$(zeltro_volume_fingerprint "$named")"
+    if [ -z "$a" ] || [ "$a" != "$b" ]; then
+        docker start "$c" >/dev/null 2>&1; echo-red "  Postgres fix: the copy doesn't match; the old container is running again."; return 1
+    fi
+    # Removed so compose recreates it with the named volume at the data path.
+    docker rm "$c" >/dev/null
+    echo-white "  moved and verified; the old anonymous volume ($anon) is left in place"
+    return 0
+}
+
 # Record that a project was up, as ISO-8601 UTC.
 #
 # Written on BOTH start and stop, deliberately: on stop the value becomes the

@@ -67,6 +67,9 @@ if check-mariadb; then
 
     cd /etc/zeltro-cli
 
+    # Before `compose down` removes the container and orphans its anonymous volume.
+    zeltro_fix_postgres_data_volume || true
+
     dockerdown
 
     cd ..

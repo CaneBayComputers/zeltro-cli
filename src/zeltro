@@ -160,6 +160,7 @@ show_help() {
     echo "                              - reads the message from stdin). Run it from your project."
     echo "  zeltro gui <action>       - Ask the Zeltro app to show a question, collect a secret into"
     echo "                              .env, notify, or open a URL (see: zeltro gui --help)"
+    echo "  zeltro migrate-names      - Move a machine installed as Podium onto the zeltro-* names (preview; --yes to run)"
     echo "  zeltro update [--full]    - Update Zeltro CLI (--full also re-pulls Docker images)"
     echo "  zeltro start-services     - Start shared services"
     echo "  zeltro enable-service <n> - Enable an optional shared service (run it bare to list them)"
@@ -758,6 +759,9 @@ case "$1" in
         ;;
     "gui")
         "$SCRIPT_DIR/scripts/bus.sh" gui "${@:2}"
+        ;;
+    "migrate-names")
+        "$SCRIPT_DIR/scripts/migrate_names.sh" "${@:2}"
         ;;
     "get-metadata")
         "$SCRIPT_DIR/scripts/get_metadata.sh" "${@:2}"

@@ -96,7 +96,10 @@ services:
     expose:
       - "5432"
     volumes:
-      - postgres_data:/var/lib/postgresql
+      # The data path of the postgres:17 image (PGDATA). Mounting one level up left
+      # the data in an anonymous volume that every `compose down` orphaned; see
+      # zeltro_fix_postgres_data_volume, which moves existing installs over.
+      - postgres_data:/var/lib/postgresql/data
     networks:
       vpc:
         ipv4_address: "${VPC_SUBNET}.6"
