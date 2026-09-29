@@ -144,13 +144,13 @@ def main():
         sys.stderr.write("usage: project_db_refs.py <projects_dir> <project> <installers_dir>\n")
         sys.exit(2)
     projects_dir, project, installers_dir = sys.argv[1:4]
-    # Container names this machine uses (podium-* on a pre-rename box), plus
-    # both stock prefixes, so detection never depends on which one is running.
+    # The stock zeltro-* names plus the names this machine actually uses (from the
+    # ZELTRO_* env vars), so detection never depends on which one is running.
     service_names = {}
     for eng, env, stock in (("mariadb", "ZELTRO_MARIADB", "mariadb|mysql"),
                             ("postgres", "ZELTRO_POSTGRES", "postgres"),
                             ("mongo", "ZELTRO_MONGO", "mongo")):
-        alts = [r"(?:zeltro|podium)-(?:%s)" % stock]
+        alts = [r"zeltro-(?:%s)" % stock]
         if os.environ.get(env):
             alts.append(re.escape(os.environ[env]))
         service_names[eng] = re.compile(r"(?<![A-Za-z0-9_-])(?:%s)(?![A-Za-z0-9_-])" % "|".join(alts))

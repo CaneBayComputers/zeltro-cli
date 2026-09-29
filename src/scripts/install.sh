@@ -11,8 +11,8 @@ source scripts/pre_check.sh
 # Rewrite zeltro-<service> hostnames to the container names THIS machine runs.
 # Reads stdin, writes stdout.
 #
-# Installers are written against the zeltro-* names, but a box installed under
-# the Podium name runs podium-mariadb, podium-postgres and so on, and nothing
+# Installers are written against the zeltro-* names, but a machine configured
+# with another SERVICE_PREFIX runs <prefix>-mariadb and so on, and nothing
 # answers to zeltro-* there. So `docker exec zeltro-mariadb ...` in a
 # pre_install hook failed with "No such container", and a compose pointing
 # DB_HOST at zeltro-postgres could never connect. Only whole names are
@@ -245,7 +245,7 @@ INSTALL_CREDENTIALS=""
 INSTALL_NOTES=""
 
 # Installers name the shared services by their zeltro-* hostnames. A machine
-# installed under the Podium name runs podium-* containers instead, so source a
+# with another SERVICE_PREFIX runs differently named containers, so source a
 # copy with this machine's names in it -- that covers the pre_install hook's
 # `docker exec` and every file write_files generates, in one place.
 INSTALLER_SRC="$(mktemp "${TMPDIR:-/tmp}/zeltro-install.XXXXXX")"

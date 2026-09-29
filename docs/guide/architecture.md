@@ -204,4 +204,4 @@ Useful flags: `--no-startup` to review the adapted compose before it boots, `--o
 
 `~/zeltro-projects` is the default. `zeltro projects-dir` prints the one this machine uses. The projects directory also gets its own `AGENTS.md` with this machine's service names.
 
-Runtime configuration lives in `/etc/zeltro-cli/.env`. On a machine installed before the rename from Podium, containers and the network use `podium-*` names (`podium-cli_vpc`) instead of `zeltro-*`.
+Runtime configuration lives in `/etc/zeltro-cli/.env`. A machine installed before the rename to Zeltro may still use older container and network names; `zeltro migrate-names` moves it onto the `zeltro-*` names without losing data.
