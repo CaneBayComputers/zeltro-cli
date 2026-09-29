@@ -2829,24 +2829,55 @@ PYEOF
 # Creates the block if absent, anchored on the service whose container_name is
 # the project — appending at the end of the file would land it in the wrong
 # service in a multi-service compose.
+#
+# Values are written as ONE line: a YAML double-quoted scalar, which is exactly a
+# JSON string, so any text round-trips byte for byte (newlines, quotes,
+# backslashes, non-ASCII) and can never spill onto a line that looks like
+# another key. Every `$` is doubled: Compose interpolates ${VAR} and $VAR even
+# in x- fields, and a stray "${" makes it reject the whole file.
 #   $1 compose file   $2 project name   $3 key   $4 value
 set_x_metadata_key() {
-    local file="$1" project="$2" key="$3" value="$4"
+    local tmp rc=0
+    tmp="$(mktemp)" || return 1
+    printf '%s' "$4" > "$tmp"
+    set_x_metadata_key_file "$1" "$2" "$3" "$tmp" || rc=1
+    rm -f "$tmp"
+    return $rc
+}
+
+# Same, with the value read from a file, byte for byte. For large values (a
+# Create with AI idea): the value never goes through argv or the environment,
+# both of which cap a single string at 128 KB on Linux.
+#   $1 compose file   $2 project name   $3 key   $4 value file   [$5 "delete"]
+set_x_metadata_key_file() {
+    local file="$1" project="$2" key="$3" vfile="$4" mode="${5:-set}"
     [ -f "$file" ] || return 1
     command -v python3 >/dev/null 2>&1 || return 1
 
-    XM_FILE="$file" XM_PROJECT="$project" XM_KEY="$key" XM_VALUE="$value" python3 - << 'PYEOF' 2>/dev/null
-import os, re, sys
+    XM_FILE="$file" XM_PROJECT="$project" XM_KEY="$key" XM_VALUE_FILE="$vfile" XM_MODE="$mode" python3 - << 'PYEOF' 2>/dev/null
+import json, os, re, sys, tempfile
 path    = os.environ["XM_FILE"]
 project = os.environ["XM_PROJECT"]
 key     = os.environ["XM_KEY"]
-value   = os.environ["XM_VALUE"]
+delete  = os.environ.get("XM_MODE") == "delete"
+value = b""
+if not delete:
+    with open(os.environ["XM_VALUE_FILE"], "rb") as f:
+        value = f.read()
+value = value.decode("utf-8", "surrogateescape")
 
-lines = open(path).read().splitlines()
+def encode(v):
+    s = json.dumps(v, ensure_ascii=False)
+    # Bytes that weren't valid UTF-8 come through as lone surrogates; write them
+    # as \uDCxx escapes so the file stays valid UTF-8 and they decode back.
+    s = re.sub("[\udc80-\udcff]", lambda m: "\\u%04x" % ord(m.group()), s)
+    return s.replace("$", "$$")
 
-# Locate an existing x-metadata block.
+with open(path, encoding="utf-8", errors="surrogateescape") as f:
+    lines = f.read().splitlines()
+entry = f"{key}: {encode(value)}"
+
 mi = next((i for i, l in enumerate(lines) if re.match(r'^\s*x-metadata:\s*$', l)), None)
-
 if mi is not None:
     indent = len(lines[mi]) - len(lines[mi].lstrip())
     end = len(lines)
@@ -2856,22 +2887,20 @@ if mi is not None:
         if len(lines[j]) - len(lines[j].lstrip()) <= indent:
             end = j
             break
-    key_re = re.compile(r'^\s*' + re.escape(key) + r':\s')
-    for j in range(mi + 1, end):
-        if key_re.match(lines[j]):
-            ki = len(lines[j]) - len(lines[j].lstrip())
-            lines[j] = " " * ki + f'{key}: "{value}"'
-            break
-    else:
-        inner = indent + 2
-        for j in range(mi + 1, end):
-            if lines[j].strip():
-                inner = len(lines[j]) - len(lines[j].lstrip())
-                break
+    inner = next((len(lines[j]) - len(lines[j].lstrip()) for j in range(mi + 1, end) if lines[j].strip()), indent + 2)
+    # Only lines at the block's own key indent are keys.
+    key_re = re.compile(r'^' + " " * inner + re.escape(key) + r':(\s|$)')
+    hit = next((j for j in range(mi + 1, end) if key_re.match(lines[j])), None)
+    if hit is not None:
+        if delete:
+            del lines[hit]
+        else:
+            lines[hit] = " " * inner + entry
+    elif not delete:
         while end > mi + 1 and lines[end - 1].strip() == "":
             end -= 1
-        lines.insert(end, " " * inner + f'{key}: "{value}"')
-else:
+        lines.insert(end, " " * inner + entry)
+elif not delete:
     # No block yet — create one inside the project's own service.
     anchor = next((i for i, l in enumerate(lines)
                    if re.match(r'^\s*container_name:\s*["\']?' + re.escape(project) + r'["\']?\s*$', l)), None)
@@ -2887,9 +2916,18 @@ else:
             break
     while end > 0 and lines[end - 1].strip() == "":
         end -= 1
-    lines[end:end] = [" " * si + "x-metadata:", " " * (si + 2) + f'{key}: "{value}"']
+    lines[end:end] = [" " * si + "x-metadata:", " " * (si + 2) + entry]
 
-open(path, "w").write("\n".join(lines) + "\n")
+# Atomic: a crash mid-write must not leave a truncated compose file.
+d = os.path.dirname(os.path.abspath(path))
+fd, tmp = tempfile.mkstemp(dir=d, prefix=".compose.zeltro-")
+with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape") as f:
+    f.write("\n".join(lines) + "\n")
+try:
+    os.chmod(tmp, os.stat(path).st_mode & 0o777)
+except OSError:
+    pass
+os.replace(tmp, path)
 PYEOF
 }
 
@@ -2931,24 +2969,49 @@ read_x_metadata_key() {
     local file="$1" key="$2"
     [ -f "$file" ] || return 0
     python3 - "$file" "$key" << 'PYEOF' 2>/dev/null
-import re, sys
+import json, re, sys
+
+def xm_decode(val):
+    """Undo set_x_metadata_key's encoding; tolerant of hand-written values."""
+    val = val.strip()
+    if len(val) >= 2 and val[0] == val[-1] == '"':
+        try:
+            return json.loads(val.replace("$$", "$"))
+        except ValueError:
+            return val[1:-1].replace("$$", "$")
+    if len(val) >= 2 and val[0] == val[-1] == "'":
+        return val[1:-1].replace("''", "'").replace("$$", "$")
+    return val.replace("$$", "$")
+
+def xm_block(lines):
+    """(key, raw value) pairs at the x-metadata block's own key indent only."""
+    mi = next((i for i, l in enumerate(lines) if re.match(r'^\s*x-metadata:\s*$', l)), None)
+    if mi is None:
+        return []
+    indent = len(lines[mi]) - len(lines[mi].lstrip())
+    inner, out = None, []
+    for l in lines[mi + 1:]:
+        if not l.strip():
+            continue
+        ind = len(l) - len(l.lstrip())
+        if ind <= indent:
+            break
+        if inner is None:
+            inner = ind
+        if ind != inner:
+            continue
+        m = re.match(r'^\s*([A-Za-z0-9_-]+):(?:\s+(.*))?$', l)
+        if m:
+            out.append((m.group(1), m.group(2) or ""))
+    return out
+
 try:
-    lines = open(sys.argv[1]).read().splitlines()
+    lines = open(sys.argv[1], encoding="utf-8", errors="surrogateescape").read().splitlines()
 except Exception:
     sys.exit(0)
-key = sys.argv[2]
-mi = next((i for i, l in enumerate(lines) if re.match(r'^\s*x-metadata:\s*$', l)), None)
-if mi is None:
-    sys.exit(0)
-indent = len(lines[mi]) - len(lines[mi].lstrip())
-for l in lines[mi + 1:]:
-    if l.strip() == "":
-        continue
-    if len(l) - len(l.lstrip()) <= indent:
-        break
-    m = re.match(r'^\s*' + re.escape(key) + r':\s*(.*)$', l)
-    if m:
-        print(m.group(1).strip().strip('"\''))
+for k, v in xm_block(lines):
+    if k == sys.argv[2]:
+        sys.stdout.buffer.write(xm_decode(v).encode("utf-8", "surrogateescape") + b"\n")
         break
 PYEOF
 }
@@ -3220,40 +3283,63 @@ zeltro_services_json_fragment() {
 # Always prints a JSON object; `{}` when there is no block, which is the common
 # case for projects created before x-metadata existed.
 read_x_metadata_json() {
-    local file="$1"
+    local file="$1" mode="${2:-}"
     if [ -z "$file" ] || [ ! -f "$file" ]; then printf '{}'; return 0; fi
-    python3 - "$file" << 'PYEOF' 2>/dev/null || printf '{}'
+    python3 - "$file" "$mode" << 'PYEOF' 2>/dev/null || printf '{}'
 import json, re, sys
 
+def xm_decode(val):
+    """Undo set_x_metadata_key's encoding; tolerant of hand-written values."""
+    val = val.strip()
+    if len(val) >= 2 and val[0] == val[-1] == '"':
+        try:
+            return json.loads(val.replace("$$", "$"))
+        except ValueError:
+            return val[1:-1].replace("$$", "$")
+    if len(val) >= 2 and val[0] == val[-1] == "'":
+        return val[1:-1].replace("''", "'").replace("$$", "$")
+    return val.replace("$$", "$")
+
+def xm_block(lines):
+    """(key, raw value) pairs at the x-metadata block's own key indent only."""
+    mi = next((i for i, l in enumerate(lines) if re.match(r'^\s*x-metadata:\s*$', l)), None)
+    if mi is None:
+        return []
+    indent = len(lines[mi]) - len(lines[mi].lstrip())
+    inner, out = None, []
+    for l in lines[mi + 1:]:
+        if not l.strip():
+            continue
+        ind = len(l) - len(l.lstrip())
+        if ind <= indent:
+            break
+        if inner is None:
+            inner = ind
+        if ind != inner:
+            continue
+        m = re.match(r'^\s*([A-Za-z0-9_-]+):(?:\s+(.*))?$', l)
+        if m:
+            out.append((m.group(1), m.group(2) or ""))
+    return out
+
 try:
-    lines = open(sys.argv[1], errors="replace").read().splitlines()
+    lines = open(sys.argv[1], encoding="utf-8", errors="surrogateescape").read().splitlines()
 except Exception:
     print("{}")
     raise SystemExit
-
-mi = next((i for i, l in enumerate(lines) if re.match(r'^\s*x-metadata:\s*$', l)), None)
-if mi is None:
-    print("{}")
-    raise SystemExit
-
-indent = len(lines[mi]) - len(lines[mi].lstrip())
 out = {}
-for line in lines[mi + 1:]:
-    if not line.strip():
+for key, raw in xm_block(lines):
+    val = xm_decode(raw)
+    if key == "idea" and sys.argv[2] != "full":
+        # Up to ~200 KB: kept out of `status` (one entry per project); read it
+        # with `zeltro get-metadata <project>`.
+        out["has_idea"] = val != ""
         continue
-    if len(line) - len(line.lstrip()) <= indent:
-        break
-    m = re.match(r'^\s*([A-Za-z0-9_-]+):\s*(.*)$', line)
-    if not m:
-        continue
-    key, val = m.group(1), m.group(2).strip()
-    # Strip one layer of matching quotes; values are written quoted when they
-    # contain spaces or emoji.
-    if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
-        val = val[1:-1]
     out["display_name" if key == "name" else key] = val
-
-print(json.dumps(out, ensure_ascii=False))
+try:
+    print(json.dumps(out, ensure_ascii=False))
+except UnicodeEncodeError:
+    print(json.dumps(out))
 PYEOF
 }
 

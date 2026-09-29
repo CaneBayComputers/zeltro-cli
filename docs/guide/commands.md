@@ -102,7 +102,8 @@ Commands marked *(project dir)* must be run from inside a project directory.
 | `zeltro clone <mode> <repo> [name]` | Clone an existing repo (mode: `work-directly` / `fork` / `new-repo`) |
 | `zeltro setup <project> [database] [options]` | Set up an existing project directory |
 | `zeltro remove <project> [options]` | Remove a project (DB preserved unless `--force-db-delete`) |
-| `zeltro set-metadata <project> [--emoji E] [--name N] [--description D]` | Set a project's display emoji, name or description |
+| `zeltro set-metadata <project> [--emoji E] [--name N] [--description D] [--idea TEXT\|--idea-file F\|--idea -]` | Set a project's display emoji, name, description, or the Create with AI idea it came from (any text up to 200 KB; `--idea ""` removes it) |
+| `zeltro get-metadata <project> [--idea] [--json-output]` | Show a project's metadata; `--idea` prints just the idea, byte for byte |
 | `zeltro disable <project>` | Stop and park a project: skipped by `up-all`, refused by `up`, hidden in the GUI. Nothing is deleted |
 | `zeltro enable <project>` | Re-enable a disabled project |
 
@@ -665,6 +666,7 @@ const data = JSON.parse(result.stdout);
 - `zeltro ai-set --json-output` - Current AI settings (read-only when used alone)
 - `zeltro create --classify-only --json-output` - Stack classification
 - `zeltro peers --json-output` / `zeltro send --json-output` - Agent sessions / send result
+- `zeltro get-metadata --json-output` - All x-metadata keys, including the full `idea` (`status` only reports `has_idea`)
 - `zeltro set-metadata`, `zeltro disable`, `zeltro enable --json-output` - Result
 - `zeltro projects-dir --json-output`, `zeltro version --json-output`
 

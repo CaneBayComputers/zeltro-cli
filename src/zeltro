@@ -144,7 +144,8 @@ show_help() {
     echo "  zeltro clone <work-directly|fork|new-repo> <repo> [name] - Clone an existing repo"
     echo "  zeltro setup <project> [options] - Set up an existing project directory"
     echo "  zeltro remove <project> [options] - Remove a project (DB preserved unless --force-db-delete)"
-    echo "  zeltro set-metadata <p>   - Set a project's emoji, display name or description"
+    echo "  zeltro set-metadata <p>   - Set a project's emoji, display name, description or idea"
+    echo "  zeltro get-metadata <p>   - Show a project's metadata, including its Create with AI idea"
     echo "  zeltro disable <project>  - Stop and park a project: skipped by up-all, hidden in the GUI"
     echo "  zeltro enable <project>   - Re-enable a disabled project"
     echo
@@ -757,6 +758,9 @@ case "$1" in
         ;;
     "gui")
         "$SCRIPT_DIR/scripts/bus.sh" gui "${@:2}"
+        ;;
+    "get-metadata")
+        "$SCRIPT_DIR/scripts/get_metadata.sh" "${@:2}"
         ;;
     "set-metadata")
         "$SCRIPT_DIR/scripts/set_metadata.sh" "${@:2}"

@@ -240,6 +240,19 @@ if [[ ! -d "$PROJECT_DIR" ]]; then
     exit 1
 fi
 
+# Keep the original idea with the project (x-metadata `idea`), exactly as typed,
+# so the app can show what a project was made from. Best effort; capped like
+# set-metadata. Read back with: zeltro get-metadata <project> --idea
+_idea_compose="$(zeltro_project_compose "$CHOSEN_NAME")"
+if [[ -n "$_idea_compose" ]]; then
+    _idea_tmp="$(mktemp)"; chmod 600 "$_idea_tmp"
+    printf '%s' "$USER_IDEA" > "$_idea_tmp"
+    if [ "$(wc -c < "$_idea_tmp" | tr -d ' ')" -le 204800 ]; then
+        set_x_metadata_key_file "$_idea_compose" "$CHOSEN_NAME" "idea" "$_idea_tmp" >/dev/null 2>&1 || true
+    fi
+    rm -f "$_idea_tmp"
+fi
+
 # ---------------------------------------------------------------------------
 # Phase 3: build — hand the ORIGINAL idea to the agent, inside the project
 # ---------------------------------------------------------------------------
