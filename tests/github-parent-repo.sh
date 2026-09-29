@@ -2,7 +2,7 @@
 # Regression test: `--github` / `--github-org` must never touch a git repository
 # that merely ENCLOSES the project.
 #
-# 2026-09-28: PROJECTS_DIR (~/podium-projects) sat inside a git-backed home
+# 2026-09-28: PROJECTS_DIR (~/zeltro-projects) sat inside a git-backed home
 # directory. create_github_repo saw "inside a work tree", skipped git init,
 # re-pointed the HOME repo's origin at the new GitHub repo and pushed the whole
 # home backup to it. This runs create_github_repo against a fake gh and local

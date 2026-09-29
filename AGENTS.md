@@ -121,7 +121,7 @@ These are host tools — run them via your Bash tool, not via `zeltro exec`.
 
 Use these hostnames + credentials when configuring projects. Do not inspect containers to derive them.
 
-> **Machines installed before the rename use `podium-*` names.** On those boxes the shared containers are `podium-postgres`, `podium-mariadb`, `podium-redis` and so on, and the network is `podium-cli_vpc` — the `zeltro-*` hostnames below **do not resolve** there. Check once with `grep COMPOSE_PROJECT_NAME /etc/zeltro-cli/.env`: `podium-cli` means use `podium-*`, anything else (or unset) means `zeltro-*`.
+> **Container names come from `SERVICE_PREFIX` in `/etc/zeltro-cli/.env`** (unset means `zeltro`, which is every fresh install). A machine with another prefix names its shared containers `<prefix>-postgres`, `<prefix>-mariadb` and so on, and the `zeltro-*` hostnames below **do not resolve** there. A machine installed before the rename can move to the `zeltro-*` names with `zeltro migrate-names` (a preview; `--yes` to run).
 
 | Service | Host | Port | User | Password |
 |---|---|---|---|---|
@@ -143,7 +143,7 @@ Use these hostnames + credentials when configuring projects. Do not inspect cont
 
 ## VPC Networking & IP Allocation
 
-All Zeltro containers attach to the `zeltro-cli_vpc` Docker network (`podium-cli_vpc` on a pre-rename machine) (subnet `${VPC_SUBNET}.0/24`, configured per machine in `/etc/zeltro-cli/.env`). The address space is partitioned to keep static IPs from colliding with dynamic allocations:
+All Zeltro containers attach to the `zeltro-cli_vpc` Docker network (subnet `${VPC_SUBNET}.0/24`, configured per machine in `/etc/zeltro-cli/.env`). The address space is partitioned to keep static IPs from colliding with dynamic allocations:
 
 | Range | Purpose | Allocation |
 |---|---|---|

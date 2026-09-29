@@ -295,9 +295,9 @@ parse_docker_compose_services() {
         
         local container_name=$(echo "$service_section" | grep -E "^\s+container_name:" | head -1 | sed 's/.*container_name: *\(.*\)/\1/' | tr -d '"'"'")
         # Resolve ${VAR:-default} the way compose does: VAR if set, else the
-        # default. Taking the default unconditionally made this look for
-        # zeltro-mariadb on a box whose container is podium-mariadb, so the JSON
-        # (what the GUI reads) reported every running service as stopped.
+        # default. Taking the default unconditionally made this look for the
+        # stock name on a box configured with another one, so the JSON (what the
+        # GUI reads) reported every running service as stopped.
         local _cn_re='^\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}$'
         if [[ "$container_name" =~ $_cn_re ]]; then
             local _cn_var="${BASH_REMATCH[1]}" _cn_def="${BASH_REMATCH[3]}"
@@ -623,7 +623,7 @@ if [[ "$JSON_OUTPUT" == "1" ]]; then
                         ping_state="failed"
                     fi
 
-                    # Keys are container names (podium-phpmyadmin), so the bare
+                    # Keys are container names (<prefix>-phpmyadmin), so the bare
                     # "phpmyadmin)" pattern never matched and these never ran.
                     case "$service_name" in
                         *phpmyadmin)

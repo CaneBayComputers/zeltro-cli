@@ -103,7 +103,7 @@ else
     # pattern matched any container whose name merely CONTAINED "redis",
     # "postgres" and so on, so uninstalling Zeltro could delete other people's
     # containers on the same machine.
-FALLBACK_CONTAINERS=$(docker ps -a --format "{{.Names}}" | grep -E "^(zeltro|podium)-(mariadb|redis|postgres|mongo|memcached|phpmyadmin|mailhog|minio|meilisearch|adminer|mongo-express|redisinsight)$" 2>/dev/null || true)
+FALLBACK_CONTAINERS=$(docker ps -a --format "{{.Names}}" | grep -E "^(zeltro|${SERVICE_PREFIX:-zeltro})-(mariadb|redis|postgres|mongo|memcached|phpmyadmin|mailhog|minio|meilisearch|adminer|mongo-express|redisinsight)$" 2>/dev/null || true)
     
     if [ -n "$FALLBACK_CONTAINERS" ]; then
         echo "Found containers by pattern: $FALLBACK_CONTAINERS"

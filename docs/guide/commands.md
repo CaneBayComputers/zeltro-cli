@@ -153,7 +153,7 @@ zeltro disable-service minio
 zeltro enable-service --json-output     # no name: list every optional service and its state
 ```
 
-A service is recorded as enabled only if it starts and stays running. Machines installed before the rename use `podium-*` names instead of `zeltro-*`.
+A service is recorded as enabled only if it starts and stays running. On a machine installed before the rename to Zeltro, run `zeltro migrate-names` to move the containers onto the `zeltro-*` names.
 
 #### Messaging other agent sessions
 

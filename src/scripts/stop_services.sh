@@ -70,7 +70,13 @@ if check-mariadb; then
     # Before `compose down` removes the container and orphans its anonymous volume.
     zeltro_fix_postgres_data_volume || true
 
-    dockerdown
+    # Every profile: without them `compose down` only stops the always-on
+    # services and leaves the databases and admin UIs (all profile-gated) running.
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        docker compose --profile '*' down > /dev/null 2>&1
+    else
+        docker compose --profile '*' down
+    fi
 
     cd ..
 

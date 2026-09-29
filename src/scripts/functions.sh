@@ -224,17 +224,6 @@ get_projects_dir() {
         fi
     fi
     
-    # Fallback to a legacy per-user config. ~/.podium/config is the pre-rebrand
-    # name and must stay spelled that way -- a machine that predates the rename
-    # still has it, and rewriting it to ~/.zeltro/config would have turned the
-    # backward-compatibility path into a file that has never existed anywhere.
-    if [ -f ~/.podium/config ]; then
-        PROJECTS_DIR=$(grep "^PROJECTS_DIR=" ~/.podium/config 2>/dev/null | cut -d'=' -f2- | sed 's/^"//; s/"$//')
-        if [ -n "$PROJECTS_DIR" ]; then
-            echo "$PROJECTS_DIR"
-            return 0
-        fi
-    fi
     if [ -f ~/.zeltro/config ]; then
         PROJECTS_DIR=$(grep "^PROJECTS_DIR=" ~/.zeltro/config | cut -d'=' -f2- | sed 's/^"//; s/"$//')
         if [ -n "$PROJECTS_DIR" ]; then
@@ -360,11 +349,10 @@ zeltro_network_name() {
     echo "${VPC_NETWORK_NAME:-${COMPOSE_PROJECT_NAME:-zeltro-cli}_vpc}"
 }
 
-# The container name for a shared service. Every service has a
-# *_CONTAINER_NAME setting in /etc/zeltro-cli/.env, and on a box installed under
-# the Podium name those are podium-*. Several callers built the name by hand as
-# "zeltro-<svc>" instead, so on those boxes they looked for containers that do
-# not exist and reported healthy services as stopped, or not running at all.
+# The container name for a shared service: the *_CONTAINER_NAME setting in
+# /etc/zeltro-cli/.env if there is one, else <SERVICE_PREFIX>-<service>
+# (SERVICE_PREFIX defaults to "zeltro"). Always resolve names through this, never
+# by hand, so a machine with other names still finds its containers.
 zeltro_service_container() {
     local p="${SERVICE_PREFIX:-zeltro}"
     case "$1" in
@@ -384,18 +372,15 @@ zeltro_service_container() {
     esac
 }
 
-# Does a compose file sit on Zeltro's network? Setup writes $(zeltro_network_name),
-# which on a box installed under the Podium name is podium-cli_vpc, so checking
-# for the literal "zeltro-cli_vpc" rejected every project on those machines --
-# setup wrote one name and validation looked for another. Accept this machine's
-# own name, plus both product names, so a project folder copied between an old
-# and a new box still validates.
+# Does a compose file sit on Zeltro's network? Accept this machine's own network
+# name ($(zeltro_network_name)) and the stock zeltro-cli_vpc, so a project folder
+# copied from another machine still validates.
 zeltro_compose_on_vpc() {
     local file="${1:-docker-compose.yaml}" net
     net="$(zeltro_network_name)"
     [ -f "$file" ] || return 1
     grep -qF "$net" "$file" 2>/dev/null && return 0
-    grep -qE '(zeltro|podium)-cli_vpc' "$file" 2>/dev/null
+    grep -qF 'zeltro-cli_vpc' "$file" 2>/dev/null
 }
 
 # Optional shared services are addressed as <prefix>-<service>. The always-on
@@ -3121,16 +3106,17 @@ zeltro_project_is_disabled() {
 # Map a zeltro-* hostname to its compose service name. These differ — the
 # MariaDB service is called `mysql` but its container is `zeltro-mariadb`.
 _zeltro_host_to_service() {
-    # Both product names: a project on a pre-rename box references podium-*.
-    case "$1" in
-        zeltro-mariadb|podium-mariadb)         printf 'mysql' ;;
-        zeltro-postgres|podium-postgres)       printf 'postgres' ;;
-        zeltro-mongo|podium-mongo)             printf 'mongo' ;;
-        zeltro-redis|podium-redis)             printf 'redis' ;;
-        zeltro-memcached|podium-memcached)     printf 'memcached' ;;
-        zeltro-mailhog|podium-mailhog)         printf 'mailhog' ;;
-        zeltro-minio|podium-minio)             printf 'minio' ;;
-        zeltro-meilisearch|podium-meilisearch) printf 'meilisearch' ;;
+    # Any prefix (zeltro-*, or this machine's SERVICE_PREFIX): the part after the
+    # first dash names the service.
+    case "${1#*-}" in
+        mariadb)     printf 'mysql' ;;
+        postgres)    printf 'postgres' ;;
+        mongo)       printf 'mongo' ;;
+        redis)       printf 'redis' ;;
+        memcached)   printf 'memcached' ;;
+        mailhog)     printf 'mailhog' ;;
+        minio)       printf 'minio' ;;
+        meilisearch) printf 'meilisearch' ;;
         *) return 1 ;;
     esac
 }
@@ -3139,7 +3125,7 @@ _zeltro_host_to_service() {
 services_referenced_in() {
     local text="$1" host svc out="" pfx name
     for name in mariadb postgres mongo redis memcached mailhog minio meilisearch; do
-        for pfx in zeltro podium; do
+        for pfx in zeltro ${SERVICE_PREFIX:-}; do
             host="$pfx-$name"
             case "$text" in
                 *"$host"*)
