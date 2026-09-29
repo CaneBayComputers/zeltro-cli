@@ -26,10 +26,16 @@ curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 
 The same command works on Ubuntu/Debian, Fedora/RHEL and Arch (the `fedora` and
 `arch` links go to the same installer). It installs the CLI first if `zeltro` is
-missing, downloads the app package for your distro, checks it against the
-release's `SHA256SUMS.txt`, and installs it with apt, dnf or pacman. The app
-then appears in your applications menu. Afterwards, log out and back in once so
-your user can use Docker.
+missing, then adds Zeltro's signed package repository
+([packages.zeltro.build](https://packages.zeltro.build)) and installs the app
+from it with apt, dnf or pacman. The app then appears in your applications menu.
+Afterwards, log out and back in once so your user can use Docker.
+
+**Updates arrive with your system's own updates** (`apt upgrade`, `dnf upgrade`,
+`pacman -Syu`), like any other package. To add the repository by hand instead,
+see the [zeltro-releases README](https://github.com/CaneBayComputers/zeltro-releases#readme).
+On Arch the installer runs `pacman -Syu`, which also upgrades the rest of the
+system, because Arch doesn't support partial upgrades.
 
 **Windows**
 
