@@ -342,7 +342,7 @@ echo-return
 # Asked for once, here, at the moment something actually worked -- not on `up`,
 # `status` or anything else people run all day. echo-white is a no-op under
 # --json-output, so machine consumers never see it.
-echo-white "Zeltro is open source with no paid tier. If it saved you time: https://zeltro.build/donate"
+echo-white "Zeltro is open source with no paid tier. If it saved you time: https://zeltro.ai/donate"
 echo-return
 
 if [[ "$JSON_OUTPUT" == "1" ]]; then

@@ -95,7 +95,7 @@ Docker CE turns off SELinux confinement by default (containers run unconfined as
 ### Windows
 
 Download the desktop app from
-[zeltro.build/download/windows](https://zeltro.build/download/windows) (a beta
+[zeltro.ai/download/windows](https://zeltro.ai/download/windows) (a beta
 Setup `.exe`; see [Downloads](../downloads/)). It installs for your account with
 no admin rights. Zeltro itself runs on Linux, so there are two ways to run your
 projects from it:

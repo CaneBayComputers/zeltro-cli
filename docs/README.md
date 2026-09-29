@@ -1,12 +1,12 @@
 # Docs
 
 `guide/` holds the user guide as markdown. It is the source of truth for
-<https://zeltro.build/guide/>.
+<https://zeltro.ai/guide/>.
 
 ## How it gets published
 
 The guide is **not** a static site build. These files are rendered by the
-zeltro.build web app (`App\Support\Guide`), a Laravel app, inside the same
+zeltro.ai web app (`App\Support\Guide`), a Laravel app, inside the same
 layout as the rest of the site. Production caches each rendered page until the
 file changes or the next deploy clears the cache. Publishing is a file copy:
 
@@ -49,7 +49,7 @@ Adding a `.md` file here is all that is needed to add a page: the sidebar and
 
 Until August 2026 this directory was a Jekyll site (just-the-docs) published by
 GitHub Pages, and it also held the marketing pages. The site now lives on its
-own server at zeltro.build, so the Jekyll config, Gemfile, theme CSS and the old `index.html` / `donate.html` were
+own server at zeltro.ai, so the Jekyll config, Gemfile, theme CSS and the old `index.html` / `donate.html` were
 removed on 2026-08-22. The guide markdown is the only part still in use. The
 logo, favicon, social card and theme screenshot images in this directory are
 left over; nothing in this repo references them.

@@ -15,7 +15,7 @@
 | **Project layout** | Reinvented every session | Fixed names, addresses, images, credentials |
 | **Other machines** | "Worked on my laptop" | Identical |
 
-📖 **[Full documentation →](https://zeltro.build/guide/)**
+📖 **[Full documentation →](https://zeltro.ai/guide/)**
 
 ---
 
@@ -53,7 +53,7 @@ reach a project by the port `zeltro status` prints rather than by container IP.
 **Windows**
 
 Zeltro is a Linux tool. On Windows, install the desktop app
-([download](https://zeltro.build/download/windows)) and point it at a Linux or
+([download](https://zeltro.ai/download/windows)) and point it at a Linux or
 Mac machine over SSH, or let it set up Zeltro inside WSL2 on the same PC (in
 preview). The older `install-windows.ps1` script, run from an administrator
 PowerShell, also sets up WSL2 with Zeltro inside it; it is lightly tested and will
@@ -65,7 +65,7 @@ Then, once:
 zeltro configure
 ```
 
-Log out and back in so Docker group access takes effect. Details and platform notes: **[Installation](https://zeltro.build/guide/installation/)**.
+Log out and back in so Docker group access takes effect. Details and platform notes: **[Installation](https://zeltro.ai/guide/installation/)**.
 
 ---
 
@@ -103,7 +103,7 @@ zeltro clone work-directly <repo-url>
 zeltro up my-api               # start it
 ```
 
-Everything else — frameworks, the 200+ app library, the full command reference, architecture, and scripting — is in the **[docs](https://zeltro.build/guide/)**.
+Everything else — frameworks, the 200+ app library, the full command reference, architecture, and scripting — is in the **[docs](https://zeltro.ai/guide/)**.
 
 ---
 
@@ -118,7 +118,7 @@ curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 ```
 
 It works on Ubuntu/Debian, Fedora/RHEL and Arch. On **Windows**,
-[download the installer](https://zeltro.build/download/windows) (beta). The app
+[download the installer](https://zeltro.ai/download/windows) (beta). The app
 drives Zeltro on machines you add under **Settings → Remotes → Hosts** (a Linux
 box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same PC (in preview).
 On a **Mac** (Apple Silicon or Intel), `curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash`
@@ -127,4 +127,4 @@ installs it through Homebrew. Packages are on the
 
 ---
 
-Runs on Linux and macOS, and on Windows through the desktop app. The CLI is open source (MIT); the desktop app is proprietary and free for personal use, with a [lifetime commercial license](https://zeltro.build/commercial) for businesses.
+Runs on Linux and macOS, and on Windows through the desktop app. The CLI is open source (MIT); the desktop app is proprietary and free for personal use, with a [lifetime commercial license](https://zeltro.ai/commercial) for businesses.

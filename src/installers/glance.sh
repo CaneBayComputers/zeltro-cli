@@ -44,7 +44,7 @@ pages:
               - title: Zeltro
                 links:
                   - title: Zeltro CLI
-                    url: https://zeltro.build/
+                    url: https://zeltro.ai/
                   - title: Zeltro on GitHub
                     url: https://github.com/CaneBayComputers/zeltro-cli
 
