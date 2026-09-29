@@ -8,9 +8,9 @@ nav_order: 3
 Zeltro comes in two pieces. The **CLI** does the work, and the **app** is a
 desktop front end that runs on top of it. The app is released as packages on
 the [releases page](https://github.com/CaneBayComputers/zeltro-releases/releases):
-a Windows Setup `.exe`, and `.deb`, `.rpm` and pacman packages for Linux
-(x86_64). **A Mac app is coming soon**; until then a Mac can run your projects
-through the CLI (below).
+a Windows Setup `.exe`, `.deb`, `.rpm` and pacman packages for Linux (x86_64),
+and Mac apps for Apple Silicon and Intel, installed through Homebrew. Only the
+newest release is kept there.
 
 Run the commands below as your normal user, not as root.
 
@@ -46,11 +46,22 @@ admin rights. It is not code-signed yet, so Windows may say it "protected your
 PC": choose **More info → Run anyway**. See [Windows](#windows) below for how to
 run your projects once it is installed.
 
-**macOS**
+**macOS** (Apple Silicon and Intel, macOS 12 or later)
 
-The Mac app is coming soon: it needs Apple's code signing first. Meanwhile,
-install the [CLI on the Mac](#zeltro-cli-only) and add the Mac under
-**Settings → Remotes** in the app on a Linux or Windows computer.
+```bash
+curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash
+```
+
+It installs the CLI first if `zeltro` is missing (with the Xcode Command Line
+Tools, Homebrew and Docker Desktop if any of those are missing), then the app
+from Zeltro's Homebrew tap. If you already have Homebrew and the CLI, you can
+install the app directly:
+
+```bash
+brew install --cask canebaycomputers/zeltro/zeltro
+```
+
+Update with **Updates** in the app, or `brew upgrade --cask zeltro`.
 
 ### After installing
 
@@ -89,7 +100,7 @@ Remote hosts work from Linux too.
 
 ## Zeltro CLI only
 
-If you don't want the app, or for a Mac:
+If you don't want the app:
 
 **Linux**
 
@@ -118,7 +129,7 @@ details, see **[Installation](../installation/)**.
 
 The CLI short links redirect to the `install-<os>.sh` scripts in the
 [zeltro-cli](https://github.com/CaneBayComputers/zeltro-cli) repository; the app
-links go to the installer in
+links go to the installers in
 [zeltro-releases](https://github.com/CaneBayComputers/zeltro-releases).
 
 ---
