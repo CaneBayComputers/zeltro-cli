@@ -283,14 +283,198 @@ zeltro_ai_agent_problem() {
         echo "The 'hermes' on PATH is not Nous Research's Hermes Agent (Meta's Hermes JavaScript engine uses the same name). Install the agent with: zeltro ai-set --install-only --agent hermes"
         return 1
     fi
+    # On the starter credit: stop before launching when it's spent, rather than
+    # letting the agent start and fail on its first request. If the server
+    # can't be reached, go ahead; the proxy gives the same message.
+    if [ "${ZELTRO_SANDBOX_ACTIVE:-0}" = "1" ]; then
+        local left
+        left=$(zeltro_sandbox_remaining) || left=""
+        if [ -n "$left" ] && python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) <= 0.001 else 1)' "$left" 2>/dev/null; then
+            echo "$ZELTRO_SANDBOX_USED_UP_MESSAGE"
+            return 1
+        fi
+    fi
     return 0
 }
+
+# ---------------------------------------------------------------------------
+# Starter credit ("sandbox")
+#
+# A new install with no AI chosen gets a small complimentary credit from the
+# license server: `zeltro sandbox claim` trades this computer's hardware id for
+# a token, and the agent (OpenCode) talks to the server's OpenAI-compatible
+# proxy with it. The provider key never leaves the server.
+#
+# The token lives in ~/.config/zeltro/sandbox.json (mode 600), NOT in the .env,
+# so nothing needs sudo. It is only used while AI_AGENT is empty: the moment
+# someone picks their own AI with ai-set, the credit steps aside by itself.
+# ZELTRO_SANDBOX=0 turns the whole thing off.
+# ---------------------------------------------------------------------------
+ZELTRO_SANDBOX_SERVER="${ZELTRO_SANDBOX_SERVER:-https://license.zeltro.ai}"
+
+zeltro_sandbox_file() {
+    echo "${XDG_CONFIG_HOME:-$HOME/.config}/zeltro/sandbox.json"
+}
+
+# sha256 hex of stdin, on Linux and macOS alike.
+zeltro_sha256() {
+    python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'
+}
+
+# A usable SMBIOS/DMI UUID on stdin -> "dmi-sha256:<hex>", or nothing. Boards
+# that never had one set report all zeros, all Fs, or one well-known filler.
+zeltro_dmi_id_from_uuid() {
+    local u
+    u=$(tr -d ' \r\n' | tr 'A-F' 'a-f')
+    case "$u" in
+        ""|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff|03000200-0400-0500-0006-000700080009) return 1 ;;
+    esac
+    [[ "$u" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || return 1
+    printf 'dmi-sha256:%s\n' "$(printf '%s' "$u" | zeltro_sha256)"
+}
+
+# An id for this computer's HARDWARE, so reinstalling Zeltro, or the whole OS,
+# doesn't bring a fresh credit. Anything a client sends can be faked; the
+# server's per-IP and global limits are the real backstop. This raises the bar.
+#
+# The SMBIOS UUID comes first, and it is the same number whichever OS reads it,
+# so Windows (WSL) and Linux on one machine share a credit. Linux keeps it
+# root-only, so `zeltro configure` stores its hash in /etc/zeltro-cli/hardware-id.
+zeltro_hardware_id() {
+    local id=""
+    if [ -n "${ZELTRO_HARDWARE_ID:-}" ]; then
+        id=$(printf '%s' "$ZELTRO_HARDWARE_ID" | zeltro_dmi_id_from_uuid) && { echo "$id"; return 0; }
+    fi
+    if [ -r /etc/zeltro-cli/hardware-id ]; then
+        IFS= read -r id < /etc/zeltro-cli/hardware-id || true
+        [ -n "$id" ] && { echo "$id"; return 0; }
+    fi
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        id=$(ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null | awk -F'"' '/IOPlatformUUID/{print $4}' | zeltro_dmi_id_from_uuid) && { echo "$id"; return 0; }
+    fi
+    if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/dev/null 2>&1; then
+        id=$(powershell.exe -NoProfile -NonInteractive -Command '(Get-CimInstance Win32_ComputerSystemProduct).UUID' 2>/dev/null | zeltro_dmi_id_from_uuid) && { echo "$id"; return 0; }
+    fi
+    if [ -r /sys/class/dmi/id/product_uuid ]; then
+        id=$(zeltro_dmi_id_from_uuid < /sys/class/dmi/id/product_uuid) && { echo "$id"; return 0; }
+    elif [ -e /sys/class/dmi/id/product_uuid ] && command -v sudo >/dev/null 2>&1; then
+        id=$(sudo -n cat /sys/class/dmi/id/product_uuid 2>/dev/null | zeltro_dmi_id_from_uuid) && { echo "$id"; return 0; }
+    fi
+    # No readable UUID: the lowest factory MAC of a physical network card. Not
+    # under WSL, where the virtual card's address changes every boot.
+    if [ -d /sys/class/net ] && ! grep -qi microsoft /proc/version 2>/dev/null; then
+        local nic mac best=""
+        for nic in /sys/class/net/*; do
+            [ -e "$nic/device" ] || continue
+            [ "$(cat "$nic/addr_assign_type" 2>/dev/null)" = "0" ] || continue
+            mac=$(tr 'A-F' 'a-f' < "$nic/address" 2>/dev/null)
+            [ -n "$mac" ] && [ "$mac" != "00:00:00:00:00:00" ] || continue
+            if [ -z "$best" ] || [[ "$mac" < "$best" ]]; then best="$mac"; fi
+        done
+        [ -n "$best" ] && { echo "mac-sha256:$(printf '%s' "$best" | zeltro_sha256)"; return 0; }
+    fi
+    if [ -r /etc/machine-id ]; then
+        IFS= read -r id < /etc/machine-id || true
+        [ -n "$id" ] && { echo "machine-id-sha256:$(printf '%s' "$id" | zeltro_sha256)"; return 0; }
+    fi
+    return 1
+}
+
+# The value sent to the license server: a one-way hash, 64 hex characters.
+zeltro_sandbox_machine() {
+    local hw
+    hw=$(zeltro_hardware_id) || return 1
+    printf 'zeltro-sandbox-v1:%s' "$hw" | zeltro_sha256
+}
+
+# Called by `zeltro configure`, which already holds sudo: store the hash of the
+# root-only DMI UUID where the user can read it. Quiet, and never fatal.
+zeltro_store_hardware_id() {
+    local id
+    [ -e /sys/class/dmi/id/product_uuid ] || return 0
+    id=$(sudo cat /sys/class/dmi/id/product_uuid 2>/dev/null | zeltro_dmi_id_from_uuid) || return 0
+    printf '%s\n' "$id" | sudo tee /etc/zeltro-cli/hardware-id >/dev/null 2>&1 || return 0
+    sudo chmod 644 /etc/zeltro-cli/hardware-id 2>/dev/null || true
+}
+
+# One field of the sandbox file, or nothing.
+zeltro_sandbox_field() {
+    local f
+    f=$(zeltro_sandbox_file)
+    [ -r "$f" ] || return 1
+    python3 -c '
+import json, sys
+try:
+    v = json.load(open(sys.argv[1])).get(sys.argv[2], "")
+except Exception:
+    sys.exit(1)
+print(v if v is not None else "")
+' "$f" "$1"
+}
+
+# With no AI chosen, run on the starter credit if this computer has claimed it.
+# Sets ZELTRO_SANDBOX_ACTIVE=1 when it did. Never touches the .env.
+zeltro_apply_sandbox_default() {
+    ZELTRO_SANDBOX_ACTIVE=0
+    [ -z "${AI_AGENT:-}" ] || return 0
+    [ "${ZELTRO_AI_NO_OVERRIDE:-0}" = "1" ] && return 0
+    [ "${ZELTRO_AI_OVERRIDE_ACTIVE:-0}" = "1" ] && return 0
+    [ "${ZELTRO_SANDBOX:-1}" = "0" ] && return 0
+    [ -r "$(zeltro_sandbox_file)" ] || return 0
+    local vals
+    vals=$(python3 -c '
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+if not d.get("token") or not d.get("api_base"):
+    sys.exit(1)
+for k in ("agent", "model", "api_base", "token"):
+    print(str(d.get(k) or "").replace("\n", ""))
+' "$(zeltro_sandbox_file)") || return 0
+    local agent model base token
+    { IFS= read -r agent; IFS= read -r model; IFS= read -r base; IFS= read -r token; } <<< "$vals"
+    AI_AGENT="${agent:-opencode}"
+    AI_MODEL="$model"
+    AI_API_BASE="$base"
+    AI_API_KEY="$token"
+    ZELTRO_SANDBOX_ACTIVE=1
+}
+
+# Before an AI run with nothing chosen: claim the starter credit (installing
+# OpenCode if needed) and switch to it. Output goes to stderr so --json-output
+# stays clean. Does nothing once any AI is chosen, or with ZELTRO_SANDBOX=0.
+zeltro_sandbox_autoclaim() {
+    [ -z "${AI_AGENT:-}" ] || return 0
+    [ "${ZELTRO_AI_OVERRIDE_ACTIVE:-0}" = "1" ] && return 0
+    [ "${ZELTRO_SANDBOX:-1}" = "0" ] && return 0
+    [ -n "${ZELTRO_SRC_DIR:-}" ] || return 0
+    if [ ! -r "$(zeltro_sandbox_file)" ]; then
+        "$ZELTRO_SRC_DIR/scripts/sandbox.sh" claim >&2 || return 0
+    fi
+    zeltro_apply_sandbox_default
+}
+
+# Remaining starter credit in USD, from the server ("" when it can't be read).
+zeltro_sandbox_remaining() {
+    local token base
+    token=$(zeltro_sandbox_field token) || return 1
+    [ -n "$token" ] || return 1
+    base="${ZELTRO_SANDBOX_SERVER%/}"
+    curl -fsS --max-time 6 --connect-timeout 4 -H "Authorization: Bearer $token" \
+        "$base/api/v1/sandbox/status" 2>/dev/null |
+        python3 -c 'import json,sys; print(json.load(sys.stdin)["remaining_usd"])' 2>/dev/null
+}
+
+ZELTRO_SANDBOX_USED_UP_MESSAGE="Your Zeltro starter credit is used up. To keep building, choose your own AI in the app under Settings → AI, or run 'zeltro ai-set': an AI plan you already pay for (Claude, ChatGPT, Gemini), an API key, or a free local model with Ollama."
 
 # Load primary configuration if available (for container names, paths, etc.)
 if [ -f "/etc/zeltro-cli/.env" ]; then
     # shellcheck disable=SC1091
     source "/etc/zeltro-cli/.env"
     zeltro_apply_ai_overrides
+    zeltro_apply_sandbox_default
 fi
 
 # Get the projects directory (configurable)

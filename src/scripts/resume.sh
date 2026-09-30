@@ -78,6 +78,8 @@ echo-return
 # Resume the AI session from the project directory
 cd "$PROJECT_DIR"
 
+# No AI chosen yet: run on the free starter credit (see zeltro sandbox).
+zeltro_sandbox_autoclaim
 AI_AGENT_CLI_NAME="$AI_AGENT"
 
 if ! _ai_problem=$(zeltro_ai_agent_problem); then

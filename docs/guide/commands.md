@@ -116,6 +116,7 @@ Commands marked *(project dir)* must be run from inside a project directory.
 | `zeltro configure` | Configure the Zeltro environment |
 | `zeltro ai [--interactive] "<prompt>"` | Send a prompt to your AI agent (one-off by default) *(project dir)* |
 | `zeltro ai-set [options]` | Configure the AI agent, model and API key |
+| `zeltro sandbox [status\|claim] [--json-output]` | The free starter credit: how much is left, or claim it now. Used only while no AI is chosen |
 | `zeltro ai-unattended [agent] [--revoke\|--status]` | Let an agent run without approval prompts (written to the agent's own config) |
 | `zeltro peers` | List agent sessions running in the Zeltro app, on every host |
 | `zeltro send <project>[@host] ... -- <message>` | Message other agent sessions *(project dir)* |

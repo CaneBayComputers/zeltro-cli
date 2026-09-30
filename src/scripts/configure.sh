@@ -99,6 +99,9 @@ debug "Script started: configure.sh with args: $ORIGINAL_ARGS"
 # Check for and set up environment variables
 # Use /etc/zeltro-cli/ as primary config location
 sudo mkdir -p /etc/zeltro-cli
+# The hardware id behind the starter credit (see zeltro_hardware_id): Linux keeps
+# the SMBIOS UUID root-only, so store its hash while we hold sudo.
+zeltro_store_hardware_id
 
 if ! [ -f /etc/zeltro-cli/.env ]; then
 

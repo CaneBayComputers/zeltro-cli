@@ -46,7 +46,7 @@ _zeltro() {
 create-installer db-refresh disable disable-service django down down-all drush enable \
 enable-service exec exec-root exec-tty exec-tty-root get-metadata gui help install memcache memcache-flush \
 memcache-stats migrate-names mysql new node npm npx peers php phpcbf phpcs phpmd pip pip3 projects-dir \
-python python3 redis redis-flush remove resume send set-metadata setup shell start-services \
+python python3 redis redis-flush remove resume sandbox send set-metadata setup shell start-services \
 status stop-services supervisor supervisor-status tinker uninstall up up-all update \
 update-installer version wp"
 
@@ -136,6 +136,8 @@ update-installer version wp"
             COMPREPLY=( $(compgen -W "--one-off" -- "$cur") ) ;;
         ai-set)
             COMPREPLY=( $(compgen -W "--agent --model --api-key --json-output" -- "$cur") ) ;;
+        sandbox)
+            COMPREPLY=( $(compgen -W "status claim --json-output" -- "$cur") ) ;;
         configure)
             COMPREPLY=( $(compgen -W "--git-name --git-email --projects-dir --vpc-subnet --json-output" -- "$cur") ) ;;
         django)
