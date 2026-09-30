@@ -154,6 +154,7 @@ show_help() {
     echo "  zeltro ai \"<prompt>\"      - Send a one-off prompt to the AI agent (--interactive for a session)"
     echo "  zeltro ai-set             - Configure AI agent and model"
     echo "  zeltro ai-unattended [agent] - Let an agent run without approval prompts (--status, --revoke)"
+    echo "  zeltro sandbox [status|claim] - The free starter credit: used while no AI is chosen"
     echo "  zeltro peers              - List agent sessions running in the Zeltro app (all hosts)"
     echo "  zeltro send <p>[@host] ... -- <msg>"
     echo "                            - Message other agent sessions (--all for everyone else;"
@@ -750,6 +751,9 @@ case "$1" in
         ;;
     "ai-set")
         "$SCRIPT_DIR/scripts/ai_set.sh" "${@:2}"
+        ;;
+    "sandbox")
+        "$SCRIPT_DIR/scripts/sandbox.sh" "${@:2}"
         ;;
     "peers")
         "$SCRIPT_DIR/scripts/bus.sh" peers "${@:2}"

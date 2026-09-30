@@ -171,6 +171,8 @@ source "$SCRIPT_DIR/classify.sh"
 # Both phases need a working agent. Check it up front: the classifier discards
 # the agent's stderr and retries, which would turn "ZELTRO_AI_AGENT names an
 # agent that isn't installed" into a vague "could not determine a stack".
+# No AI chosen yet: run on the free starter credit (see zeltro sandbox).
+zeltro_sandbox_autoclaim
 if ! _ai_problem=$(zeltro_ai_agent_problem); then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
         _action=create; [[ "$CLASSIFY_ONLY" == "1" ]] && _action=classify

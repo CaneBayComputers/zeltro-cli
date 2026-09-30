@@ -68,6 +68,26 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 
 Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true`, `"ai_language": true` and `"installed_agents": [...]`.
 
+### Starter credit (`zeltro sandbox`)
+
+A fresh install with no AI chosen runs on a small complimentary credit from `license.zeltro.ai`. Nothing is written to `/etc/zeltro-cli/.env`, so nothing needs sudo:
+
+- **Claim.** `zeltro sandbox claim --json-output` sends a one-way hash of the computer's hardware id and saves the returned token in `~/.config/zeltro/sandbox.json` (mode 600). It then installs the credit's agent (OpenCode) if it's missing. Output: `{"action":"sandbox_claim","status":"success","new":bool,"credit_usd":1.0,"agent":"opencode","model":"…","agent_installed":bool,"in_use":bool}`. On error: `{"status":"error","error":<code>,"message":…}`, where the code is `sandbox_budget_exhausted`, `rate_limited`, `sandbox_disabled`, `sandbox_revoked`, `provider_error`, `unreachable`, `no_machine_id` or `sandbox_off`. The token is never printed. A reinstall gets the same credit back, with a new token.
+- **Automatic.** `create`, `ai` and `resume` claim the credit by themselves when `AI_AGENT` is empty, no `ZELTRO_AI_*` override is set, and `ZELTRO_SANDBOX` isn't `0`. The claim's output goes to stderr.
+- **In use** only while `AI_AGENT` is empty and no per-run override is set. The agent, model, endpoint and token are loaded in memory from the file. Choosing an AI with `ai-set` takes over at once, and `ai-set --json-output` still reports `"agent": ""`.
+- **Status.** `zeltro sandbox status --json-output` returns `{"claimed":bool,"in_use":bool,"credit_usd","used_usd","remaining_usd","used_up":bool,"message"?}`. When the balance can't be read it gives `balance_error` instead. `invalid_token` there means another install on the same machine claimed the credit since; run `claim` again.
+- **Used up.** Once the credit is gone, AI commands stop before launching the agent with a message that names Settings → AI and `zeltro ai-set` (for `create --json-output`, the existing `ai_agent_unavailable` error). The proxy answers mid-session requests with a 402 and the same text.
+- **Hardware id.** Checked in this order:
+  1. `ZELTRO_HARDWARE_ID` (the GUI can pass the SMBIOS UUID)
+  2. `/etc/zeltro-cli/hardware-id`, written by `zeltro configure`
+  3. macOS IOPlatformUUID
+  4. under WSL, the Windows SMBIOS UUID read through `powershell.exe`
+  5. the Linux DMI product UUID, or `sudo -n` if it's root-only
+  6. the lowest factory MAC address
+  7. `/etc/machine-id`
+
+  Only hashes are stored or sent.
+
 ### Messaging other agent sessions
 
 When the Zeltro app hosts agent sessions in several projects (on one host or several), they can talk:

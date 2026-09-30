@@ -24,7 +24,22 @@ zeltro ai-set --agent hermes   --model openrouter/qwen/qwen3-coder --api-key sk-
 zeltro ai-set --json-output          # inspect current settings (read-only)
 ```
 
-A fresh install has no agent set, and the AI commands tell you to run `zeltro ai-set` first. If you're unsure, pick `claude` and leave the model blank so Claude Code uses its own default.
+A fresh install has no agent set. Until you choose one, Zeltro runs on its **starter credit** (below). If you're unsure what to pick, choose `claude` and leave the model blank so Claude Code uses its own default.
+
+### The starter credit
+
+Zeltro comes with a small complimentary AI credit, so a new install can build its first projects before you set up an AI of your own. There's nothing to sign up for. The first time `zeltro create`, `ai` or `resume` needs an AI and none is chosen, Zeltro claims the credit for this computer, installs OpenCode if it's missing, and runs it through Zeltro's server on a fast, low-cost coding model.
+
+- It's used **only while no AI is chosen**. Run `zeltro ai-set` (or pick one in the app's Settings → AI) and Zeltro switches to yours; your own choice always wins.
+- One credit per computer. Reinstalling Zeltro, or the operating system, brings back the same credit, not a new one.
+- When it runs out, Zeltro says so before starting the agent, and tells you how to choose your own AI.
+- The provider key stays on Zeltro's server. Your computer holds only a token for it, in `~/.config/zeltro/sandbox.json` (readable by you alone). Your prompts pass through that server on their way to the model and are not stored. The [privacy page](https://zeltro.ai/privacy) has the details.
+
+```bash
+zeltro sandbox                # how much is left, and whether it's in use
+zeltro sandbox claim          # claim it now instead of on first use
+ZELTRO_SANDBOX=0 zeltro ...   # never use it
+```
 
 | Flag | Description |
 |---|---|
