@@ -64,11 +64,13 @@ usage() {
     echo-white "Configure or inspect the global AI agent settings used by Zeltro."
     echo-white ""
     echo-white "Options:"
-    echo-white "  --agent NAME       Set the AI agent CLI (codex, claude, gemini, qwen, or aider)."
-    echo-white "  --model NAME       Set the AI model name (optional for codex, claude, gemini; required for qwen and aider)."
-    echo-white "  --api-key KEY      Set the AI API key (optional for codex and claude; required for aider)."
+    echo-white "  --agent NAME       Set the AI agent CLI (codex, claude, gemini, qwen, aider, opencode or hermes)."
+    echo-white "  --model NAME       Set the AI model name (optional for codex, claude, gemini, opencode, hermes;"
+    echo-white "                     required for qwen and aider, and for opencode/hermes with --api-base)."
+    echo-white "                     opencode and hermes take provider/model, e.g. openai/gpt-5.4-mini."
+    echo-white "  --api-key KEY      Set the AI API key (optional for codex, claude, opencode, hermes; required for aider)."
     echo-white "                     Pass an empty value (--api-key \"\") to clear a stored key."
-    echo-white "  --api-base URL     Set a custom API endpoint. Works with codex, qwen and aider"
+    echo-white "  --api-base URL     Set a custom API endpoint. Works with codex, qwen, aider, opencode and hermes"
     echo-white "                     (OpenAI-compatible: OpenRouter, Ollama, vLLM, LM Studio),"
     echo-white "                     and with claude via an Anthropic-compatible proxy."
     echo-white "  --json-output      Output configuration in JSON format (non-interactive)."
@@ -197,8 +199,10 @@ select_ai_agent() {
         echo-white '  3) gemini'
         echo-white '  4) aider   (bring your own API key — any model/provider)'
         echo-white '  5) qwen    (Qwen Code — cheap/local models via an OpenAI-compatible endpoint)'
+        echo-white '  6) opencode (OpenCode — any provider, your own login or key)'
+        echo-white '  7) hermes  (Hermes Agent by Nous Research — any provider, your own login or key)'
         echo-return
-        echo-yellow -ne 'Enter your choice (1-5): '
+        echo-yellow -ne 'Enter your choice (1-7): '
         echo-white -ne
         read AI_AGENT_CHOICE
         echo-return
@@ -229,8 +233,18 @@ select_ai_agent() {
                 sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
                 break
                 ;;
+            6)
+                AI_AGENT="opencode"
+                sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
+                break
+                ;;
+            7)
+                AI_AGENT="hermes"
+                sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
+                break
+                ;;
             *)
-                echo-yellow "Invalid selection. Please enter 1, 2, 3, 4, or 5."
+                echo-yellow "Invalid selection. Please enter a number from 1 to 7."
                 ;;
         esac
     done
@@ -266,6 +280,16 @@ prompt_ai_model() {
         echo-white "Full list: https://aider.chat/docs/llms.html"
         echo-return
         echo-yellow -ne 'Enter model name: '
+    elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" ]]; then
+        echo-return
+        echo-white "$AI_AGENT takes provider/model, or nothing to use its own default and login:"
+        echo-white "  openai/gpt-5.4-mini              OpenAI (with an OpenAI API key)"
+        echo-white "  anthropic/claude-sonnet-5-5      Anthropic"
+        echo-white "  openrouter/qwen/qwen3-coder      OpenRouter"
+        echo-white "With an API endpoint below (Ollama, LM Studio…), give the model name that server uses,"
+        echo-white "e.g. qwen3-coder:30b. A model is required then."
+        echo-return
+        echo-yellow -ne 'Enter model name (optional, press Enter to leave blank): '
     else
         echo-yellow -ne 'Enter model name (optional, press Enter to leave blank): '
     fi
@@ -288,7 +312,7 @@ prompt_ai_api_base() {
     echo-return
     echo-cyan "API Endpoint (optional)"; echo-white
     echo-white "Leave this blank to use the provider's own hosted API."
-    echo-white "Set it only to point aider at an OpenAI-compatible server, e.g.:"
+    echo-white "Set it only to point $AI_AGENT at an OpenAI-compatible server, e.g.:"
     echo-white "  http://localhost:11434/v1     Ollama"
     echo-white "  http://localhost:1234/v1      LM Studio"
     echo-white "  https://openrouter.ai/api/v1  OpenRouter"
@@ -473,7 +497,7 @@ ensure_ai_agent_installed() {
 
     # If the CLI is already available, nothing to do beyond checking that it can
     # actually run unattended — Zeltro's AI commands stall otherwise.
-    if command -v "$exec_command" >/dev/null 2>&1; then
+    if zeltro_agent_installed "$exec_command"; then
         echo-green "AI agent CLI '$cli_command' is already installed (command: $exec_command)."
         echo-white
         zeltro_offer_agent_autonomy "$cli_command"
@@ -495,6 +519,18 @@ ensure_ai_agent_installed() {
         claude)
             curl -fsSL https://claude.ai/install.sh | bash
             ;;
+        opencode)
+            npm install -g opencode-ai
+            ;;
+        hermes)
+            # --non-interactive skips Hermes's setup wizard (Zeltro passes the model and
+            # key); the browser and computer-use extras download Chromium and aren't used.
+            curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive --skip-browser --skip-computer-use
+            case ":$PATH:" in
+                *":$HOME/.local/bin:"*) ;;
+                *) export PATH="$HOME/.local/bin:$PATH" ;;
+            esac
+            ;;
         aider)
             curl -LsSf https://aider.chat/install.sh | sh
             # aider installs into ~/.local/bin, which isn't necessarily on PATH
@@ -509,7 +545,7 @@ ensure_ai_agent_installed() {
             ;;
     esac
 
-    if command -v "$exec_command" >/dev/null 2>&1; then
+    if zeltro_agent_installed "$exec_command"; then
         echo-green "AI agent CLI '$cli_command' installed successfully (command: $exec_command)."
         echo-white
         zeltro_offer_agent_autonomy "$cli_command"
@@ -525,7 +561,7 @@ ensure_ai_agent_installed() {
 installed_agents_json() {
     local a out=""
     for a in $ZELTRO_KNOWN_AI_AGENTS; do
-        command -v "$a" >/dev/null 2>&1 && out="$out${out:+, }\"$a\""
+        zeltro_agent_installed "$a" && out="$out${out:+, }\"$a\""
     done
     printf '[%s]' "$out"
 }
@@ -574,7 +610,7 @@ if [[ "$INSTALL_ONLY" == "1" ]]; then
         ensure_ai_agent_installed "$NEW_AGENT" || true
     fi
 
-    if ! command -v "$NEW_AGENT" >/dev/null 2>&1; then
+    if ! zeltro_agent_installed "$NEW_AGENT"; then
         if [[ "$JSON_OUTPUT" == "1" ]]; then
             echo "{\"action\": \"ai_install\", \"status\": \"error\", \"agent\": \"$NEW_AGENT\", \"installed\": false, \"details\": \"$NEW_AGENT is still not on PATH after the install attempt.\", \"installed_agents\": $(installed_agents_json)}"
         else
@@ -678,6 +714,15 @@ if [[ "$AI_AGENT" == "aider" ]]; then
     echo-white "(A local server such as Ollama usually accepts any placeholder key.)"
     configure_ai_api_key
     prompt_ai_api_base
+elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" ]]; then
+    # Both have their own login (opencode auth login / hermes auth), so a key and an
+    # endpoint are optional: set them to use a provider API key or a local server.
+    echo-cyan "$AI_AGENT can use its own login, or a provider API key and endpoint set here."
+    configure_ai_api_key
+    prompt_ai_api_base
+    if [[ -n "$AI_API_BASE" && -z "$AI_MODEL" ]]; then
+        echo-yellow "An endpoint needs a model name too. Run 'zeltro ai-set --agent $AI_AGENT --model <name>'."
+    fi
 fi
 
 # An explicit --allow-unattended / --no-allow-unattended suppresses the

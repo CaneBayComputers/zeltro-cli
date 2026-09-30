@@ -59,7 +59,7 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `gemini`, `aider` or `qwen` |
+| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `gemini`, `aider`, `qwen`, `opencode` or `hermes` |
 | `ZELTRO_AI_MODEL` | `AI_MODEL` |
 | `ZELTRO_AI_API_BASE` | `AI_API_BASE` |
 | `ZELTRO_AI_API_KEY` | `AI_API_KEY` |

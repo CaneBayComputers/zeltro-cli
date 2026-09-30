@@ -19,6 +19,8 @@ zeltro ai-set --agent codex  --model gpt-6-sol
 zeltro ai-set --agent gemini
 zeltro ai-set --agent aider  --model anthropic/claude-sonnet-5 --api-key sk-ant-...
 zeltro ai-set --agent qwen   --model qwen/qwen3-coder-30b-a3b-instruct --api-base https://openrouter.ai/api/v1 --api-key sk-or-...
+zeltro ai-set --agent opencode --model openai/gpt-5.4-mini --api-key sk-...
+zeltro ai-set --agent hermes   --model openrouter/qwen/qwen3-coder --api-key sk-or-...
 zeltro ai-set --json-output          # inspect current settings (read-only)
 ```
 
@@ -26,10 +28,10 @@ A fresh install has no agent set, and the AI commands tell you to run `zeltro ai
 
 | Flag | Description |
 |---|---|
-| `--agent <name>` | `codex`, `claude`, `gemini`, `qwen`, or `aider`. Switching agents clears the stored model and endpoint. |
-| `--model <name>` | Model name. Optional for Codex, Claude and Gemini; needed for Qwen Code and Aider |
-| `--api-key <key>` | API key. Optional for Codex and Claude, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
-| `--api-base <url>` | Custom endpoint. OpenAI-compatible for `qwen` and `aider`; Anthropic-compatible for `claude`. `none` clears it. See [Cheap and local models](../cheap-models/) for Codex |
+| `--agent <name>` | `codex`, `claude`, `gemini`, `qwen`, `aider`, `opencode` or `hermes`. Switching agents clears the stored model and endpoint. |
+| `--model <name>` | Model name. Optional for Codex, Claude, Gemini, OpenCode and Hermes; needed for Qwen Code and Aider, and for OpenCode and Hermes with `--api-base`. OpenCode and Hermes take `provider/model`, e.g. `openai/gpt-5.4-mini` |
+| `--api-key <key>` | API key. Optional for Codex, Claude, OpenCode and Hermes, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
+| `--api-base <url>` | Custom endpoint. OpenAI-compatible for `qwen`, `aider`, `opencode` and `hermes`; Anthropic-compatible for `claude`. `none` clears it. See [Cheap and local models](../cheap-models/) for Codex |
 | `--install-only` | With `--agent`: install that agent's CLI if it's missing, without making it the default |
 | `--allow-unattended` / `--no-allow-unattended` | Turn the agent's approval prompts off or back on (see [Unattended mode](#unattended-mode)) |
 
@@ -41,6 +43,9 @@ npm install -g @openai/codex                       # Codex
 npm install -g @google/gemini-cli                  # Gemini CLI
 npm install -g @qwen-code/qwen-code                # Qwen Code
 curl -LsSf https://aider.chat/install.sh | sh      # Aider
+npm install -g opencode-ai                         # OpenCode
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- \
+  --non-interactive --skip-browser --skip-computer-use   # Hermes Agent
 ```
 
 Zeltro passes a stored key only where it fits. Codex gets it as `OPENAI_API_KEY` only if it starts with `sk-`, and Claude gets it as `ANTHROPIC_API_KEY` only if it starts with `sk-ant-`. Anything else is ignored with a warning, and the CLI uses its own sign-in. Gemini never gets the key or the endpoint: it uses its own Google sign-in, or a `GEMINI_API_KEY` you export yourself.
@@ -98,6 +103,51 @@ Qwen's free OAuth sign-in was discontinued on 15 April 2026, so it needs an API 
 or a local endpoint. There is no free hosted route through Qwen itself. It also wants
 **Node 22+**; it runs on Node 20 with an `EBADENGINE` warning, but that is unsupported.
 
+### OpenCode
+
+[OpenCode](https://opencode.ai) is an open-source terminal agent that works with almost
+any provider. Zeltro installs it with `npm install -g opencode-ai`. It can use its own
+sign-in (`opencode auth login`), or a key you give Zeltro:
+
+```bash
+# a hosted provider: the model is provider/model, as OpenCode names it
+zeltro ai-set --agent opencode --model openai/gpt-5.4-mini --api-key sk-...
+zeltro ai-set --agent opencode --model openrouter/deepseek/deepseek-v4.1-flash --api-key sk-or-...
+
+# any OpenAI-compatible server (the model is the name that server uses)
+zeltro ai-set --agent opencode --model qwen3-coder:30b \
+  --api-base http://localhost:11434/v1 --api-key ollama
+```
+
+The key goes to the variable the model's provider reads (`OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY`). An
+endpoint becomes an OpenAI-compatible provider called `zeltro`, passed in
+`OPENCODE_CONFIG_CONTENT` for that run only, so nothing is written to your OpenCode
+config. Zeltro also turns OpenCode's auto-update off for its runs. OpenCode reads the
+project's `AGENTS.md` by itself.
+
+### Hermes Agent
+
+[Hermes Agent](https://hermes-agent.nousresearch.com) by Nous Research is an open-source
+agent with a full coding tool set. Zeltro installs it with its official script, without
+the optional browser and computer-use extras, into `~/.local/bin/hermes`.
+
+```bash
+# a provider prefix picks Hermes's provider: openai/, openrouter/, anthropic/ or gemini/
+zeltro ai-set --agent hermes --model openai/gpt-5.4-mini --api-key sk-...
+zeltro ai-set --agent hermes --model openrouter/qwen/qwen3-coder --api-key sk-or-...
+
+# any OpenAI-compatible server
+zeltro ai-set --agent hermes --model qwen3-coder:30b \
+  --api-base http://localhost:11434/v1 --api-key ollama
+```
+
+Without a prefix the model goes to whatever provider Hermes is set up for. An endpoint
+uses Hermes's `openai` provider with `OPENAI_BASE_URL`. Hermes reads the project's
+`AGENTS.md` by itself. Meta's Hermes JavaScript engine also installs a command called
+`hermes`; Zeltro checks it has the agent (`hermes --version` says "Hermes Agent") before
+it runs one.
+
 ---
 
 ## Unattended mode
@@ -116,6 +166,8 @@ writes the setting into **the agent's own config file**, where you can see and u
 | Gemini CLI | `~/.gemini/settings.json` | `"autoAccept": true` |
 | Qwen Code | `~/.qwen/settings.json` | `"autoAccept": true` |
 | Aider | `~/.aider.conf.yml` | `yes-always: true` |
+| OpenCode | `~/.config/opencode/opencode.json` | `"permission": "allow"` |
+| Hermes Agent | `~/.hermes/config.yaml` | `approvals.mode: off` (set with `hermes config set`; turning it back on restores `smart`) |
 
 ```bash
 zeltro ai-unattended                 # allow it for the current agent
@@ -139,7 +191,7 @@ changing it, set these in the environment. They are never written to the `.env`:
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `gemini`, `aider` or `qwen` |
+| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `gemini`, `aider`, `qwen`, `opencode` or `hermes` |
 | `ZELTRO_AI_MODEL` | The model |
 | `ZELTRO_AI_API_BASE` | The endpoint |
 | `ZELTRO_AI_API_KEY` | The key |
@@ -161,9 +213,10 @@ command before anything runs. Nothing is installed for you; use
 
 The language instruction reaches Claude Code and Qwen Code through
 `--append-system-prompt`, Codex through `-c developer_instructions=...`, and Aider
-through `--chat-language`, so it also holds on `zeltro resume`. Gemini CLI has no way to
-add to its system prompt, so `zeltro ai` puts the instruction at the top of the prompt
-and a resumed Gemini session gets none.
+through `--chat-language`, and Hermes through `HERMES_EPHEMERAL_SYSTEM_PROMPT`, so it
+also holds on `zeltro resume`. Gemini CLI and OpenCode have no way to add to their system
+prompt, so `zeltro ai` puts the instruction at the top of the prompt and a resumed
+Gemini or OpenCode session gets none.
 
 In the Zeltro app, **AI profiles** (Settings → AI Profiles) are named agent, model,
 endpoint and key setups you pick per session. Keys are stored encrypted, and a
