@@ -7,9 +7,9 @@
 | | AI without Zeltro | AI with Zeltro |
 |---|---|---|
 | **Standing up an OSS app** | Re-derives the image, compose and env vars | `zeltro install grafana` |
-| ↳ prompts | Several rounds of fixes | One |
-| ↳ tokens | ~10–15k, lands *almost* right | ~800 |
-| ↳ time | An afternoon | Minutes |
+| ↳ agent steps | 4–6, sometimes including a crash loop to fix | None: the installer runs without AI |
+| ↳ AI cost | About $0.20 per app with Claude Sonnet ([measured](https://zeltro.ai/ai-app-builder-cost-comparison/#we-measured-the-tokens)) | $0 |
+| ↳ time | 2–4 minutes of agent time | About a minute |
 | **Databases** | One bundled per project | One shared — ~700MB → ~100MB |
 | **Addresses** | `localhost:3002`? `:3003`? | One per project, printed by `zeltro status` |
 | **Project layout** | Reinvented every session | Fixed names, addresses, images, credentials |
