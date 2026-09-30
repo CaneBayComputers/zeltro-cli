@@ -70,8 +70,8 @@ terms](https://zeltro.ai/terms), shows a short setup form and runs
 `zeltro configure` for you. Running `zeltro configure` in a terminal works too.
 
 **Upgrading from 1.0.0-beta.4 or earlier:** those builds can't update
-themselves to beta.5. Install beta.5 over the old one the same way; your
-settings are kept.
+themselves. Install the current version over the old one the same way; your
+settings are kept. From beta.5 on, **Updates** in the app's footer does it.
 
 ### What's in it
 
