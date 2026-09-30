@@ -92,8 +92,8 @@ notify_resume_fallback() {
 }
 
 # ZELTRO_AI_LANGUAGE rides on each agent's system-level flag, which applies to
-# the resumed session too. Gemini has none and a resume has no prompt to carry
-# it, so a resumed gemini session gets no language instruction.
+# the resumed session too. Gemini and OpenCode have none and a resume has no
+# prompt to carry it, so a resumed session of theirs gets no language instruction.
 zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
@@ -171,6 +171,24 @@ case "$AI_AGENT_CLI_NAME" in
             exec gemini "${common_args[@]}"
         fi
         ;;
+    opencode)
+        zeltro_opencode_prepare
+        common_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"})
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--auto)
+        # --continue reopens the last session in this directory; with none it
+        # just opens a new one, which is the fallback anyway.
+        exec opencode ${common_args[@]+"${common_args[@]}"} --continue
+        ;;
+    hermes)
+        zeltro_hermes_prepare
+        common_args=(${ZELTRO_HERMES_ARGS[@]+"${ZELTRO_HERMES_ARGS[@]}"})
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo)
+        # --in keeps --continue to this project's sessions, not the newest anywhere.
+        if ! hermes chat ${common_args[@]+"${common_args[@]}"} --continue --in "$PWD"; then
+            notify_resume_fallback
+            exec hermes chat ${common_args[@]+"${common_args[@]}"}
+        fi
+        ;;
     aider)
         build_aider_args
         AIDER_ARGS+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
@@ -182,7 +200,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, qwen, aider"
+        echo-white "Supported agents: codex, claude, gemini, qwen, aider, opencode, hermes"
         exit 1
         ;;
 esac

@@ -103,11 +103,11 @@ fi
 AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
 
 # ZELTRO_AI_LANGUAGE: a system-level instruction where the agent has one (see
-# zeltro_ai_language_args). Gemini has none, so it rides on the prompt.
+# zeltro_ai_language_args). Gemini and OpenCode have none, so it rides on the prompt.
 zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
-if [[ "$AI_AGENT_CLI_NAME" == "gemini" && -n "${AI_LANGUAGE:-}" ]]; then
+if zeltro_ai_language_in_prompt "$AI_AGENT_CLI_NAME" && [[ -n "${AI_LANGUAGE:-}" ]]; then
     INIT_PROMPT="$(zeltro_ai_language_instruction)
 
 $INIT_PROMPT"
@@ -196,6 +196,29 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         gemini "${gemini_args[@]}"
         ;;
+    opencode)
+        zeltro_opencode_prepare
+        oc_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"})
+        [[ "$AUTO_APPROVE" == "1" ]] && oc_args+=(--auto)
+        if [[ "$ONE_OFF" == "1" ]]; then
+            # `run` answers and exits; without a closed stdin it waits for more input.
+            opencode run ${oc_args[@]+"${oc_args[@]}"} "$INIT_PROMPT" </dev/null
+        else
+            # --prompt opens the TUI with the prompt already sent.
+            opencode ${oc_args[@]+"${oc_args[@]}"} --prompt "$INIT_PROMPT"
+        fi
+        ;;
+    hermes)
+        zeltro_hermes_prepare
+        he_args=(${ZELTRO_HERMES_ARGS[@]+"${ZELTRO_HERMES_ARGS[@]}"})
+        [[ "$AUTO_APPROVE" == "1" ]] && he_args+=(--yolo)
+        if [[ "$ONE_OFF" == "1" ]]; then
+            hermes chat ${he_args[@]+"${he_args[@]}"} --oneshot -Q -q "$INIT_PROMPT" </dev/null
+        else
+            # On a terminal, -q seeds an interactive session with the prompt.
+            hermes chat ${he_args[@]+"${he_args[@]}"} -q "$INIT_PROMPT"
+        fi
+        ;;
     aider)
         build_aider_args
         AIDER_ARGS+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
@@ -210,7 +233,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, qwen, aider"
+        echo-white "Supported agents: codex, claude, gemini, qwen, aider, opencode, hermes"
         echo-white "Run 'zeltro ai-set' to choose a supported agent."
         exit 1
         ;;

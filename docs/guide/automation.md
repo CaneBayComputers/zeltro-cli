@@ -37,7 +37,7 @@ zeltro exec "php artisan migrate --force"
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `gemini`, `aider` or `qwen` |
+| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `gemini`, `aider`, `qwen`, `opencode` or `hermes` |
 | `ZELTRO_AI_MODEL` | The model |
 | `ZELTRO_AI_API_BASE` | The API endpoint |
 | `ZELTRO_AI_API_KEY` | The API key |

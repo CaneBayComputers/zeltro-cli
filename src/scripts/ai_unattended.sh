@@ -28,7 +28,7 @@ usage() {
     echo-white "Control whether an AI agent runs without asking approval for each action."
     echo-white ""
     echo-white "Arguments:"
-    echo-white "  AGENT            claude, codex, gemini, qwen or aider."
+    echo-white "  AGENT            claude, codex, gemini, qwen, aider, opencode or hermes."
     echo-white "                   Defaults to the currently configured agent."
     echo-white ""
     echo-white "Options:"
@@ -41,7 +41,8 @@ usage() {
     echo-white "it can be inspected and undone with that agent's documentation:"
     echo-white "  claude → ~/.claude/settings.json      codex → ~/.codex/config.toml"
     echo-white "  gemini → ~/.gemini/settings.json      qwen  → ~/.qwen/settings.json"
-    echo-white "  aider  → ~/.aider.conf.yml"
+    echo-white "  aider  → ~/.aider.conf.yml             opencode → ~/.config/opencode/opencode.json"
+    echo-white "  hermes → ~/.hermes/config.yaml (approvals.mode)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -71,12 +72,12 @@ if [ -z "$AGENT" ]; then
 fi
 
 case "$AGENT" in
-    claude|codex|gemini|qwen|aider) ;;
+    claude|codex|gemini|qwen|aider|opencode|hermes) ;;
     *)
         if [[ "$JSON_OUTPUT" == "1" ]]; then
-            json_error "Unknown agent '$AGENT'. Expected claude, codex, gemini, qwen or aider."
+            json_error "Unknown agent '$AGENT'. Expected claude, codex, gemini, qwen, aider, opencode or hermes."
         fi
-        error "Unknown agent '$AGENT'. Expected claude, codex, gemini, qwen or aider." ;;
+        error "Unknown agent '$AGENT'. Expected claude, codex, gemini, qwen, aider, opencode or hermes." ;;
 esac
 
 CFG="$(zeltro_agent_config_path "$AGENT")"

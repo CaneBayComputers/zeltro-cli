@@ -217,6 +217,24 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         gemini "${gemini_args[@]}"
         ;;
+    opencode)
+        zeltro_opencode_prepare
+        oc_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"} --auto)
+        if [[ "$ONE_OFF" == "1" ]]; then
+            opencode run "${oc_args[@]}" "$PROMPT" </dev/null
+        else
+            opencode "${oc_args[@]}" --prompt "$PROMPT"
+        fi
+        ;;
+    hermes)
+        zeltro_hermes_prepare
+        he_args=(${ZELTRO_HERMES_ARGS[@]+"${ZELTRO_HERMES_ARGS[@]}"} --yolo)
+        if [[ "$ONE_OFF" == "1" ]]; then
+            hermes chat "${he_args[@]}" --oneshot -Q -q "$PROMPT" </dev/null
+        else
+            hermes chat "${he_args[@]}" -q "$PROMPT"
+        fi
+        ;;
     aider)
         build_aider_args
         if [[ "$ONE_OFF" == "1" ]]; then
@@ -229,7 +247,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, aider"
+        echo-white "Supported agents: codex, claude, gemini, qwen, aider, opencode, hermes"
         exit 1
         ;;
 esac

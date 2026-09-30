@@ -44,13 +44,17 @@ setting that CLI reads:
 |---|---|---|---|
 | `qwen` | `OPENAI_BASE_URL` | `OPENAI_API_KEY` | OpenAI-compatible |
 | `aider` | `--openai-api-base` | `--api-key <provider>=<key>` | OpenAI-compatible |
+| `opencode` | an inline OpenAI-compatible provider in `OPENCODE_CONFIG_CONTENT` | that provider's `apiKey` | OpenAI-compatible |
+| `hermes` | `OPENAI_BASE_URL`, with `--provider openai` | `OPENAI_API_KEY` | OpenAI-compatible |
 | `claude` | `ANTHROPIC_BASE_URL` | `ANTHROPIC_API_KEY`, only if it starts with `sk-ant-` | **Anthropic-compatible** |
 | `codex` | `-c openai_base_url=…` (Zeltro passes it for you) | `OPENAI_API_KEY`, only if it starts with `sk-` | OpenAI Responses API |
 | `gemini` | nothing | nothing | Its own Google sign-in, or a `GEMINI_API_KEY` you export |
 
 "OpenAI-compatible" covers OpenRouter, DeepInfra, Together, Fireworks, Ollama,
-LM Studio and vLLM, so `qwen` and `aider` are the agents to use with cheap or local
-models.
+LM Studio and vLLM, so `qwen`, `aider`, `opencode` and `hermes` are the agents to use
+with cheap or local models. In our tests, OpenCode and Hermes both worked through
+OpenRouter with DeepSeek V4.1 Flash; OpenCode with Qwen3 Coder sometimes described a
+file edit instead of making it, so try a second model if one misbehaves.
 
 For one run with a different model, without touching the global setting, use the
 [per-session overrides](../ai-workflow/#per-session-overrides) (`ZELTRO_AI_AGENT`,

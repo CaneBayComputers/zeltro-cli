@@ -174,7 +174,7 @@ show_help() {
     echo "  --no-colors               - Disable colored output"
     echo
     echo-white "PER-SESSION AI OVERRIDES (environment variables; never written to the config):"
-    echo "  ZELTRO_AI_AGENT           - Agent for this run: codex, claude, gemini, aider or qwen"
+    echo "  ZELTRO_AI_AGENT           - Agent for this run: codex, claude, gemini, aider, qwen, opencode or hermes"
     echo "  ZELTRO_AI_MODEL           - Model for this run"
     echo "  ZELTRO_AI_API_BASE        - API endpoint for this run"
     echo "  ZELTRO_AI_API_KEY         - API key for this run"

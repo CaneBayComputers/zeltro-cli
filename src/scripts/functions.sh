@@ -14,7 +14,7 @@ _zeltro_src_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)
 unset _zeltro_src_dir
 
 # Agents Zeltro knows how to drive. The agent name is also its binary name.
-ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen"
+ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen opencode hermes"
 
 # Per-session AI overrides. A caller (the GUI running a chosen profile, a script)
 # can pick the agent for ONE run without rewriting /etc/zeltro-cli/.env:
@@ -83,9 +83,12 @@ zeltro_ai_language_instruction() {
 #   claude, qwen  --append-system-prompt
 #   codex         -c developer_instructions=... (per-run config override)
 #   aider         --chat-language, aider's own reply-language setting
-#   gemini        nothing: it can only REPLACE its whole system prompt
+#   hermes        HERMES_EPHEMERAL_SYSTEM_PROMPT (exported here), which Hermes
+#                 adds to its system prompt without saving it into the session
+#   gemini,       nothing: gemini can only REPLACE its whole system prompt
+#   opencode      and opencode has no flag or variable for it at all
 #                 (GEMINI_SYSTEM_MD). `zeltro ai` prepends the instruction to
-#                 the prompt instead; a resumed gemini session gets none.
+#                 the prompt instead; a resumed session gets none.
 # Expand with ${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"} (bash 3.2 + set -u).
 zeltro_ai_language_args() {
     ZELTRO_LANG_ARGS=()
@@ -97,8 +100,99 @@ zeltro_ai_language_args() {
         # basic string, so quotes and non-ASCII names survive intact.
         codex)  ZELTRO_LANG_ARGS=(-c "developer_instructions=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False))' "$instr")") ;;
         aider)  ZELTRO_LANG_ARGS=(--chat-language "$AI_LANGUAGE") ;;
+        hermes) export HERMES_EPHEMERAL_SYSTEM_PROMPT="$instr" ;;
     esac
     return 0
+}
+
+# Agents whose reply language rides on the prompt (see zeltro_ai_language_args).
+zeltro_ai_language_in_prompt() {
+    case "$1" in gemini|opencode) return 0 ;; *) return 1 ;; esac
+}
+
+# OpenCode (opencode.ai). Sets ZELTRO_OPENCODE_ARGS and exports what the run needs.
+#   - Model: "provider/model" as OpenCode names it, e.g. openai/gpt-5.4-mini or
+#     openrouter/qwen/qwen3-coder. Without one, OpenCode uses its own default/login.
+#   - Key: exported under the variable the model's provider reads.
+#   - Custom endpoint (--api-base): an inline OpenAI-compatible provider called
+#     "zeltro", passed in OPENCODE_CONFIG_CONTENT. OpenCode merges that over the
+#     user's own config for this run only; nothing is written. The model is then
+#     "zeltro/<model>", so --model is required with --api-base.
+# Auto-update is switched off for these runs, so a run never stops to update.
+zeltro_opencode_prepare() {
+    ZELTRO_OPENCODE_ARGS=()
+    export OPENCODE_DISABLE_AUTOUPDATE=1
+    if [ -n "${AI_API_BASE:-}" ]; then
+        # Local servers ignore the key, but the provider needs one to be set.
+        export ZELTRO_AI_API_KEY="${AI_API_KEY:-zeltro-no-key}"
+        OPENCODE_CONFIG_CONTENT="$(python3 -c '
+import json, sys
+base, model = sys.argv[1], sys.argv[2]
+provider = {"npm": "@ai-sdk/openai-compatible", "name": "Zeltro endpoint",
+            "options": {"baseURL": base, "apiKey": "{env:ZELTRO_AI_API_KEY}"},
+            "models": {model: {}} if model else {}}
+print(json.dumps({"provider": {"zeltro": provider}}))
+' "$AI_API_BASE" "${AI_MODEL:-}")"
+        export OPENCODE_CONFIG_CONTENT
+        [ -n "${AI_MODEL:-}" ] && ZELTRO_OPENCODE_ARGS+=(-m "zeltro/$AI_MODEL")
+        return 0
+    fi
+    [ -n "${AI_MODEL:-}" ] && ZELTRO_OPENCODE_ARGS+=(-m "$AI_MODEL")
+    if [ -n "${AI_API_KEY:-}" ]; then
+        case "${AI_MODEL%%/*}" in
+            anthropic)  export ANTHROPIC_API_KEY="$AI_API_KEY" ;;
+            openrouter) export OPENROUTER_API_KEY="$AI_API_KEY" ;;
+            google)     export GOOGLE_GENERATIVE_AI_API_KEY="$AI_API_KEY" ;;
+            *)          export OPENAI_API_KEY="$AI_API_KEY" ;;
+        esac
+    fi
+    return 0
+}
+
+# Hermes Agent (Nous Research). Sets ZELTRO_HERMES_ARGS and exports what the run needs.
+#   - Model: a provider prefix Hermes knows picks the provider, the rest is the
+#     model: openai/gpt-5.4-mini, openrouter/qwen/qwen3-coder, anthropic/claude-...,
+#     gemini/gemini-... Anything else goes to Hermes as-is, on its own provider.
+#   - Key: exported under the variable that provider reads.
+#   - Custom endpoint (--api-base): Hermes's "openai" provider with
+#     OPENAI_BASE_URL, so any OpenAI-compatible server works (Ollama, OpenRouter,
+#     LM Studio). --model is required with --api-base.
+zeltro_hermes_prepare() {
+    ZELTRO_HERMES_ARGS=()
+    local model="${AI_MODEL:-}" provider=""
+    if [ -n "${AI_API_BASE:-}" ]; then
+        export OPENAI_BASE_URL="$AI_API_BASE"
+        export OPENAI_API_KEY="${AI_API_KEY:-zeltro-no-key}"
+        provider="openai"
+    else
+        case "$model" in
+            openai/*|openrouter/*|anthropic/*|gemini/*)
+                provider="${model%%/*}"; model="${model#*/}" ;;
+        esac
+        if [ -n "${AI_API_KEY:-}" ]; then
+            case "$provider" in
+                anthropic)  export ANTHROPIC_API_KEY="$AI_API_KEY" ;;
+                openrouter) export OPENROUTER_API_KEY="$AI_API_KEY" ;;
+                gemini)     export GEMINI_API_KEY="$AI_API_KEY" ;;
+                *)          export OPENAI_API_KEY="$AI_API_KEY" ;;
+            esac
+        fi
+    fi
+    [ -n "$provider" ] && ZELTRO_HERMES_ARGS+=(--provider "$provider")
+    [ -n "$model" ] && ZELTRO_HERMES_ARGS+=(-m "$model")
+    return 0
+}
+
+# Whether agent $1's CLI can run here. Plain `command -v`, except for hermes (below).
+zeltro_agent_installed() {
+    if [ "$1" = "hermes" ]; then zeltro_hermes_is_agent; else command -v "$1" >/dev/null 2>&1; fi
+}
+
+# Meta's Hermes JavaScript engine (React Native) also installs a "hermes" binary.
+# Returns 0 when the one on PATH is Nous Research's Hermes Agent.
+zeltro_hermes_is_agent() {
+    command -v hermes >/dev/null 2>&1 || return 1
+    hermes --version 2>/dev/null | grep -q "Hermes Agent"
 }
 
 # Codex stopped reading OPENAI_BASE_URL, so an endpoint set with --api-base (or
@@ -183,6 +277,10 @@ zeltro_ai_agent_problem() {
         else
             echo "Configured AI agent CLI '$AI_AGENT' is not on PATH. Run 'zeltro ai-set' to choose a different agent, or install $AI_AGENT."
         fi
+        return 1
+    fi
+    if [ "$AI_AGENT" = "hermes" ] && ! zeltro_hermes_is_agent; then
+        echo "The 'hermes' on PATH is not Nous Research's Hermes Agent (Meta's Hermes JavaScript engine uses the same name). Install the agent with: zeltro ai-set --install-only --agent hermes"
         return 1
     fi
     return 0
@@ -2251,6 +2349,8 @@ zeltro_offer_agent_autonomy() {
         gemini) cfg="$HOME/.gemini/settings.json"; desc='"autoAccept": true' ;;
         qwen)   cfg="$HOME/.qwen/settings.json";   desc='"autoAccept": true' ;;
         aider)  cfg="$HOME/.aider.conf.yml";       desc='yes-always: true' ;;
+        opencode) cfg="$HOME/.config/opencode/opencode.json"; desc='"permission": "allow"' ;;
+        hermes) cfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"; desc='approvals.mode: off' ;;
         *) return 0 ;;
     esac
 
@@ -2364,6 +2464,42 @@ PYEOF
                 echo 'yes-always: true' >> "$cfg"
             fi
             ;;
+        opencode)
+            if ! command -v python3 >/dev/null 2>&1; then
+                echo-yellow "python3 not available — set this manually in $cfg."
+                return 1
+            fi
+            # opencode.json may be JSONC (comments allowed); if it doesn't parse as
+            # plain JSON it is left alone rather than rewritten without its comments.
+            local oc_rc=0
+            python3 - "$cfg" << 'PYEOF' || oc_rc=$?
+import json, os, sys
+path = sys.argv[1]
+data = {"$schema": "https://opencode.ai/config.json"}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            data = json.load(f) or {}
+    except Exception:
+        print("UNPARSEABLE"); sys.exit(2)
+data["permission"] = "allow"
+with open(path, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+print("OK")
+PYEOF
+            if [ $oc_rc -eq 2 ]; then
+                echo-yellow "$cfg has comments or is not plain JSON — leaving it untouched."
+                echo-white  "Add \"permission\": \"allow\" yourself."
+                return 1
+            fi
+            ;;
+        hermes)
+            # Hermes's config is commented YAML, so its own CLI edits it.
+            if ! hermes config set approvals.mode off >/dev/null 2>&1; then
+                echo-yellow "Could not run 'hermes config set approvals.mode off' — set it in $cfg."
+                return 1
+            fi
+            ;;
     esac
 
     echo-green "Recorded in $cfg — $agent will now run unattended under Zeltro."
@@ -2384,6 +2520,27 @@ zeltro_read_agent_autonomy() {
         gemini) cfg="$HOME/.gemini/settings.json" ;;
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
         aider)  cfg="$HOME/.aider.conf.yml" ;;
+        opencode)
+            # OpenCode merges opencode.json with its own opencode.jsonc (and project
+            # files), so ask it for the resolved setting rather than reading one file.
+            command -v opencode >/dev/null 2>&1 || { echo "false"; return 0; }
+            (cd /tmp && opencode debug config 2>/dev/null) | python3 -c '
+import json, sys
+try:
+    p = json.load(sys.stdin).get("permission")
+except Exception:
+    print("unknown"); sys.exit(0)
+allow = p == "allow" or (isinstance(p, dict) and p.get("*") == "allow")
+print("true" if allow else "false")' 2>/dev/null || echo "unknown"
+            return 0 ;;
+        hermes)
+            command -v hermes >/dev/null 2>&1 || { echo "false"; return 0; }
+            case "$(hermes config get approvals.mode 2>/dev/null | tail -n 1)" in
+                off) echo "true" ;;
+                "")  echo "unknown" ;;
+                *)   echo "false" ;;
+            esac
+            return 0 ;;
         *) echo "unknown"; return 0 ;;
     esac
 
@@ -2440,6 +2597,16 @@ zeltro_revoke_agent_autonomy() {
         gemini) cfg="$HOME/.gemini/settings.json" ;;
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
         aider)  cfg="$HOME/.aider.conf.yml" ;;
+        opencode) cfg="$HOME/.config/opencode/opencode.json" ;;
+        hermes)
+            cfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"
+            # "smart" is Hermes's own default: a helper model judges risky commands.
+            if hermes config set approvals.mode smart >/dev/null 2>&1; then
+                echo-green "hermes will ask for approval again (approvals.mode: smart in $cfg)."
+                return 0
+            fi
+            echo-yellow "Could not run 'hermes config set approvals.mode smart' — set it in $cfg."
+            return 1 ;;
         *) echo-yellow "Unknown agent '$agent'."; return 1 ;;
     esac
 
@@ -2484,6 +2651,25 @@ PYEOF
                 zeltro-sed 's|^[[:space:]]*yes-always[[:space:]]*:.*|yes-always: false|' "$cfg"
             fi
             ;;
+        opencode)
+            command -v python3 >/dev/null 2>&1 || { echo-yellow "python3 unavailable — edit $cfg by hand."; return 1; }
+            local oc_rc=0
+            python3 - "$cfg" << 'PYEOF' || oc_rc=$?
+import json, sys
+path = sys.argv[1]
+try:
+    with open(path) as f:
+        data = json.load(f) or {}
+except Exception:
+    print("UNPARSEABLE"); sys.exit(2)
+if data.get("permission") == "allow":
+    data["permission"] = "ask"
+with open(path, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+print("OK")
+PYEOF
+            [ $oc_rc -eq 2 ] && { echo-yellow "$cfg has comments or is not plain JSON — left untouched."; return 1; }
+            ;;
     esac
 
     echo-green "$agent will prompt for approval again (updated $cfg)."
@@ -2499,6 +2685,8 @@ zeltro_agent_config_path() {
         gemini) echo "$HOME/.gemini/settings.json" ;;
         qwen)   echo "$HOME/.qwen/settings.json" ;;
         aider)  echo "$HOME/.aider.conf.yml" ;;
+        opencode) echo "$HOME/.config/opencode/opencode.json" ;;
+        hermes) echo "${HERMES_HOME:-$HOME/.hermes}/config.yaml" ;;
         *) return 1 ;;
     esac
 }
