@@ -10,7 +10,7 @@
 | ↳ agent steps | 4–6, sometimes including a crash loop to fix | None: the installer runs without AI |
 | ↳ AI cost | About $0.20 per app with Claude Sonnet ([measured](https://zeltro.ai/ai-app-builder-cost-comparison/#we-measured-the-tokens)) | $0 |
 | ↳ time | 2–4 minutes of agent time | About a minute |
-| **Databases** | One bundled per project | One shared — ~700MB → ~100MB |
+| **Databases** | One bundled per project: 5 projects ≈ 670 MB of RAM | One shared: ≈ 170 MB ([measured](https://zeltro.ai/benchmarks/2026-09-30-shared-db-memory/README.txt)) |
 | **Addresses** | `localhost:3002`? `:3003`? | One per project, printed by `zeltro status` |
 | **Project layout** | Reinvented every session | Fixed names, addresses, images, credentials |
 | **Other machines** | "Worked on my laptop" | Identical |
