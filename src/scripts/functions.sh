@@ -183,6 +183,15 @@ zeltro_hermes_prepare() {
     return 0
 }
 
+# The agent's product name, for messages: codex -> Codex, claude -> Claude Code.
+zeltro_agent_display_name() {
+    case "$1" in
+        codex) echo "Codex" ;; claude) echo "Claude Code" ;; gemini) echo "Gemini CLI" ;;
+        qwen) echo "Qwen Code" ;; aider) echo "Aider" ;; opencode) echo "OpenCode" ;;
+        hermes) echo "Hermes Agent" ;; *) echo "$1" ;;
+    esac
+}
+
 # Whether agent $1's CLI can run here. Plain `command -v`, except for hermes (below).
 zeltro_agent_installed() {
     if [ "$1" = "hermes" ]; then zeltro_hermes_is_agent; else command -v "$1" >/dev/null 2>&1; fi
@@ -203,6 +212,41 @@ zeltro_codex_base_args() {
     ZELTRO_CODEX_BASE_ARGS=()
     [ -n "${AI_API_BASE:-}" ] || return 0
     ZELTRO_CODEX_BASE_ARGS=(-c "openai_base_url=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$AI_API_BASE")")
+    return 0
+}
+
+# Codex ignores OPENAI_API_KEY (codex-cli 0.128): a key only works once it's been
+# given to `codex login --with-api-key`, which stores it in CODEX_HOME/auth.json.
+# Without that, a run with a key fails with 401 "Missing bearer", or quietly
+# uses the ChatGPT sign-in in ~/.codex, which rejects API-only models.
+#
+# So when a key is set, Codex runs in a CODEX_HOME that Zeltro manages, one per
+# key (~/.zeltro/codex/<hash of the key>), logged in with that key. It's stable
+# so `codex resume --last` finds that profile's earlier sessions. The user's own
+# ~/.codex is never written to; their config.toml and AGENTS.md are linked in,
+# so their settings (including unattended mode) still apply.
+# Exports CODEX_HOME; returns 1 with a message on stderr if the login fails.
+zeltro_codex_prepare() {
+    [ -n "${AI_API_KEY:-}" ] || return 0
+    # Same rule as _export_agent_key: without a custom endpoint, a value that
+    # isn't an OpenAI-style key is ignored and Codex uses its own sign-in.
+    [ -z "${AI_API_BASE:-}" ] && [[ "$AI_API_KEY" != sk-* ]] && return 0
+    local user_home="${CODEX_HOME:-$HOME/.codex}" base="$HOME/.zeltro/codex" h dir f
+    h="$(printf '%s' "$AI_API_KEY" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])')" || return 1
+    dir="$base/$h"
+    mkdir -p "$dir" && chmod 700 "$HOME/.zeltro" "$base" "$dir" 2>/dev/null
+    for f in config.toml AGENTS.md; do
+        if [ -e "$user_home/$f" ] && [ ! -e "$dir/$f" ] && [ ! -L "$dir/$f" ]; then
+            ln -s "$user_home/$f" "$dir/$f" 2>/dev/null || true
+        fi
+    done
+    if [ ! -s "$dir/auth.json" ]; then
+        if ! printf '%s' "$AI_API_KEY" | CODEX_HOME="$dir" codex login --with-api-key >/dev/null 2>&1; then
+            echo "Codex: couldn't sign in with the configured API key (codex login --with-api-key failed)." >&2
+            return 1
+        fi
+    fi
+    export CODEX_HOME="$dir"
     return 0
 }
 

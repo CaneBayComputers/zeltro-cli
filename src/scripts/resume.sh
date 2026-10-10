@@ -128,6 +128,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         _export_agent_key OPENAI_API_KEY "sk-"
         _export_agent_base OPENAI_BASE_URL
+        zeltro_codex_prepare || exit 1
         zeltro_codex_base_args
         common_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-bypass-approvals-and-sandbox)

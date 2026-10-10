@@ -48,7 +48,7 @@ curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- \
   --non-interactive --skip-browser --skip-computer-use   # Hermes Agent
 ```
 
-Zeltro passes a stored key only where it fits. Codex gets it as `OPENAI_API_KEY` only if it starts with `sk-`, and Claude gets it as `ANTHROPIC_API_KEY` only if it starts with `sk-ant-`. Anything else is ignored with a warning, and the CLI uses its own sign-in. Gemini never gets the key or the endpoint: it uses its own Google sign-in, or a `GEMINI_API_KEY` you export yourself.
+Zeltro passes a stored key only where it fits. Codex gets a key only if it starts with `sk-` (any key with a custom endpoint), and Claude gets it as `ANTHROPIC_API_KEY` only if it starts with `sk-ant-`. Codex ignores `OPENAI_API_KEY`, so Zeltro signs it in with the key (`codex login --with-api-key`) in a Codex home of its own, `~/.zeltro/codex/<hash of the key>`, with your `config.toml` linked in. Your own `~/.codex`, and any ChatGPT sign-in in it, is never touched, and each key keeps its own session history for `zeltro resume`. Anything else is ignored with a warning, and the CLI uses its own sign-in. Gemini never gets the key or the endpoint: it uses its own Google sign-in, or a `GEMINI_API_KEY` you export yourself.
 
 `zeltro ai-set --json-output` on its own is read-only. It installs nothing and writes nothing, and reports the agent, model, endpoint, whether a key is stored, the unattended setting, and which agents are installed.
 
@@ -252,7 +252,7 @@ zeltro create --one-off "..."            # no menus; take the top recommendation
 zeltro create --classify-only "..."      # print the recommendation and stop; creates nothing
 ```
 
-`--classify-only` never prompts. Add `--json-output` for a machine-readable result, which is what the Zeltro app uses.
+`--classify-only` never prompts. Add `--json-output` for a machine-readable result, which is what the Zeltro app uses. If the agent itself fails (a wrong key, a model your account can't use, no credit left), the result is `{"status":"error","error":"agent_failed","message":"Codex: <the agent's own error>"}`, and Zeltro stops as soon as the agent reports a 400, 401, 403 or 404 rather than waiting out its retries. `"error":"no_stack"` means the agent answered but gave no usable recommendation. `create` reports the same codes.
 
 ---
 

@@ -199,6 +199,17 @@ fi
 CHOSEN_KIND=""; CHOSEN_SLUG=""; CHOSEN_DB=""; CHOSEN_NAME=""; CHOSEN_CUSTOMIZE="yes"
 
 if ! classify_project "$USER_IDEA" "$CLASSIFY_NONINTERACTIVE"; then
+    _classify_last_error
+    rm -f "${CLASSIFY_ERR_FILE:-}"
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        python3 -c 'import json,sys; print(json.dumps({"action":"create","status":"error","error":sys.argv[1],"message":sys.argv[2]}))' "$CLASSIFY_ERR_CODE" "$CLASSIFY_ERR_MESSAGE"
+        exit 1
+    fi
+    if [[ "$CLASSIFY_ERR_CODE" == "agent_failed" ]]; then
+        echo-red "The AI agent failed. $CLASSIFY_ERR_MESSAGE"
+        echo-white "Check its settings (Settings → AI in the app, or 'zeltro ai-set'), then try again."
+        exit 1
+    fi
     echo-yellow "Could not determine a stack automatically."
     echo-white "Create the project yourself, then describe what to build:"
     echo-white "  zeltro new <framework> <name>   or   zeltro install <app>"
