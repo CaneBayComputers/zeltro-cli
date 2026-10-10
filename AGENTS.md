@@ -30,6 +30,7 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 | `zeltro down <name>` / `zeltro down-all` | Stop one project, or every project. Shared services keep running — use `zeltro stop-services` for those. |
 | `zeltro setup <name>` | Adapt a project directory in `~/zeltro-projects/`. |
 | `zeltro remove <name>` | Tear down a project. DB is **preserved** by default — pass `--force-db-delete` to drop its databases, the database users its installer created, and its volumes (anything another project also uses is kept). |
+| `zeltro rename <name> <new-name>` | Rename a project: its folder, container, volumes and Claude Code history follow. `--github` renames the GitHub repo too. See "Renaming a project" below. |
 | `zeltro status [name] [--all]` | Show running state. Lists only active (running) projects by default; `--all` includes stopped projects. |
 | `zeltro exec <cmd>` | Run a command inside the project container, no TTY (automation-friendly). Run from the project directory. |
 
@@ -107,6 +108,19 @@ A folder project is a folder plus an AI session: no container, framework, databa
   - It appears only when the idea isn't something served on the web.
   - Choosing it creates the folder project, saves the idea, and opens the agent seeded with a folder-specific build prompt. The JSON result has `"kind":"folder"`.
 - **Remote hosts.** Everything above works over SSH and WSL like any other command; for `add`, the path is on that host.
+
+### Renaming a project
+
+`zeltro rename <project> <new-name> [--github] [--dry-run] [--force] [--json-output]`. The new name is cleaned like `zeltro new` does (`"My App"` -> `my-app`), and `project_name` in the result is the name it got.
+
+- **Docker project.** The folder moves, and the web service's `container_name` (the one equal to the project name, which `x-metadata` hangs off) changes; other `container_name`s are the app's own and stay. Named volumes (`<old>_<volume>`, found by their compose labels) are copied to `<new>_<volume>`, verified file by file, and the old ones removed. Locally built images (`<old>-<service>`) are retagged, so nothing rebuilds. A running project is stopped first and started again; the IP, port, database, `.env` and disabled state don't change.
+- **Folder project.** Created: the folder moves, and its record and AGENTS.md follow. Added: only the link and the record are renamed; the user's folder isn't touched.
+- **AI history.** Claude Code's conversations for the folder (`~/.claude/projects/<encoded path>`) and its `~/.claude.json` entry move to the new path, so `zeltro resume` continues them. Other agents start a fresh session after a rename.
+- **In use.** Refused with error `in_use` (and `"in_use":[{"pid","name"}]`) while any process has its working directory inside the project, e.g. an open AI session or a terminal there. The process that ran the command, its parents and its pipeline don't count. Close those sessions first, or pass `--force`. Not checked for an added folder, which doesn't move.
+- **`--dry-run --json-output`** changes nothing and gives `{"action":"rename","status":"preview","old_name","project_name"(null without a new name),"kind","origin"(folder only),"running","volumes":[{"from","to"}],"images":[{"from","to"}],"github":{"repo","can_rename","reason"},"in_use":[...]}`. The new name is optional here, so a front end can ask up front whether to offer the GitHub option. `reason` is one of `no_github_remote`, `gh_not_installed`, `gh_unavailable` (not signed in, offline, or no such repo), `not_repo_admin`.
+- **`--github`** renames the GitHub repo behind `origin` (needs admin rights; GitHub redirects the old URL) and points `origin` at the new name. It's checked before anything changes: if it can't work, the command fails with `github_unavailable` and `github_reason`. The GitHub rename runs after the local one, so a failure there leaves the local rename done and reports `"github":{"renamed":false,"error"}`.
+- **Result:** `{"action":"rename","status":"success","old_name","project_name","kind","origin"(folder only),"path","was_running","restarted","volumes_moved":[...],"ai_history_moved","github":{"repo","renamed"}}`. Optional extras: `start_error` (it didn't come back up; `zeltro up <new>`), and `old_volumes_kept` (couldn't remove; the data is in the new ones).
+- **Errors** (`status:"error"`, `error`, `message`): `not_found`, `missing_name`, `bad_name`, `same_name`, `name_taken`, `container_exists` / `volume_exists` (Docker leftovers already using the new name), `github_unavailable`, `in_use`, `volume_copy_failed` and `move_failed`. On the last two everything is put back and the project restarted if it was running.
 
 ### Messaging other agent sessions
 

@@ -46,7 +46,7 @@ _zeltro() {
 create-installer db-refresh disable disable-service django down down-all drush enable \
 enable-service exec exec-root exec-tty exec-tty-root get-metadata gui help install memcache memcache-flush \
 memcache-stats migrate-names mysql new node npm npx peers php phpcbf phpcs phpmd pip pip3 projects-dir \
-python python3 redis redis-flush remove resume send set-metadata setup shell start-services \
+python python3 redis redis-flush remove rename resume send set-metadata setup shell start-services \
 status stop-services supervisor supervisor-status tinker uninstall up up-all update \
 update-installer version wp"
 
@@ -92,6 +92,12 @@ update-installer version wp"
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=( $(compgen -W "--force-db-delete --preserve-database --force --json-output" -- "$cur") )
             else
+                COMPREPLY=( $(compgen -W "$(_zeltro_projects)" -- "$cur") )
+            fi ;;
+        rename)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "--github --dry-run --force --json-output" -- "$cur") )
+            elif [ "$cword" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "$(_zeltro_projects)" -- "$cur") )
             fi ;;
         resume)
