@@ -13,6 +13,7 @@ T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 export ZELTRO_TEST_PROJECTS_DIR="$T/projects"
 export XDG_DATA_HOME="$T/data"
+export PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$ZELTRO_TEST_PROJECTS_DIR" "$T/elsewhere/my-scripts" "$T/data"
 P="$ZELTRO_TEST_PROJECTS_DIR"
 
