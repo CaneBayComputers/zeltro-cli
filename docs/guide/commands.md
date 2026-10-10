@@ -104,6 +104,7 @@ Commands marked *(project dir)* must be run from inside a project directory.
 | `zeltro clone <mode> <repo> [name]` | Clone an existing repo (mode: `work-directly` / `fork` / `new-repo`) |
 | `zeltro setup <project> [database] [options]` | Set up an existing project directory |
 | `zeltro remove <project> [options]` | Remove a project (DB preserved unless `--force-db-delete`) |
+| `zeltro rename <project> <new-name> [--github] [--dry-run] [--force]` | Rename a project. Its folder, container, data volumes and Claude Code history follow; its address, port, database and settings stay. A running project restarts under the new name. `--github` renames its GitHub repo too |
 | `zeltro set-metadata <project> [--emoji E] [--name N] [--description D] [--idea TEXT\|--idea-file F\|--idea -]` | Set a project's display emoji, name, description, or the Create with AI idea it came from (any text up to 200 KB; `--idea ""` removes it) |
 | `zeltro get-metadata <project> [--idea] [--json-output]` | Show a project's metadata; `--idea` prints just the idea, byte for byte |
 | `zeltro disable <project>` | Stop and park a project: skipped by `up-all`, refused by `up`, hidden in the GUI. Nothing is deleted |
@@ -443,6 +444,16 @@ By default project files are moved to the trash and the database and the project
 |--------|-------------|
 | `--force-db-delete` | Also drop the project's databases, the database users its installer created, and its named volumes. Names come from the project's compose/.env files and its installer; any that another project also uses are kept |
 | `--preserve-database` | Skip database deletion entirely (wins over `--force-db-delete`) |
+
+### Rename Project Options
+
+`zeltro rename <project> <new-name>` refuses while something is running inside the project folder (an AI session, a terminal), so close those first. For a folder added with `zeltro add`, only the project's name changes; the folder stays where it is.
+
+| Option | Description |
+|--------|-------------|
+| `--github` | Also rename the GitHub repo behind `origin` (you need admin rights on it) and point `origin` at the new name. GitHub redirects the old URL |
+| `--dry-run` | Show what would change, and whether `--github` can work, without changing anything |
+| `--force` | Rename even though a program is running inside the project folder |
 
 ### Uninstall Options
 

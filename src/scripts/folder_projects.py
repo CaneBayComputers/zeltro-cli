@@ -121,6 +121,19 @@ def main(argv):
             pass
         return 0
 
+    if cmd == "rename":
+        # rename <old> <new> [path]: move the record, and the path with it for
+        # a created folder (an added one stays where the user keeps it).
+        old, new = args[0], args[1]
+        rec = load(pdir, old)
+        if not rec:
+            return 1
+        if len(args) > 2 and args[2]:
+            rec["path"] = args[2]
+        save(pdir, new, rec)
+        os.remove(rec_path(pdir, old))
+        return 0
+
     if cmd == "find-path":
         # The project name already registered for this real path, if any.
         target = os.path.realpath(args[0])

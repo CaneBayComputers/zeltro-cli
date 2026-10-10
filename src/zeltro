@@ -146,6 +146,7 @@ show_help() {
     echo "  zeltro clone <work-directly|fork|new-repo> <repo> [name] - Clone an existing repo"
     echo "  zeltro setup <project> [options] - Set up an existing project directory"
     echo "  zeltro remove <project> [options] - Remove a project (DB preserved unless --force-db-delete)"
+    echo "  zeltro rename <project> <new-name> [--github] - Rename a project: folder, container, volumes, AI history"
     echo "  zeltro set-metadata <p>   - Set a project's emoji, display name, description or idea"
     echo "  zeltro get-metadata <p>   - Show a project's metadata, including its Create with AI idea"
     echo "  zeltro disable <project>  - Stop and park a project: skipped by up-all, hidden in the GUI"
@@ -745,6 +746,9 @@ case "$1" in
         ;;
     "remove")
         "$SCRIPT_DIR/scripts/remove_project.sh" "${@:2}"
+        ;;
+    "rename")
+        "$SCRIPT_DIR/scripts/rename_project.sh" "${@:2}"
         ;;
     
     # System management
