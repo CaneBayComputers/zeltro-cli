@@ -295,6 +295,11 @@ fi
 
 # Get the projects directory (configurable)
 get_projects_dir() {
+    # Tests point a whole run at a scratch directory with this; nothing else sets it.
+    if [ -n "${ZELTRO_TEST_PROJECTS_DIR:-}" ]; then
+        echo "$ZELTRO_TEST_PROJECTS_DIR"
+        return
+    fi
     # Get the directory where this script is located
     local zeltro_root="${ZELTRO_SRC_DIR:-}"
     
@@ -1832,15 +1837,23 @@ ai_handoff() {
     [[ ! -f "$ai_script" ]] && return 0
 
     # Write the durable handoff context into the project before invoking the
-    # agent. The seed prompt only has to point at it.
-    write_project_agents_md "$project_name" "$project_dir"
+    # agent. The seed prompt only has to point at it. A folder project has no
+    # container or address; one that was added (not created) gets no AGENTS.md.
+    if zeltro_project_is_folder "$project_name"; then
+        if [[ "$(zeltro_folder_py info "$project_name" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("origin",""))' 2>/dev/null)" == "created" ]]; then
+            zeltro_write_folder_agents_md "$project_dir" "$project_name"
+        fi
+        [[ -n "$seed_prompt" ]] || seed_prompt="This is a Zeltro folder project: a plain folder with no container, web server or address. Read AGENTS.md and README.md if present, look around the folder, and ask me what I'd like to do."
+    else
+        write_project_agents_md "$project_name" "$project_dir"
+    fi
 
     if [[ -z "$seed_prompt" ]]; then
         seed_prompt="Read AGENTS.md in this directory first — it describes this Zeltro-managed project, its local URL, its database, and the commands to use. Then read README.md if present. The project is running at $(zeltro_project_url "$project_name" || true). You are the developer on it."
     fi
 
     echo-return
-    echo-cyan "Wrote AGENTS.md handoff context to $project_name."
+    zeltro_project_is_folder "$project_name" || echo-cyan "Wrote AGENTS.md handoff context to $project_name."
     echo-cyan "Starting AI session in $project_name..."
     echo-white "(skip with --one-off; configure agent with 'zeltro ai-set')"
     echo-return
@@ -3162,6 +3175,83 @@ zeltro_fix_postgres_data_volume() {
 
 # Record that a project was up, as ISO-8601 UTC.
 #
+# ---------------------------------------------------------------------------
+# Folder projects: a folder plus an AI session, with no containers, framework,
+# database or address. Scripts, scrapers, docs, data clean-ups, CLI tools, bots.
+#
+#   zeltro new folder <name>     a new folder in the projects directory
+#   zeltro add <path> [--name N] an existing folder anywhere on this host, left
+#                                where it is (the project is a symlink to it)
+#
+# What makes a project a folder project is its record in
+# <projects>/.zeltro/folders/<name>.json (see folder_projects.py), which also
+# holds its metadata. Everything else is a Docker project.
+# ---------------------------------------------------------------------------
+zeltro_folder_py() {
+    python3 "$ZELTRO_SRC_DIR/scripts/folder_projects.py" "$1" "${PROJECTS_DIR_PATH:-$(get_projects_dir)}" "${@:2}"
+}
+
+# folder | docker | none
+zeltro_project_kind() {
+    zeltro_folder_py kind "$1" 2>/dev/null || echo none
+}
+
+# Cheap enough for loops: a file test first, python only when one exists.
+zeltro_project_is_folder() {
+    [ -n "$1" ] && [ -f "${PROJECTS_DIR_PATH:-$(get_projects_dir)}/.zeltro/folders/$1.json" ] \
+        && [ "$(zeltro_project_kind "$1")" = "folder" ]
+}
+
+# The name rule `zeltro new` uses: lowercase, spaces to dashes, [a-z0-9-_] only.
+zeltro_clean_project_name() {
+    printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr ' ' '-' | LC_ALL=C tr -cd 'a-z0-9-_'
+}
+
+# Whether a project name is taken: a directory, a file, a symlink (even a broken
+# one: an added folder that has since disappeared), or a leftover record.
+zeltro_project_name_taken() {
+    local pd="${PROJECTS_DIR_PATH:-$(get_projects_dir)}"
+    [ -e "$pd/$1" ] || [ -L "$pd/$1" ] || [ -f "$pd/.zeltro/folders/$1.json" ]
+}
+
+# AGENTS.md context for a folder project made by `zeltro new folder`. Added
+# folders never get one: Zeltro writes nothing inside a folder it didn't create.
+# Only the text between the markers is Zeltro's; the rest of the file is kept.
+#   $1 project dir, $2 project name
+zeltro_write_folder_agents_md() {
+    local dir="$1" name="$2"
+    python3 - "$dir/AGENTS.md" "$name" <<'PYEOF' 2>/dev/null || true
+import os, sys
+f, name = sys.argv[1], sys.argv[2]
+b, e = "<!-- BEGIN ZELTRO CONTEXT -->", "<!-- END ZELTRO CONTEXT -->"
+body = f"""{b}
+# {name}
+
+This is a **Zeltro folder project**: a plain folder for scripts, tools, documents
+or data, with no container, web server, database or address. Work directly on
+this computer, in this folder:
+
+- Run code with the tools installed here (python3, node, bash and so on). Prefer
+  a project-local environment (a Python venv, a local node_modules) over
+  system-wide installs, and write in README.md how to run what you build.
+- Keep secrets in `.env`, which is never committed. Inside the Zeltro app, ask the
+  user for one with `zeltro gui secret <NAME> "<why you need it>"`.
+- There is no `zeltro exec`, `zeltro up` or project address here; those are for
+  Docker projects.
+- Commit your work to git as you go.
+{e}"""
+s = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
+i, j = s.find(b), s.find(e)
+if i != -1 and j != -1:
+    s = s[:i] + body + s[j + len(e):]
+elif s:
+    s = body + "\n\n" + s
+else:
+    s = body + "\n"
+open(f, "w", encoding="utf-8").write(s)
+PYEOF
+}
+
 # Written on BOTH start and stop, deliberately: on stop the value becomes the
 # moment it stopped, so it means "last time this was running" rather than "last
 # time somebody started it" — which is what the GUI sorts on. Best-effort; a
@@ -3170,6 +3260,10 @@ zeltro_fix_postgres_data_volume() {
 record_last_on() {
     local project="$1"
     [ -n "$project" ] || return 0
+    if zeltro_project_is_folder "$project"; then
+        zeltro_folder_py touch "$project" >/dev/null 2>&1 || true
+        return 0
+    fi
     local dir="${PROJECTS_DIR_PATH:-$HOME/zeltro-projects}/$project"
     local file=""
     [ -f "$dir/docker-compose.yaml" ] && file="$dir/docker-compose.yaml"

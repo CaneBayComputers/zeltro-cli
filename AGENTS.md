@@ -68,6 +68,37 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 
 Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true`, `"ai_language": true` and `"installed_agents": [...]`.
 
+### Folder projects
+
+A folder project is a folder plus an AI session: no container, framework, database or address. Use it for scripts, scrapers, documents, data clean-ups, CLI tools and bots. AI sessions, the saved idea, profiles and overrides, the agent bus and `zeltro gui` all work as they do for other projects.
+
+- **Create.** `zeltro new folder <name> [--one-off] [--json-output]` makes `<projects>/<name>` with an `AGENTS.md`, a `.gitignore` (for `.env`) and a git repo, then hands off to the agent unless `--one-off`.
+  - JSON: `{"action":"new_project","project_name","kind":"folder","origin":"created","path","status":"success"}`.
+  - The name is cleaned like `zeltro new`: lowercase, spaces become dashes, only `[a-z0-9-_]` kept.
+  - Errors: `{"status":"error","error":<code>,"message"}` with code `missing_name`, `bad_name` or `name_taken`.
+- **Add.** `zeltro add <path> [--name N] [--json-output]` uses a folder that already exists on that host, without moving or copying it. The project is a symlink, `<projects>/<name>`, pointing at the folder.
+  - Nothing is written inside the folder, not even an `AGENTS.md`.
+  - The name defaults to the folder's name, with `-2`, `-3`... added if it's taken. An explicit `--name` that's taken is an error instead.
+  - JSON: `{"action":"add_folder","project_name","kind":"folder","origin":"added","path":<real path>,"status":"success"}`.
+  - Errors: `missing_path`, `not_found`, `not_a_folder`, `path_not_allowed` (`/`, home, system folders, or a folder that contains the projects folder), `inside_projects_dir` (also gives `project_name`), `already_added` (gives `project_name`), `name_taken`, `registry_failed`.
+- **Record.** What makes a project a folder project is its record in `<projects>/.zeltro/folders/<name>.json`. The record holds `origin` (`created` or `added`), the real `path`, and the metadata. Everything without a record is a Docker project.
+- **Status.** `zeltro status --all --json-output` gives every project a `kind` field: `"folder"` or `"docker"`.
+  - A folder project's entry is fixed apart from `name`, `origin` (`created` or `added`), `path`, `missing` and `metadata`. The rest is always: `folder_exists` (= not missing), `docker_running:false`, `port_mapped:false`, `external_port/project_ip/resolved_ip/local_url/lan_url:null`, `ping_status/http_status:"not_applicable"`.
+  - `missing:true` means an added folder has been moved or deleted. It's still listed, and `zeltro remove` forgets it.
+  - Folder projects never count as running, so plain `zeltro status` (running only) leaves them out; use `--all`.
+- **Metadata.** `set-metadata` and `get-metadata` work the same as for other projects (emoji, name, description, idea, `--idea`), stored in the record. `last_on` is updated on `resume`.
+- **Skipped.** `up`, `down`, `enable` and `disable` exit 0 with `{"status":"skipped","reason":"folder_project","kind":"folder",...}`. `up-all`, `down-all` and `uninstall` pass over folder projects. `setup` refuses one.
+- **Remove.** `zeltro remove <name> --json-output` gives `{"action":"remove_project","project_name","kind":"folder","origin","files_deleted":bool,"trashed":bool,"database_deleted":false,"status":"success"}`.
+  - An **added** folder is only forgotten: the symlink and record go, and `files_deleted` is always `false`.
+  - A folder Zeltro **created** goes to the trash like any project directory. If trash-cli is missing, the folder is left in place with error `trash_unavailable` and nothing changes.
+  - Docker projects' remove JSON now carries `"kind":"docker"`.
+- **AI sessions.** `ai`, `ai --interactive` and `resume` run the agent in the folder, which for an added folder is the real path. No container is started and no address is shown. The agent bus maps a working directory inside an added folder back to its project, so `zeltro gui ...` works there.
+- **Create with AI.** `create --classify-only --json-output` can return a candidate `{"kind":"folder","slug":"folder","display":"Just a folder","reason"}` with no database field, and `"recommended":"folder"`.
+  - The folder candidate is first when it's recommended, otherwise last.
+  - It appears only when the idea isn't something served on the web.
+  - Choosing it creates the folder project, saves the idea, and opens the agent seeded with a folder-specific build prompt. The JSON result has `"kind":"folder"`.
+- **Remote hosts.** Everything above works over SSH and WSL like any other command; for `add`, the path is on that host.
+
 ### Messaging other agent sessions
 
 When the Zeltro app hosts agent sessions in several projects (on one host or several), they can talk:

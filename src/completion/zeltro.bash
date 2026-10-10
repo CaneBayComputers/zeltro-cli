@@ -42,7 +42,7 @@ _zeltro() {
     cword=$COMP_CWORD
     verb="${COMP_WORDS[1]}"
 
-    local verbs="ai ai-set ai-unattended art artisan bash cache-refresh clone composer configure create \
+    local verbs="add ai ai-set ai-unattended art artisan bash cache-refresh clone composer configure create \
 create-installer db-refresh disable disable-service django down down-all drush enable \
 enable-service exec exec-root exec-tty exec-tty-root get-metadata gui help install memcache memcache-flush \
 memcache-stats migrate-names mysql new node npm npx peers php phpcbf phpcs phpmd pip pip3 projects-dir \
@@ -50,7 +50,7 @@ python python3 redis redis-flush remove resume send set-metadata setup shell sta
 status stop-services supervisor supervisor-status tinker uninstall up up-all update \
 update-installer version wp"
 
-    local frameworks="laravel kavera octobercms drupal wordpress php fastapi flask django python express nestjs fastify node nextjs nuxt sveltekit astro hono react vue"
+    local frameworks="folder laravel kavera octobercms drupal wordpress php fastapi flask django python express nestjs fastify node nextjs nuxt sveltekit astro hono react vue"
 
     # First token after `zeltro` → the verb.
     if [ "$cword" -eq 1 ]; then

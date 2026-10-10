@@ -146,9 +146,28 @@ def my_project():
         return None
     rel = os.path.relpath(cwd, root)
     if rel == "." or rel.startswith(".."):
-        return None
+        return added_folder_project(root, cwd)
     name = rel.split(os.sep)[0]
     return name if os.path.isdir(os.path.join(root, name)) else None
+
+
+def added_folder_project(root, cwd):
+    """A folder added with `zeltro add` lives outside the projects dir; the
+    project is a symlink to it there. Match cwd against those links."""
+    best, best_len = None, -1
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return None
+    for name in names:
+        link = os.path.join(root, name)
+        if name.startswith(".") or not os.path.islink(link):
+            continue
+        target = os.path.realpath(link)
+        if cwd == target or cwd.startswith(target + os.sep):
+            if len(target) > best_len:
+                best, best_len = name, len(target)
+    return best
 
 
 def cmd_peers(args):

@@ -212,6 +212,8 @@ fi
 echo-return
 if [[ "$CHOSEN_KIND" == "app" ]]; then
     echo-cyan "Installing $CHOSEN_SLUG as '$CHOSEN_NAME' ..."
+elif [[ "$CHOSEN_KIND" == "folder" ]]; then
+    echo-cyan "Creating folder project '$CHOSEN_NAME' ..."
 else
     echo-cyan "Creating $CHOSEN_SLUG project '$CHOSEN_NAME'${CHOSEN_DB:+ with $CHOSEN_DB} ..."
 fi
@@ -219,7 +221,14 @@ echo-return
 
 # A pre-existing directory means a stale project of the same name; `create`
 # always means start fresh.
-if [[ -d "$PROJECTS_DIR_PATH/$CHOSEN_NAME" ]]; then
+# Except a folder the user ADDED: that's theirs, not a stale build, so the new
+# project takes a different name instead.
+if zeltro_project_is_folder "$CHOSEN_NAME" && [[ -L "$PROJECTS_DIR_PATH/$CHOSEN_NAME" ]]; then
+    _n=2; while zeltro_project_name_taken "$CHOSEN_NAME-$_n"; do _n=$((_n + 1)); done
+    echo-yellow "'$CHOSEN_NAME' is a folder you added — naming this one '$CHOSEN_NAME-$_n'."
+    CHOSEN_NAME="$CHOSEN_NAME-$_n"
+fi
+if [[ -d "$PROJECTS_DIR_PATH/$CHOSEN_NAME" ]] || zeltro_project_is_folder "$CHOSEN_NAME"; then
     echo-yellow "Project '$CHOSEN_NAME' already exists — replacing it."
     "$SCRIPT_DIR/remove_project.sh" "$CHOSEN_NAME" --force --force-db-delete >/dev/null 2>&1 || true
 fi
@@ -229,6 +238,14 @@ fi
 if [[ "$CHOSEN_KIND" == "app" ]]; then
     "$SCRIPT_DIR/install.sh" "$CHOSEN_SLUG" "$CHOSEN_NAME" --one-off || {
         echo-red "Install of '$CHOSEN_SLUG' failed."; exit 1; }
+elif [[ "$CHOSEN_KIND" == "folder" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        "$SCRIPT_DIR/new_folder.sh" "$CHOSEN_NAME" --one-off >/dev/null || {
+            echo "{\"action\": \"create\", \"project_name\": \"$CHOSEN_NAME\", \"kind\": \"folder\", \"status\": \"error\", \"error\": \"create_failed\"}"; exit 1; }
+    else
+        "$SCRIPT_DIR/new_folder.sh" "$CHOSEN_NAME" --one-off || {
+            echo-red "Creating '$CHOSEN_NAME' failed."; exit 1; }
+    fi
 else
     "$SCRIPT_DIR/new_project.sh" "$CHOSEN_SLUG" "$CHOSEN_NAME" ${CHOSEN_DB:+--database "$CHOSEN_DB"} --one-off || {
         echo-red "Creating '$CHOSEN_NAME' failed."; exit 1; }
@@ -243,6 +260,14 @@ fi
 # Keep the original idea with the project (x-metadata `idea`), exactly as typed,
 # so the app can show what a project was made from. Best effort; capped like
 # set-metadata. Read back with: zeltro get-metadata <project> --idea
+if [[ "$CHOSEN_KIND" == "folder" ]]; then
+    _idea_tmp="$(mktemp)"; chmod 600 "$_idea_tmp"
+    printf '%s' "$USER_IDEA" > "$_idea_tmp"
+    if [ "$(wc -c < "$_idea_tmp" | tr -d ' ')" -le 204800 ]; then
+        zeltro_folder_py meta-set "$CHOSEN_NAME" idea "$_idea_tmp" >/dev/null 2>&1 || true
+    fi
+    rm -f "$_idea_tmp"
+fi
 _idea_compose="$(zeltro_project_compose "$CHOSEN_NAME")"
 if [[ -n "$_idea_compose" ]]; then
     _idea_tmp="$(mktemp)"; chmod 600 "$_idea_tmp"
@@ -261,7 +286,9 @@ fi
 # and gotchas (INSTALL_NOTES) — so an agent session here would spend real tokens
 # re-deriving what Zeltro reported seconds ago. It only earns its keep when the
 # user asked for something beyond standing the software up.
-write_project_agents_md "$CHOSEN_NAME" "$PROJECT_DIR"
+if [[ "$CHOSEN_KIND" != "folder" ]]; then
+    write_project_agents_md "$CHOSEN_NAME" "$PROJECT_DIR"
+fi
 
 if [[ "$CHOSEN_KIND" == "app" && "$CHOSEN_CUSTOMIZE" != "yes" ]]; then
     echo-return
@@ -284,8 +311,12 @@ fi
 # above supplies the URL, database and command patterns.
 # The address that works from this machine. http://<name>/ no longer resolves
 # on the host, so an agent told to curl it could never verify its work.
-PROJECT_URL="$(zeltro_project_url "$CHOSEN_NAME")"
-[[ -n "$PROJECT_URL" ]] || PROJECT_URL="http://<the address 'zeltro status $CHOSEN_NAME' prints>"
+if [[ "$CHOSEN_KIND" == "folder" ]]; then
+    PROJECT_URL=""
+else
+    PROJECT_URL="$(zeltro_project_url "$CHOSEN_NAME")"
+    [[ -n "$PROJECT_URL" ]] || PROJECT_URL="http://<the address 'zeltro status $CHOSEN_NAME' prints>"
+fi
 
 COMMON_RULES="Rules:
 - Run project tooling inside the container (zeltro exec / zeltro art / zeltro django manage / zeltro npm ...), never on the host.
@@ -301,7 +332,22 @@ COMMON_RULES="Rules:
   installed only fails once the process restarts.
 - You are NOT done until, AFTER that restart, 'curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 $PROJECT_URL/' returns 2xx or 3xx AND the response reflects what you built rather than the scaffold's placeholder page. If it does not, check 'docker logs $CHOSEN_NAME', fix it, and re-verify."
 
-if [[ "$CHOSEN_KIND" == "app" ]]; then
+if [[ "$CHOSEN_KIND" == "folder" ]]; then
+    BUILD_PROMPT="You are working in a Zeltro folder project: a plain folder on this computer, with no container, web server, database or address. It has just been created for this request; do NOT run zeltro new, zeltro install or zeltro create.
+
+Read AGENTS.md in this directory first.
+
+Build this:
+
+$USER_IDEA
+
+Rules:
+- Work directly on this computer, in this folder. Use a project-local environment (a Python venv, a local node_modules) rather than installing things system-wide.
+- Put secrets in .env (never committed). Inside the Zeltro app, ask the user for one with: zeltro gui secret <NAME> \"<why you need it>\"
+- Write a README.md that says what this is and exactly how to run it.
+- Actually run what you built on a small real example before saying you're done, and fix anything that fails.
+- Commit your work to git."
+elif [[ "$CHOSEN_KIND" == "app" ]]; then
     # The software is already installed, configured and serving. Framing this as
     # "build X" invites the agent to rebuild the whole app from scratch, so the
     # install is stated as done and only the leftover work is asked for.
@@ -336,7 +382,7 @@ fi
 
 echo-return
 echo-green "Project ready: $CHOSEN_NAME"
-echo-white "Local URL: $PROJECT_URL/"
+[[ -n "$PROJECT_URL" ]] && echo-white "Local URL: $PROJECT_URL/"
 echo-white "Directory: $PROJECT_DIR"
 echo-return
 # Asked for once, here, at the moment something actually worked -- not on `up`,

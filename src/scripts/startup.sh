@@ -83,6 +83,16 @@ if [[ "$START_ALL" == "1" && -n "$PROJECT_NAME" ]]; then
     error "Cannot combine 'zeltro up-all' with a project name."
 fi
 
+# A folder project has nothing to start: no container, no shared services.
+if [[ -n "$PROJECT_NAME" ]] && zeltro_project_is_folder "$PROJECT_NAME"; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        echo "{\"action\": \"startup\", \"status\": \"skipped\", \"reason\": \"folder_project\", \"project\": \"$PROJECT_NAME\", \"kind\": \"folder\"}"
+    else
+        echo-white "'$PROJECT_NAME' is a folder project: there's nothing to start."
+    fi
+    exit 0
+fi
+
 
 # Functions
 start_project() {
@@ -236,6 +246,7 @@ elif [[ "$START_ALL" == "1" ]]; then
         # Skip non-directories and hidden directories
         [[ -d "$PROJECT_FOLDER_NAME" ]] || continue
         [[ "$PROJECT_FOLDER_NAME" == .* ]] && continue
+        zeltro_project_is_folder "$PROJECT_FOLDER_NAME" && continue
 
         # A disabled project is parked: up-all must pass over it. Announced
         # rather than silent, so "why didn't that one start" is answerable

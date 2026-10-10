@@ -192,6 +192,12 @@ if ! [ -d "$PROJECT_DIR" ]; then
     error "Project folder does not exist!"
 fi
 
+# A folder project has no container to set up, and an added one isn't ours to
+# write a compose file into.
+if zeltro_project_is_folder "$PROJECT_NAME"; then
+    error "'$PROJECT_NAME' is a folder project: there's no container to set up."
+fi
+
 
 # Bring up the database engine this project asked for. Services are profile-gated
 # and nothing runs by default, so this is what makes `--database postgres` work on

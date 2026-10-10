@@ -101,6 +101,35 @@ if [ "$SET_IDEA" = "1" ]; then
     fi
 fi
 
+if zeltro_project_is_folder "$PROJECT_NAME"; then
+    # Folder projects keep their metadata in Zeltro's registry, not a compose file.
+    _ftmp="$(mktemp)"
+    _fset() { # <key> <value>
+        printf '%s' "$2" > "$_ftmp"
+        zeltro_folder_py meta-set "$PROJECT_NAME" "$1" "$_ftmp" || { rm -f "$_ftmp"; [[ "$JSON_OUTPUT" == "1" ]] && json_error "could not write project metadata"; error "Could not update project metadata."; }
+    }
+    [ "$SET_EMOJI" = "1" ] && _fset emoji "$NEW_EMOJI"
+    [ "$SET_NAME"  = "1" ] && _fset name "$NEW_NAME"
+    [ "$SET_DESC"  = "1" ] && _fset description "$NEW_DESC"
+    if [ "$SET_IDEA" = "1" ]; then
+        if [ "$IDEA_BYTES" = "0" ]; then
+            zeltro_folder_py meta-set "$PROJECT_NAME" idea "$IDEA_TMP" delete
+        else
+            zeltro_folder_py meta-set "$PROJECT_NAME" idea "$IDEA_TMP"
+        fi
+    fi
+    rm -f "$_ftmp"
+    UPDATED="$(zeltro_folder_py meta-get "$PROJECT_NAME")"
+    [ -n "$UPDATED" ] || UPDATED="{}"
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        echo "{\"action\": \"set_metadata\", \"status\": \"success\", \"project\": \"$PROJECT_NAME\", \"metadata\": $UPDATED}"
+    else
+        echo-green "Metadata updated for '$PROJECT_NAME'."
+    fi
+    cd "$ORIG_DIR"
+    exit 0
+fi
+
 PROJECT_DIR="$PROJECTS_DIR_PATH/$PROJECT_NAME"
 if [ ! -d "$PROJECT_DIR" ]; then
     [[ "$JSON_OUTPUT" == "1" ]] && json_error "project '$PROJECT_NAME' not found"

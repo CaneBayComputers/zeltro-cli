@@ -311,6 +311,10 @@ if [ -n "$PROJECTS_DIR" ] && [ -d "$PROJECTS_DIR" ]; then
     
     # Iterate through project folders
     for project_dir in "$PROJECTS_DIR"/*; do
+        # Never touch folder projects, above all ones the user added from
+        # elsewhere (symlinks): any compose file in there is theirs, not ours.
+        [ -L "$project_dir" ] && continue
+        [ -f "$PROJECTS_DIR/.zeltro/folders/$(basename "$project_dir").json" ] && continue
         if [ -d "$project_dir" ]; then
             PROJECT_NAME=$(basename "$project_dir")
             COMPOSE_FILE_PATH="$project_dir/docker-compose.yaml"
