@@ -121,12 +121,16 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         _export_agent_key OPENAI_API_KEY "sk-"
         _export_agent_base OPENAI_BASE_URL
+        zeltro_codex_prepare || exit 1
         zeltro_codex_base_args
         codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && codex_args+=(--dangerously-bypass-approvals-and-sandbox)
         codex_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         codex_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
+            # A read-only question from Zeltro itself (the create classifier)
+            # needn't be inside a git repo or a folder Codex trusts.
+            [[ "${ZELTRO_AI_READONLY:-0}" == "1" ]] && codex_args+=(--skip-git-repo-check)
             codex exec "${codex_args[@]}" "$INIT_PROMPT"
         else
             codex "${codex_args[@]}" "$INIT_PROMPT"

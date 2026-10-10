@@ -178,6 +178,7 @@ case "$AI_AGENT_CLI_NAME" in
         [[ -n "$AI_MODEL" ]] && codex_args+=("--model" "$AI_MODEL")
         _export_agent_key OPENAI_API_KEY "sk-"
         _export_agent_base OPENAI_BASE_URL
+        zeltro_codex_prepare || exit 1
         codex_args+=(--dangerously-bypass-approvals-and-sandbox)
         if [[ "$ONE_OFF" == "1" ]]; then
             codex exec "${codex_args[@]}" "$PROMPT"

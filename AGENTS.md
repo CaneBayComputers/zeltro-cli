@@ -68,6 +68,15 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 
 Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` is read-only and reports `"session_overrides": true`, `"ai_language": true` and `"installed_agents": [...]`.
 
+### Classify and create errors
+
+When `create --classify-only --json-output` (or `create --json-output`) fails, it gives `{"action":"classify"|"create","status":"error","error":<code>,"message"}`. The codes:
+
+- **`agent_failed`**: the AI agent itself failed, for example a wrong key, a model the account can't use, no credit left, or not signed in. `message` is the agent's own last error line, prefixed with its name, e.g. `Codex: unexpected status 401 Unauthorized: Incorrect API key provided: ...`. A run that shows a 400, 401, 403 or 404 is stopped at once rather than after the agent's own retries. It is not retried.
+- **`no_stack`**: the agent answered, but not with a usable recommendation. Retried once.
+
+**Codex with an API key:** Codex ignores `OPENAI_API_KEY`, so Zeltro signs it in with `codex login --with-api-key` in a managed `CODEX_HOME`, `~/.zeltro/codex/<hash of the key>`. That home is stable per key, so `codex resume --last` finds the profile's earlier sessions. The user's `config.toml` and `AGENTS.md` are symlinked into it, and the user's own `~/.codex` (and any ChatGPT sign-in in it) is never written to. This applies to `ai`, `resume`, `create`, `create-installer` and `update-installer`.
+
 ### Folder projects
 
 A folder project is a folder plus an AI session: no container, framework, database or address. Use it for scripts, scrapers, documents, data clean-ups, CLI tools and bots. AI sessions, the saved idea, profiles and overrides, the agent bus and `zeltro gui` all work as they do for other projects.

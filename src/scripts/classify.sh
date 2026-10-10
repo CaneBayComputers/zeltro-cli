@@ -255,20 +255,87 @@ PYEOF
 # Ask the agent, with one retry — a single malformed reply is common enough to
 # be worth retrying, but two means something is genuinely wrong and the caller
 # should fall back rather than loop.
+#
+# When it fails, the reason goes to $CLASSIFY_ERR_FILE (if set) as
+# "<code><TAB><message>", so callers can show it rather than a generic line:
+#   agent_failed  the agent itself errored (bad key, unsupported model, quota,
+#                 not signed in...). Message: its last error line. Not retried.
+#   no_stack      the agent answered, but not with a usable recommendation.
+#
+# Agents retry HTTP errors themselves (Codex reconnects five times, ~100s), so a
+# watchdog stops the run as soon as the output shows a client error that a
+# retry can't fix: 400, 401, 403 or 404.
+_classify_fatal_re='unexpected status 40[0134]|API Error: 40[0134]|invalid_api_key|Incorrect API key|is not supported when using Codex|model_not_found|insufficient_quota'
+
+_kill_tree() {
+    local pid="$1" c
+    for c in $(pgrep -P "$pid" 2>/dev/null); do _kill_tree "$c"; done
+    kill "$pid" 2>/dev/null || true
+}
+
+# The most useful error line in an agent's output, cleaned up, or nothing.
+_classify_error_line() {
+    python3 - "$1" "$_classify_fatal_re" <<'PYEOF' 2>/dev/null
+import re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
+lines = [l.strip() for l in text.splitlines() if l.strip()]
+fatal = re.compile(sys.argv[2], re.I)
+generic = re.compile(r"error|unauthori[sz]ed|forbidden|denied|not supported|invalid|quota|rate limit|not found|failed|not signed in|log ?in|trusted directory", re.I)
+pick = next((l for l in reversed(lines) if fatal.search(l)), None) \
+    or next((l for l in reversed(lines) if generic.search(l) and "Reconnecting" not in l), None)
+if pick:
+    pick = re.sub(r"^(ERROR|Error|error)\s*:\s*", "", pick)
+    pick = re.split(r",\s*(?:url|cf-ray|request id):", pick)[0]
+    print(pick[:300])
+PYEOF
+}
+
 _run_classifier() {
-    local idea="$1" attempt out parsed
+    local idea="$1" attempt parsed tmp pid rc fatal msg
     for attempt in 1 2; do
-        local tmp; tmp=$(mktemp)
-        "$SCRIPT_DIR/ai.sh" --one-off "$(_classifier_prompt "$idea")" > "$tmp" 2>/dev/null || true
+        tmp=$(mktemp)
+        # Read-only question, no stdin: lets Codex answer outside a git repo.
+        # The answer is parsed from stdout only: some agents (Codex) echo the
+        # prompt, JSON template included, on stderr.
+        ZELTRO_AI_READONLY=1 "$SCRIPT_DIR/ai.sh" --one-off "$(_classifier_prompt "$idea")" > "$tmp" 2> "$tmp.err" < /dev/null &
+        pid=$!
+        fatal=0
+        while kill -0 "$pid" 2>/dev/null; do
+            if grep -Eqi "$_classify_fatal_re" "$tmp" "$tmp.err" 2>/dev/null; then
+                fatal=1; _kill_tree "$pid"; break
+            fi
+            sleep 1
+        done
+        rc=0; wait "$pid" 2>/dev/null || rc=$?
         parsed=$(_parse_classification "$tmp" 2>/dev/null) || parsed=""
-        rm -f "$tmp"
-        if [[ -n "$parsed" ]]; then
+        if [[ -n "$parsed" && "$fatal" == "0" ]]; then
+            rm -f "$tmp" "$tmp.err"
             printf '%s' "$parsed"
             return 0
         fi
+        cat "$tmp" >> "$tmp.err" 2>/dev/null
+        msg="$(_classify_error_line "$tmp.err")"
+        rm -f "$tmp" "$tmp.err"
+        if [[ "$fatal" == "1" || ( "$rc" != "0" && -n "$msg" ) ]]; then
+            if [[ -n "${CLASSIFY_ERR_FILE:-}" ]]; then
+                printf 'agent_failed\t%s: %s\n' "$(zeltro_agent_display_name "${AI_AGENT:-agent}")" "${msg:-the AI agent exited with an error}" > "$CLASSIFY_ERR_FILE"
+            fi
+            return 1
+        fi
         [[ $attempt -eq 1 ]] && echo-yellow "Could not read the AI's stack recommendation; retrying once ..." >&2
     done
+    [[ -n "${CLASSIFY_ERR_FILE:-}" ]] && printf 'no_stack\t%s\n' "could not determine a stack from that description" > "$CLASSIFY_ERR_FILE"
     return 1
+}
+
+# Splits the last failure into CLASSIFY_ERR_CODE and CLASSIFY_ERR_MESSAGE.
+_classify_last_error() {
+    local line=""
+    [[ -n "${CLASSIFY_ERR_FILE:-}" && -s "$CLASSIFY_ERR_FILE" ]] && IFS= read -r line < "$CLASSIFY_ERR_FILE"
+    [[ -n "$line" ]] || line="$(printf 'no_stack\tcould not determine a stack from that description')"
+    CLASSIFY_ERR_CODE="${line%%$'\t'*}"
+    CLASSIFY_ERR_MESSAGE="${line#*$'\t'}"
 }
 
 # Numbered, coloured menu. Plain text rather than whiptail/dialog so it works
@@ -311,6 +378,7 @@ classify_project() {
     echo-cyan "Working out which stack fits ..."
 
     local parsed
+    CLASSIFY_ERR_FILE="${CLASSIFY_ERR_FILE:-$(mktemp)}"
     parsed=$(_run_classifier "$idea") || return 1
 
     local suggested_name suggested_dbs
@@ -468,14 +536,18 @@ classify_only() {
     local idea="$1" want_json="$2"
     local parsed
 
+    CLASSIFY_ERR_FILE="${CLASSIFY_ERR_FILE:-$(mktemp)}"
     if ! parsed=$(_run_classifier "$idea"); then
+        _classify_last_error
+        rm -f "$CLASSIFY_ERR_FILE"
         if [[ "$want_json" == "1" ]]; then
-            printf '%s\n' '{"action": "classify", "status": "error", "message": "could not determine a stack from that description"}'
+            python3 -c 'import json,sys; print(json.dumps({"action":"classify","status":"error","error":sys.argv[1],"message":sys.argv[2]}))' "$CLASSIFY_ERR_CODE" "$CLASSIFY_ERR_MESSAGE"
         else
-            echo-red "Could not determine a stack from that description."
+            echo-red "$CLASSIFY_ERR_MESSAGE"
         fi
         return 1
     fi
+    rm -f "$CLASSIFY_ERR_FILE"
 
     if [[ "$want_json" == "1" ]]; then
         printf '%s' "$parsed" | python3 -c '
