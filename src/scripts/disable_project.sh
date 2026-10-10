@@ -65,6 +65,14 @@ if [ -z "$PROJECT_NAME" ]; then
     error "Error: project name is required. Usage: zeltro $ACTION <project>"
 fi
 
+# Folder projects have nothing to park: no container for up-all to start.
+if zeltro_project_is_folder "$PROJECT_NAME"; then
+    _act="${ZELTRO_TOGGLE_ACTION:-disable}"
+    [[ "$JSON_OUTPUT" == "1" ]] && echo "{\"action\": \"$_act\", \"status\": \"skipped\", \"reason\": \"folder_project\", \"project\": \"$PROJECT_NAME\", \"kind\": \"folder\", \"changed\": false}"
+    [[ "$JSON_OUTPUT" == "1" ]] || echo-white "'$PROJECT_NAME' is a folder project: there's nothing to $_act."
+    exit 0
+fi
+
 PROJECT_DIR="$PROJECTS_DIR_PATH/$PROJECT_NAME"
 if [ ! -d "$PROJECT_DIR" ]; then
     [[ "$JSON_OUTPUT" == "1" ]] && json_error "project '$PROJECT_NAME' not found"

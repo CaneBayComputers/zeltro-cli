@@ -118,6 +118,45 @@ fi
 PROJECT_DIR="$PROJECTS_DIR_PATH/$PROJECT_NAME"
 # No /etc/hosts cleanup: Zeltro does not write that file any more.
 
+# Folder projects have no container or database. An ADDED folder is only
+# forgotten: its symlink and record go, and the folder and every file in it stay
+# exactly where they are. A folder Zeltro CREATED goes to the trash, like any
+# other project directory.
+if zeltro_project_is_folder "$PROJECT_NAME"; then
+    _forigin="$(zeltro_folder_py info "$PROJECT_NAME" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("origin","created"))')"
+    _ftrashed=false
+    if [ "$_forigin" = "added" ]; then
+        [ -L "$PROJECT_DIR" ] && rm -f "$PROJECT_DIR"
+        zeltro_folder_py forget "$PROJECT_NAME"
+        [[ "$JSON_OUTPUT" == "1" ]] || echo-green "Forgot '$PROJECT_NAME'. The folder and its files are untouched."
+    else
+        if [ -d "$PROJECT_DIR" ] && [ ! -L "$PROJECT_DIR" ]; then
+            if ! command -v trash-put &> /dev/null && ! command -v trash &> /dev/null; then
+                if [[ "$JSON_OUTPUT" == "1" ]]; then
+                    echo "{\"action\": \"remove_project\", \"project_name\": \"$PROJECT_NAME\", \"kind\": \"folder\", \"origin\": \"created\", \"status\": \"error\", \"error\": \"trash_unavailable\", \"message\": \"trash-cli is not installed, so the folder was left in place\"}"
+                else
+                    echo-yellow "trash-cli isn't installed, so the folder was left in place to avoid permanent deletion."
+                    echo-white "Install trash-cli and run this again, or delete it yourself: $PROJECT_DIR"
+                fi
+                exit 1
+            fi
+            _ftarget="$PROJECT_DIR"
+            if [ -e "$HOME/.local/share/Trash/files/$PROJECT_NAME" ]; then
+                _ftarget="${PROJECT_DIR}.$(date +%Y%m%d-%H%M%S)"
+                mv "$PROJECT_DIR" "$_ftarget"
+            fi
+            if command -v trash-put &> /dev/null; then trash-put "$_ftarget"; else trash "$_ftarget"; fi
+            _ftrashed=true
+        fi
+        zeltro_folder_py forget "$PROJECT_NAME"
+        [[ "$JSON_OUTPUT" == "1" ]] || echo-green "Removed '$PROJECT_NAME'. The folder is in the trash (can be recovered)."
+    fi
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        echo "{\"action\": \"remove_project\", \"project_name\": \"$PROJECT_NAME\", \"kind\": \"folder\", \"origin\": \"$_forigin\", \"files_deleted\": $_ftrashed, \"trashed\": $_ftrashed, \"database_deleted\": false, \"status\": \"success\"}"
+    fi
+    exit 0
+fi
+
 debug "Project directory: $PROJECT_DIR"
 debug "Force trash project: $FORCE_TRASH_PROJECT"
 debug "Force DB delete: $FORCE_DB_DELETE"
@@ -435,7 +474,7 @@ cd "$ORIG_DIR"
 
 # JSON output for project removal
 if [[ "$JSON_OUTPUT" == "1" ]]; then
-    echo "{\"action\": \"remove_project\", \"project_name\": \"$PROJECT_NAME\", \"database_deleted\": $([ "$DELETE_DB_CONFIRM" = "y" ] && echo "true" || echo "false"), \"status\": \"success\"}"
+    echo "{\"action\": \"remove_project\", \"project_name\": \"$PROJECT_NAME\", \"kind\": \"docker\", \"database_deleted\": $([ "$DELETE_DB_CONFIRM" = "y" ] && echo "true" || echo "false"), \"status\": \"success\"}"
 else
     echo-green "Project '$PROJECT_NAME' and associated settings have been removed."
     echo-white

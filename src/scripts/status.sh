@@ -339,13 +339,29 @@ parse_docker_compose_services() {
 get_project_status() {
     local proj_name="$1"
     local project_data="{}"
+
+    # Folder projects have no container, address or port: fixed values the GUI
+    # can rely on, plus where the folder is and whether it's still there.
+    if zeltro_project_is_folder "$proj_name"; then
+        local _finfo _fmeta
+        _finfo="$(zeltro_folder_py info "$proj_name")"
+        _fmeta="$(zeltro_folder_py meta-get "$proj_name" 2>/dev/null)"; [ -n "$_fmeta" ] || _fmeta="{}"
+        echo "$_finfo" | jq -c --arg name "$proj_name" --argjson meta "$_fmeta" '{
+            name: $name, kind: "folder", origin: .origin, path: .path, missing: .missing,
+            folder_exists: (.missing | not), metadata: $meta,
+            external_port: null, project_ip: null, resolved_ip: null,
+            docker_running: false, port_mapped: false,
+            ping_status: "not_applicable", http_status: "not_applicable",
+            local_url: null, lan_url: null }'
+        return 0
+    fi
     
     # Project folder check
     if [ -d "$proj_name" ]; then
-        project_data=$(echo "$project_data" | jq --arg name "$proj_name" '. + {name: $name, folder_exists: true}')
+        project_data=$(echo "$project_data" | jq --arg name "$proj_name" '. + {name: $name, kind: "docker", folder_exists: true}')
         
     else
-        project_data=$(echo "$project_data" | jq --arg name "$proj_name" '. + {name: $name, folder_exists: false}')
+        project_data=$(echo "$project_data" | jq --arg name "$proj_name" '. + {name: $name, kind: "docker", folder_exists: false}')
     fi
     
     # Display metadata straight from the project's x-metadata block, so nothing
@@ -451,6 +467,22 @@ project_status() {
 
   echo -n PROJECT:
   echo-yellow " $PROJ_NAME"
+
+  if zeltro_project_is_folder "$PROJ_NAME"; then
+    local _fi _fpath _fmissing _forigin
+    _fi="$(zeltro_folder_py info "$PROJ_NAME")"
+    _fpath="$(echo "$_fi" | jq -r .path)"; _fmissing="$(echo "$_fi" | jq -r .missing)"; _forigin="$(echo "$_fi" | jq -r .origin)"
+    echo-white -n "KIND:"; echo-cyan " folder project (no container or address)"
+    echo-white -n "FOLDER:"
+    if [ "$_fmissing" = "true" ]; then
+      echo-red " MISSING: $_fpath"
+      echo-white -n SUGGESTION:; echo-yellow " Put the folder back, or forget it with: zeltro remove $PROJ_NAME"
+    else
+      echo-green " $_fpath"
+    fi
+    [ "$_forigin" = "added" ] && echo-white "ADDED: yes (Zeltro never deletes this folder)"
+    return 0
+  fi
 
   echo-white -n PROJECT FOLDER:
   if ! [ -d "$PROJ_NAME" ]; then
@@ -664,14 +696,16 @@ if [[ "$JSON_OUTPUT" == "1" ]]; then
         
         if ! [ -z "$PROJECT_NAME" ]; then
             # Single project requested — always shown, even if stopped.
-            if [ -d "$PROJECT_NAME" ]; then
+            if [ -d "$PROJECT_NAME" ] || zeltro_project_is_folder "$PROJECT_NAME"; then
                 PROJECT_JSON=$(get_project_status "$PROJECT_NAME")
                 JSON_DATA=$(echo "$JSON_DATA" | jq --argjson project "$PROJECT_JSON" '.projects += [$project]')
             fi
         else
             # All projects (optionally only running ones)
+            # Folder projects are never "running", so they show with --all only.
+            # A broken symlink (an added folder that has gone) still counts.
             for item in *; do
-                if [ -d "$item" ] && [ "$item" != "." ] && [ "$item" != ".." ]; then
+                if { [ -d "$item" ] || { [ -L "$item" ] && zeltro_project_is_folder "$item"; }; } && [ "$item" != "." ] && [ "$item" != ".." ]; then
                     if [ "$RUNNING_ONLY" = "1" ] && ! service_running "$item"; then
                         continue
                     fi
@@ -817,7 +851,7 @@ else
     # Count project directories (only running ones when --running is set)
     PROJECT_COUNT=0
     for item in *; do
-        if [ -d "$item" ] && [ "$item" != "." ] && [ "$item" != ".." ]; then
+        if { [ -d "$item" ] || { [ -L "$item" ] && zeltro_project_is_folder "$item"; }; } && [ "$item" != "." ] && [ "$item" != ".." ]; then
             if [ "$RUNNING_ONLY" = "1" ] && ! service_running "$item"; then
                 continue
             fi
@@ -840,7 +874,7 @@ else
         echo-cyan "PROJECTS STATUS:"
         echo-return
         for PROJECT_NAME in *; do
-            if [ -d "$PROJECT_NAME" ] && [ "$PROJECT_NAME" != "." ] && [ "$PROJECT_NAME" != ".." ]; then
+            if { [ -d "$PROJECT_NAME" ] || { [ -L "$PROJECT_NAME" ] && zeltro_project_is_folder "$PROJECT_NAME"; }; } && [ "$PROJECT_NAME" != "." ] && [ "$PROJECT_NAME" != ".." ]; then
                 if [ "$RUNNING_ONLY" = "1" ] && ! service_running "$PROJECT_NAME"; then
                     continue
                 fi

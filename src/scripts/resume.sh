@@ -46,6 +46,20 @@ if [[ ! -d "$PROJECT_DIR" ]]; then
     exit 1
 fi
 
+if zeltro_project_is_folder "$PROJECT_NAME"; then
+    # A folder project: no container to start and no address to show. Its
+    # folder may also live outside the projects directory (zeltro add).
+    record_last_on "$PROJECT_NAME" || true
+    echo-return
+    echo-cyan "============================================"
+    echo-cyan "  Project : $PROJECT_NAME (folder project)"
+    echo-cyan "  Folder  : $(cd "$PROJECT_DIR" && pwd -P)"
+    echo-cyan "============================================"
+    echo-return
+    echo-white "The AI will resume the last session for this project."
+    echo-return
+else
+
 # Start the project — but only if it is not already up.
 #
 # resume is "continue my AI conversation", not "restart my project". Calling
@@ -74,6 +88,7 @@ echo-return
 echo-white "Ctrl+click (or right-click) the URL above to open it in your browser."
 echo-white "The AI will resume the last session for this project."
 echo-return
+fi
 
 # Resume the AI session from the project directory
 cd "$PROJECT_DIR"

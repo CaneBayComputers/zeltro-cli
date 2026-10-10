@@ -76,9 +76,17 @@ Return BOTH of the following, always:
    else's product instead of getting what they asked for. Returning an empty
    list is a perfectly good answer for anything bespoke.
 
-Also state which you would recommend overall — "app" or "framework". An app is
-running in about two minutes; a framework build costs meaningfully more time and
-AI tokens, but produces exactly what was asked for.
+3. A plain FOLDER, when the idea is not something people open in a browser: a
+   script, a scraper, a command-line tool, a bot, a data clean-up, a set of
+   documents. A folder project has no web server, database or address; the AI
+   simply works in a folder on the user's computer. Give it a reason when it
+   fits, otherwise return null for "folder". "A Python script that renames my
+   photos by date" is a folder; "a website for my bakery" is not.
+
+Also state which you would recommend overall — "app", "framework" or "folder".
+An app is running in about two minutes; a framework build costs meaningfully
+more time and AI tokens, but produces exactly what was asked for; a folder is
+the right answer whenever nothing needs to be served on the web.
 
 Also decide "customization_requested": does the idea ask for anything BEYOND
 simply standing the software up? Configuring something, adding content, wiring
@@ -110,12 +118,13 @@ Reply with ONLY this JSON. No prose, no markdown fences:
 
 {
   "project_name": "short-hyphenated-name" | null,
-  "recommended": "app" | "framework",
+  "recommended": "app" | "framework" | "folder",
   "customization_requested": true | false,
   "framework": {"slug": "<framework slug>", "reason": "<one short sentence, max 15 words>"},
   "apps": [
     {"slug": "<app slug>", "reason": "<one short sentence, max 15 words>"}
   ],
+  "folder": {"reason": "<one short sentence, max 15 words>"} | null,
   "database": {"slug": "<engine>", "reason": "<one short sentence, max 15 words>"}
 }
 PROMPTEOF
@@ -165,17 +174,39 @@ if fw_slug in fws:
     out.append(("framework", fw_slug, fws[fw_slug]["display"],
                 ",".join(fws[fw_slug]["databases"]), fw_why))
 
-if not out:
+# A plain folder project (no web server), when the model offers one.
+_fo = doc.get("folder")
+folder = None
+if isinstance(_fo, dict):
+    folder = ("folder", "folder", "Just a folder", "",
+              (_fo.get("reason") or _fo.get("why") or "").strip().replace("\t", " ")[:120])
+
+rec = (doc.get("recommended") or "").strip().lower()
+if rec == "folder" and folder is None:
+    folder = ("folder", "folder", "Just a folder", "", "")
+
+if not out and folder is None:
     sys.exit(1)
 
 # What the model would pick. Fall back to the framework when it named "app" but
 # supplied none, which is the only way that answer can be self-contradictory.
-rec = (doc.get("recommended") or "").strip().lower()
 has_app = any(o[0] == "app" for o in out)
-if rec not in ("app", "framework"):
-    rec = "app" if has_app else "framework"
+has_fw = any(o[0] == "framework" for o in out)
+if rec not in ("app", "framework", "folder"):
+    rec = "app" if has_app else ("framework" if has_fw else "folder")
 if rec == "app" and not has_app:
-    rec = "framework"
+    rec = "framework" if has_fw else "folder"
+if rec == "framework" and not has_fw:
+    rec = "app" if has_app else "folder"
+
+# The folder goes first when it's the recommendation, else last. Apps are capped
+# so the folder and framework always survive the five-candidate limit.
+apps_only = [o for o in out if o[0] == "app"][:3]
+fw_only = [o for o in out if o[0] == "framework"]
+if folder and rec == "folder":
+    out = [folder] + apps_only + fw_only
+else:
+    out = apps_only + fw_only + ([folder] if folder else [])
 
 # A name is only useful if it says something about the project. Reject the
 # generic shapes outright rather than trusting the instruction above — the model
@@ -318,6 +349,8 @@ classify_project() {
         for n in "${!slugs[@]}"; do
             if [[ "${kinds[$n]}" == "app" ]]; then
                 tag="ready to run — live in about 2 minutes"
+            elif [[ "${kinds[$n]}" == "folder" ]]; then
+                tag="no web server — your AI works in a plain folder"
             else
                 tag="custom build — exactly what you asked for, more time and tokens"
             fi
@@ -339,7 +372,10 @@ classify_project() {
     CHOSEN_SLUG="${slugs[$sel]}"
     CHOSEN_DB=""
 
-    if [[ "$CHOSEN_KIND" == "app" ]]; then
+    if [[ "$CHOSEN_KIND" == "folder" ]]; then
+        # No database, container or address to choose.
+        :
+    elif [[ "$CHOSEN_KIND" == "app" ]]; then
         # The installer's compose fixes the engine, so there is nothing to ask.
         local appdb="${dbs[$sel]}"
         if [[ -n "$appdb" ]]; then
@@ -467,8 +503,9 @@ for line in sys.stdin.read().split("\n"):
         # constrained set. The consumer must not present a choice for an app.
         if kind == "framework":
             c["databases"] = [d for d in db.split(",") if d]
-        else:
+        elif kind == "app":
             c["database"] = db
+        # kind "folder": a plain folder project, no database or address.
         cands.append(c)
 
 print(json.dumps({
@@ -502,6 +539,8 @@ print(json.dumps({
         [[ "$tag" != "CAND" ]] && continue
         if [[ "$kind" == "framework" ]]; then
             echo-white "  [framework] $display ($slug) — databases: ${db//,/, }"
+        elif [[ "$kind" == "folder" ]]; then
+            echo-white "  [folder]    $display (no web server, database or address)"
         else
             echo-white "  [app]       $display ($slug)${db:+ — database: $db}"
         fi

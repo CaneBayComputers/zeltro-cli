@@ -136,6 +136,8 @@ show_help() {
     echo "  zeltro down-all           - Stop every project (shared services keep running)"
     echo "  zeltro status [project] [--all] - Show status of active projects (--all: include stopped projects)"
     echo "  zeltro new <framework> <name> [--database <type>] [--version X] - Create a new project"
+    echo "  zeltro new folder <name>  - A folder project: a folder plus an AI session, no container"
+    echo "  zeltro add <path> [--name N] - Use a folder you already have as a folder project (left in place)"
     echo "  zeltro create \"<idea>\"    - Create a project from a plain English description (AI)"
     echo "  zeltro resume <project>   - Resume AI session for a project"
     echo "  zeltro install <app> [name] [--image <ref>] - Install a known open-source app (zeltro install --list)"
@@ -714,7 +716,14 @@ case "$1" in
         )
         ;;
     "new")
-        "$SCRIPT_DIR/scripts/new_project.sh" "${@:2}"
+        if [ "${2:-}" = "folder" ]; then
+            "$SCRIPT_DIR/scripts/new_folder.sh" "${@:3}"
+        else
+            "$SCRIPT_DIR/scripts/new_project.sh" "${@:2}"
+        fi
+        ;;
+    "add")
+        "$SCRIPT_DIR/scripts/add_folder.sh" "${@:2}"
         ;;
     "create")
         "$SCRIPT_DIR/scripts/create.sh" "${@:2}"

@@ -47,6 +47,10 @@ if [ -z "$PROJECT_NAME" ]; then
     [[ "$JSON_OUTPUT" == "1" ]] && json_error "project name is required"
     usage; exit 1
 fi
+if zeltro_project_is_folder "$PROJECT_NAME"; then
+    # Folder projects keep their metadata in Zeltro's registry, not a compose file.
+    META="$(zeltro_folder_py meta-get "$PROJECT_NAME" full)"
+else
 if [ ! -d "$PROJECTS_DIR_PATH/$PROJECT_NAME" ]; then
     [[ "$JSON_OUTPUT" == "1" ]] && json_error "project '$PROJECT_NAME' not found"
     error "Project '$PROJECT_NAME' not found in $PROJECTS_DIR_PATH."
@@ -58,6 +62,7 @@ if [ -z "$COMPOSE_FILE" ]; then
 fi
 
 META="$(read_x_metadata_json "$COMPOSE_FILE" full)"
+fi
 [ -n "$META" ] || META="{}"
 
 if [ "$ONLY_IDEA" = "1" ]; then

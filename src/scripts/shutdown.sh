@@ -167,6 +167,7 @@ if [ -z "$PROJECT_NAME" ]; then
 
         # Get the project name (folder name)
         PROJECT_FOLDER_NAME=$(basename "$PROJECT_FOLDER")
+        zeltro_project_is_folder "$PROJECT_FOLDER_NAME" && continue
 
         # Use the reusable shutdown function (but don't exit on errors in loop)
         shutdown_project "$PROJECT_FOLDER_NAME" "$PROJECT_FOLDER" || true
@@ -175,6 +176,14 @@ if [ -z "$PROJECT_NAME" ]; then
     # Note: shared services are intentionally left running. Use 'zeltro stop-services'
     # explicitly when you want to stop them.
 
+elif zeltro_project_is_folder "$PROJECT_NAME"; then
+    # A folder project has no container to stop.
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        echo "{\"action\": \"shutdown\", \"status\": \"skipped\", \"reason\": \"folder_project\", \"project\": \"$PROJECT_NAME\", \"kind\": \"folder\"}"
+    else
+        echo-white "'$PROJECT_NAME' is a folder project: there's nothing to stop."
+    fi
+    exit 0
 else
     # Shutdown specific project (PROJECTS_DIR_PATH set by pre_check)
     PROJECT_FOLDER="$PROJECTS_DIR_PATH/$PROJECT_NAME"

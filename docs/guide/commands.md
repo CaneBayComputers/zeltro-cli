@@ -96,6 +96,8 @@ Commands marked *(project dir)* must be run from inside a project directory.
 | `zeltro down-all` | Stop every project (shared services stay up) |
 | `zeltro status [project] [--all]` | Show running projects and each one's local and LAN address; `--all` includes stopped projects |
 | `zeltro new <framework> <name> [options]` | Create a new project (framework + name required; DB auto-selected, override with `--database`) |
+| `zeltro new folder <name>` | A folder project: a folder plus an AI session, with no container, database or address. For scripts, scrapers, documents, CLI tools and bots |
+| `zeltro add <path> [--name N]` | Use a folder you already have as a folder project. It stays where it is, nothing is written inside it, and `zeltro remove` only forgets it |
 | `zeltro create "<idea>"` | Create a project from a plain-English idea, then hand off to your AI agent in the project dir |
 | `zeltro resume <project>` | Resume the last AI session for a project |
 | `zeltro install <app> [name] [--image <ref>]` | Install a popular OSS app in one command (`--list` to see all; `--one-off` skips the AI handoff) |
