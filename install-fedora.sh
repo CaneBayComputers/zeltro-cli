@@ -346,6 +346,9 @@ else
     echo -e "${BLUE}Setting permissions...${NC}"
     sudo chmod +x "$INSTALL_DIR/src/zeltro"
     sudo chmod +x "$INSTALL_DIR/src/scripts"/*.sh 2>/dev/null || true
+    # The chmod above is a mode-only change git would otherwise see as a local edit,
+    # and `git pull --ff-only` refuses to update any file carrying one.
+    sudo git -C "$INSTALL_DIR" config core.fileMode false 2>/dev/null || true
     sudo chown -R "$(whoami):$(id -gn)" "$INSTALL_DIR"
     sudo chown root:root "$INSTALL_DIR/src/zeltro" 2>/dev/null || true
 

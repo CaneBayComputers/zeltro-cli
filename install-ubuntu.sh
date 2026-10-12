@@ -399,6 +399,9 @@ else
     # Keep most files accessible to users, only set execute permissions for scripts
     sudo chmod +x "$INSTALL_DIR/src/zeltro"
     sudo chmod +x "$INSTALL_DIR/src/scripts"/*.sh
+    # The chmod above is a mode-only change git would otherwise see as a local edit,
+    # and `git pull --ff-only` refuses to update any file carrying one.
+    sudo git -C "$INSTALL_DIR" config core.fileMode false 2>/dev/null || true
     # Make sure current user can read/write config files
     sudo chown -R "$(whoami):$(id -gn)" "$INSTALL_DIR"
     # Only the main binary needs special permissions
