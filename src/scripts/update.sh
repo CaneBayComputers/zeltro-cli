@@ -205,11 +205,15 @@ else
         echo-yellow "Zeltro CLI install dir is not a git checkout: $INSTALL_DIR"
         echo-yellow "Run 'zeltro update --full' to reinstall via the platform installer."
     else
-        # Use sudo if the checkout isn't writable by the current user
+        # Use sudo if the checkout isn't writable by the current user.
+        # core.fileMode=false: the installers chmod +x every script, so a file
+        # committed without the bit shows as a mode-only local change, and
+        # --ff-only refuses any update that touches it. Ignoring modes lets the
+        # pull land the committed file, mode included.
         if [[ -w "$INSTALL_DIR/.git" ]]; then
-            GIT_PULL=(git -C "$INSTALL_DIR" pull --ff-only)
+            GIT_PULL=(git -c core.fileMode=false -C "$INSTALL_DIR" pull --ff-only)
         else
-            GIT_PULL=(sudo git -C "$INSTALL_DIR" pull --ff-only)
+            GIT_PULL=(sudo git -c core.fileMode=false -C "$INSTALL_DIR" pull --ff-only)
         fi
 
         if "${GIT_PULL[@]}"; then
@@ -221,6 +225,8 @@ else
             echo-yellow "git pull failed in $INSTALL_DIR."
             echo-yellow "If the working tree has local changes or has diverged, resolve them"
             echo-yellow "or run 'zeltro update --full' to reinstall from scratch."
+            # Non-zero so callers (the app) don't report an update that didn't happen.
+            exit 1
         fi
     fi
 fi
