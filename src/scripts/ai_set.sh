@@ -178,6 +178,14 @@ if [[ "$API_BASE_PROVIDED" == "1" ]]; then
     fi
 fi
 
+# Nothing configured and no agent named here: start from the first installed
+# one (claude, codex, gemini, ...). The write paths below save it as they save
+# any agent; the bare --json-output probe saves it only if it can without a
+# password prompt.
+if [[ -z "$NEW_AGENT" ]]; then
+    zeltro_fill_default_agent
+fi
+
 NONINTERACTIVE=0
 # No TTY on stdin means nobody can answer a prompt — reading would hit EOF and
 # either abort under `set -e` or spin the selection loop forever. Treat it as
@@ -576,7 +584,7 @@ print_config_json() {
     # it cannot parse should not stop the whole settings panel from loading.
     local unattended
     unattended=$(zeltro_read_agent_autonomy "${AI_AGENT:-}")
-    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"ai_language\": true, \"agent_bus\": 1, \"gui_actions\": 1, \"gui_event_agents\": $(zeltro_gui_event_agents_json), \"installed_agents\": $(installed_agents_json)}"
+    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"agent_auto\": $([[ "${ZELTRO_AI_AGENT_AUTO:-0}" == "1" ]] && echo true || echo false), \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"ai_language\": true, \"agent_bus\": 1, \"gui_actions\": 1, \"gui_event_agents\": $(zeltro_gui_event_agents_json), \"installed_agents\": $(installed_agents_json)}"
 }
 
 # --install-only: make an agent runnable here without making it the default,
@@ -633,10 +641,15 @@ if [[ "$INSTALL_ONLY" == "1" ]]; then
     exit 0
 fi
 
-# A bare `--json-output` is a probe: report and change nothing. It used to fall
-# through to the write path below, so reading the settings could sudo-rewrite
-# the .env and even try to install the configured agent.
+# A bare `--json-output` is a probe: report, and never prompt or install. It used
+# to fall through to the write path below, so reading the settings could
+# sudo-rewrite the .env and even try to install the configured agent. The one
+# write it makes is saving an automatically picked default agent, and only when
+# that needs no password (zeltro_fill_default_agent).
 if [[ "$JSON_OUTPUT" == "1" && -z "$NEW_AGENT" && -z "$NEW_MODEL" && "$API_KEY_PROVIDED" != "1" && "$API_BASE_PROVIDED" != "1" && -z "$UNATTENDED_REQUEST" ]]; then
+    if [[ "${ZELTRO_AI_AGENT_AUTO:-0}" == "1" ]]; then
+        zeltro_env_set_noprompt AI_AGENT "\"$AI_AGENT\"" /etc/zeltro-cli/.env || true
+    fi
     print_config_json
     cd "$ORIG_DIR"
     exit 0
