@@ -204,6 +204,86 @@ zeltro_hermes_is_agent() {
     hermes --version 2>/dev/null | grep -q "Hermes Agent"
 }
 
+# Per-user bin directories that agent installers use: Claude's native installer,
+# aider and Hermes put their CLI in ~/.local/bin, `npm install -g` with a user
+# prefix in <prefix>/bin. A login shell usually has them on PATH; the
+# non-login shell that ssh runs (the Zeltro app reaching a host) often doesn't,
+# so an installed agent looked missing and couldn't be launched. Appended, so
+# anything already on PATH still wins. Detection and launch both go through
+# PATH, so they agree. Runs once, when this file is sourced.
+zeltro_add_agent_bin_dirs() {
+    [ -n "${HOME:-}" ] || return 0
+    local d prefix="${NPM_CONFIG_PREFIX:-${npm_config_prefix:-}}" nvm_bin=""
+    if [ -z "$prefix" ] && [ -f "$HOME/.npmrc" ]; then
+        prefix=$(sed -n 's/^[[:space:]]*prefix[[:space:]]*=[[:space:]]*//p' "$HOME/.npmrc" | tail -n 1 | tr -d "\"'\r")
+        case "$prefix" in "~"/*) prefix="$HOME/${prefix#"~/"}" ;; esac
+    fi
+    # nvm: the Node its default alias names (e.g. "20" -> the newest v20.x), else
+    # the newest installed. Global npm packages live per Node version.
+    if [ -d "$HOME/.nvm/versions/node" ]; then
+        local nvm_default=""
+        [ -f "$HOME/.nvm/alias/default" ] && nvm_default=$(head -n 1 "$HOME/.nvm/alias/default" | tr -d ' \r')
+        nvm_default="${nvm_default#v}"
+        case "$nvm_default" in
+            [0-9]*) nvm_bin=$(ls -d "$HOME/.nvm/versions/node/v$nvm_default/bin" "$HOME/.nvm/versions/node/v$nvm_default".*/bin 2>/dev/null | sort -V | tail -n 1) ;;
+        esac
+        [ -n "$nvm_bin" ] || nvm_bin=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -n 1)
+    fi
+    for d in "$HOME/.local/bin" "${prefix:+$prefix/bin}" "$HOME/.npm-global/bin" "$HOME/.bun/bin" "$HOME/.opencode/bin" "$nvm_bin"; do
+        [ -n "$d" ] && [ -d "$d" ] || continue
+        case ":$PATH:" in *":$d:"*) ;; *) PATH="$PATH:$d" ;; esac
+    done
+    export PATH
+}
+zeltro_add_agent_bin_dirs
+
+# The order Zeltro picks a default agent in when none is configured.
+ZELTRO_DEFAULT_AGENT_ORDER="claude codex gemini qwen aider opencode hermes"
+
+# When no default agent is configured (AI_AGENT is blank, as env.example ships
+# it), use the first installed one in ZELTRO_DEFAULT_AGENT_ORDER, so "Host
+# default" in the app and a plain `zeltro ai` work without a trip to ai-set.
+# Sets AI_AGENT and ZELTRO_AI_AGENT_AUTO=1 when it picked one.
+#
+# $1 = "save" also writes it to the .env ($2, default /etc/zeltro-cli/.env),
+# but never prompts: directly when the file is writable, else `sudo -n`. When
+# neither works the pick holds for this run only and is made the same way next
+# time. ai-set and configure save it with their usual sudo write instead.
+zeltro_fill_default_agent() {
+    ZELTRO_AI_AGENT_AUTO=0
+    [ -z "${AI_AGENT:-}" ] || return 0
+    local a file="${2:-/etc/zeltro-cli/.env}"
+    for a in $ZELTRO_DEFAULT_AGENT_ORDER; do
+        zeltro_agent_installed "$a" || continue
+        AI_AGENT="$a"
+        ZELTRO_AI_AGENT_AUTO=1
+        if [ "${1:-}" = "save" ] && [ -f "$file" ]; then
+            zeltro_env_set_noprompt AI_AGENT "\"$a\"" "$file" || true
+        fi
+        return 0
+    done
+    return 0
+}
+
+# Set KEY=VALUE in an env file without ever prompting for a password. Returns
+# non-zero (and changes nothing) when the file can't be written that way.
+zeltro_env_set_noprompt() {
+    local key="$1" value="$2" file="$3" tmp rc
+    tmp=$(mktemp) || return 1
+    awk -v k="$key" -v v="$value" '
+        !done && index($0, k "=") == 1 { print k "=" v; done = 1; next }
+        { print }
+        END { if (!done) print k "=" v }' "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
+    if [ -w "$file" ]; then
+        cat "$tmp" > "$file"
+    else
+        sudo -n tee "$file" < "$tmp" >/dev/null 2>&1
+    fi
+    rc=$?
+    rm -f "$tmp"
+    return $rc
+}
+
 # Codex stopped reading OPENAI_BASE_URL, so an endpoint set with --api-base (or
 # ZELTRO_AI_API_BASE) was silently ignored and requests went to OpenAI. Its own
 # config key still works as a per-run override: -c openai_base_url="<url>".
@@ -335,6 +415,11 @@ if [ -f "/etc/zeltro-cli/.env" ]; then
     # shellcheck disable=SC1091
     source "/etc/zeltro-cli/.env"
     zeltro_apply_ai_overrides
+    # No override naming an agent, and none configured: use the first installed
+    # one. In memory only, since this runs on every command; ai-set saves it.
+    if [ "${ZELTRO_AI_NO_OVERRIDE:-0}" != "1" ] && [ -z "${ZELTRO_AI_AGENT+x}" ]; then
+        zeltro_fill_default_agent
+    fi
 fi
 
 # Get the projects directory (configurable)
@@ -1820,6 +1905,23 @@ mongo `root`/`password`. Redis and memcached need no auth.
 - Before reporting done, verify: {verify}
   must return 2xx or 3xx **after that restart**. `http://{name}/` does not
   resolve on the host, so do not use it.
+
+## Web pages: name the sections
+
+In the Zeltro app, the user can point at part of a page in the preview, and
+your note says which section it's in (`Inside: section#pricing`). So:
+
+- Give each meaningful visible section a stable, descriptive, unique `id`
+  (`hero`, `pricing`, `signup-form`, `site-nav`, `footer`): one per block a
+  person would name, not every element, not layout wrappers. Use semantic
+  elements where they fit (`header`, `nav`, `main`, `section`, `article`,
+  `aside`, `footer`, `form`). Keep ids stable across edits.
+- In development only, add `data-zeltro-src="<path from the project root>"`
+  (optionally `:<line>`) to each section's root element, or a reusable
+  component's root, naming the file that renders it. Gate it on the
+  framework's development setting (Laravel `APP_DEBUG` / `APP_ENV=local`,
+  Django `DEBUG`, `import.meta.env.DEV` or `NODE_ENV`) so production HTML never
+  shows file paths. The note then includes `Source: <path>`.
 
 ## Other agents
 

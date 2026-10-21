@@ -85,6 +85,23 @@ zeltro gui open --project | <url>    zeltro gui settings <ai|remotes|github|...>
 
 `zeltro help` prints the full reference.
 
+## Web pages: name the sections
+
+In the Zeltro app, the user can point at part of a page in the preview, and your note says which
+section it's in (`Inside: section#pricing`). That only works if the sections have names:
+
+- **Give each meaningful visible section a stable, descriptive, unique `id`**: `hero`, `pricing`,
+  `signup-form`, `site-nav`, `footer`. One per block a person would name, not every element, and
+  not layout wrapper divs. Use semantic elements where they fit (`header`, `nav`, `main`,
+  `section`, `article`, `aside`, `footer`, `form`). Don't rename ids casually; keep them stable
+  across edits.
+- **In development only, mark where each section comes from**: on the section's root element
+  (a reusable component's root), add `data-zeltro-src="<path from the project root>"`, optionally
+  `:<line>`, e.g. `data-zeltro-src="resources/views/pricing.blade.php"`. Emit it only when the
+  framework is in development mode (Laravel `APP_DEBUG` / `APP_ENV=local`, Django `DEBUG`,
+  `import.meta.env.DEV` or `NODE_ENV !== 'production'`), so production HTML never shows file
+  paths. The note then says `Source: <path>`, and you can go straight to the file.
+
 ## Rules for agents
 
 - **Always `zeltro exec`, never a raw `docker exec -u developer`.** The image's `developer`
