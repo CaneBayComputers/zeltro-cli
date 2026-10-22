@@ -68,6 +68,8 @@ CANCELS = os.path.join(GUI, "cancel")
 JSON_OUT = bus.JSON_OUT
 POLL = 0.25
 EVENT_GAP = 2.0           # seconds: at most one event of a type per session this often
+STATUS_MAX = 2000         # characters the app shows for a status
+MESSAGE_MAX = 4000        # characters of the agent's last reply sent with turn-done
 
 EXIT_OK, EXIT_ERROR, EXIT_USAGE, EXIT_NO_APP, EXIT_TIMEOUT, EXIT_DECLINED, EXIT_REFUSED = 0, 1, 2, 3, 4, 5, 6
 STATUS_EXIT = {"ok": EXIT_OK, "declined": EXIT_DECLINED, "refused": EXIT_REFUSED, "error": EXIT_ERROR}
@@ -97,6 +99,9 @@ started; anywhere else it exits 3, so ask in the chat instead.
   zeltro gui preview [--path /page]
         Reload this session's app preview, or open that page of the project's
         site in it. Does not wait.
+  zeltro gui status "<text>"
+        Show the user, in the app's panel, what you're doing or what changed.
+        One or two plain sentences. Does not wait.
   zeltro gui event <turn-done|needs-input|build-done>
         Tell the app a turn ended or needs the user. Always exits 0.
 
@@ -542,11 +547,97 @@ def cmd_preview(argv):
     return finish(EXIT_OK, "preview", "Sent to the Zeltro app.")
 
 
+def cmd_status(argv):
+    """Fire and forget, like notify: the text goes to the app's panel."""
+    opts, pos = parse(argv, {})
+    if len(pos) != 1 or not pos[0].strip():
+        raise Usage('zeltro gui status "<what you are doing, or what changed>"')
+    text = pos[0].strip()
+    if len(text) > STATUS_MAX:
+        text = text[:STATUS_MAX - 1].rstrip() + "\u2026"
+    require_session("status")
+    problem = app_problem()
+    if problem:
+        return finish(EXIT_NO_APP, "status", problem)
+    send_request("status", {"text": text})
+    return finish(EXIT_OK, "status", "Sent to the Zeltro app.")
+
+
+def _hook_stdin():
+    """The JSON a hook gets on stdin (Claude Code), or {}. Never blocks: a
+    terminal or a pipe nobody writes to just gives {}."""
+    import select
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return {}
+        ready, _, _ = select.select([sys.stdin], [], [], 0.5)
+        if not ready:
+            return {}
+        data = json.loads(sys.stdin.read(4 * 1024 * 1024) or "{}")
+        return data if isinstance(data, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _last_reply_from_transcript(path):
+    """The text of the last assistant message in a Claude Code transcript
+    (JSONL), for versions whose Stop input has no last_assistant_message. A
+    message can span several lines with the same message id."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 2 * 1024 * 1024))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    msg_id, parts = None, []
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        msg = entry.get("message") if isinstance(entry, dict) else None
+        if entry.get("type") != "assistant" or not isinstance(msg, dict):
+            if msg_id and entry.get("type") == "user":
+                break
+            continue
+        texts = [b.get("text", "") for b in msg.get("content") or []
+                 if isinstance(b, dict) and b.get("type") == "text"]
+        if msg_id is None:
+            if not any(t.strip() for t in texts):
+                continue
+            msg_id = msg.get("id")
+        elif msg.get("id") != msg_id:
+            break
+        parts[:0] = texts
+    return "\n".join(t for t in parts if t.strip())
+
+
+def last_reply(argv):
+    """The agent's final reply for this turn, from whatever its hook passes:
+    Claude Code's Stop input on stdin (last_assistant_message, else the
+    transcript), or Codex's notify payload (an extra JSON argument)."""
+    for raw in argv[1:]:
+        try:
+            payload = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("last-assistant-message"), str):
+            return payload["last-assistant-message"]
+    data = _hook_stdin()
+    if isinstance(data.get("last_assistant_message"), str):
+        return data["last_assistant_message"]
+    if isinstance(data.get("transcript_path"), str):
+        return _last_reply_from_transcript(data["transcript_path"])
+    return ""
+
+
 def cmd_event(argv):
     """Hook entry point. Never fails, never prints, never waits."""
     try:
         session = os.environ.get("ZELTRO_GUI_SESSION", "")
-        # Codex appends its JSON payload as an extra argument; only the first counts.
+        # Codex appends its JSON payload as an extra argument; only the first counts
+        # as the event.
         event = argv[0] if argv else ""
         if not session or event not in EVENTS or app_problem():
             return EXIT_OK
@@ -559,14 +650,20 @@ def cmd_event(argv):
             pass
         with open(stamp, "w"):
             pass
-        send_request("event", {"event": event})
+        args = {"event": event}
+        if event == "turn-done":
+            message = last_reply(argv).strip()
+            if message:
+                args["message"] = message[:MESSAGE_MAX]
+        send_request("event", args)
     except Exception:  # noqa: BLE001 -- a hook must never fail the agent
         pass
     return EXIT_OK
 
 
 ACTIONS = {"ask": cmd_ask, "secret": cmd_secret, "notify": cmd_notify,
-           "open": cmd_open, "settings": cmd_settings, "preview": cmd_preview, "event": cmd_event}
+           "open": cmd_open, "settings": cmd_settings, "preview": cmd_preview,
+           "status": cmd_status, "event": cmd_event}
 
 
 def main():

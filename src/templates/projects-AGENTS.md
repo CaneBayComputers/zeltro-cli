@@ -79,6 +79,7 @@ zeltro send <project>[@host] ... -- "message"   # --all for everyone else
 # The user, through the Zeltro app's window (only in a session the app started)
 zeltro gui ask "<question>" --option A --option B --allow-text   # prints their answer
 zeltro gui preview [--path /page]                   # refresh what they see in the app
+zeltro gui status "<one or two plain sentences>"    # what you're doing / what changed
 zeltro gui secret <NAME> [--file .env]              # they enter a key; written to .env, never shown
 zeltro gui notify [--level warning] "<title>" ["<message>"]
 zeltro gui open --project | <url>    zeltro gui settings <ai|remotes|github|...>
@@ -129,5 +130,8 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
   themselves.)
 - **After changing what the user sees, refresh their preview:** `zeltro gui preview`, or
   `zeltro gui preview --path /that/page` to show a particular page.
+- **Keep the app's status panel current.** When you start a piece of work and when you finish
+  it, run `zeltro gui status "<one or two sentences>"`: what you're doing, or what changed and
+  what to look at. Write it for someone who isn't a developer, and don't post every step.
 
 Full reference for agents: `@@ZELTRO_DOCS@@`.
