@@ -80,6 +80,22 @@ esac
 FAKE
 chmod +x "$T/bin/docker"
 
+# Fake package managers: packages listed in <state>/pkgs are "installed".
+# They also keep the test from ever reaching the real apt.
+cat > "$T/bin/dpkg" <<'FAKE'
+#!/bin/bash
+[ "$1" = "-s" ] && grep -qx "$2" "$FAKE_DOCKER_STATE/pkgs" 2>/dev/null
+FAKE
+cat > "$T/bin/apt-get" <<'FAKE'
+#!/bin/bash
+echo "apt-get $*" >> "$FAKE_DOCKER_STATE/calls"
+name="${@: -1}"; grep -vx "$name" "$FAKE_DOCKER_STATE/pkgs" > "$FAKE_DOCKER_STATE/pkgs.tmp"; mv "$FAKE_DOCKER_STATE/pkgs.tmp" "$FAKE_DOCKER_STATE/pkgs"
+FAKE
+for f in rpm pacman dnf; do printf '#!/bin/sh
+exit 1
+' > "$T/bin/$f"; done
+chmod +x "$T/bin/dpkg" "$T/bin/apt-get" "$T/bin/rpm" "$T/bin/pacman" "$T/bin/dnf"
+
 # A fresh world: a projects folder, a scratch system root and Docker state.
 setup() { # <name>
     W="$T/$1"; S="$W/docker"; ROOT="$W/root"; PD="$W/projects"; H="$W/home"
@@ -91,6 +107,14 @@ setup() { # <name>
     echo x > "$ROOT/etc/zeltro-cli/.env"; echo x > "$ROOT/etc/zeltro-cli/docker-compose.yaml"
     echo x > "$ROOT/etc/apt/sources.list.d/zeltro.list"; echo x > "$ROOT/etc/apt/keyrings/zeltro.asc"
     echo x > "$ROOT/usr/local/bin/zeltro"; echo x > "$H/.config/zeltro-gui/config.json"
+    mkdir -p "$ROOT/etc/bash_completion.d" "$ROOT/usr/share/bash-completion/completions" "$ROOT/var/lib/apt/lists" \
+             "$ROOT/tmp/zeltro-update-Ab12" "$ROOT/Applications/Zeltro.app" "$H/.zeltro/bus" "$H/.cache/zeltro"
+    ln -s /nonexistent/zeltro.bash "$ROOT/etc/bash_completion.d/zeltro"
+    ln -s /nonexistent/zeltro.bash "$ROOT/usr/share/bash-completion/completions/zeltro"
+    echo x > "$ROOT/var/lib/apt/lists/packages.zeltro.ai_apt_dists_stable_InRelease"
+    echo x > "$ROOT/var/lib/apt/lists/archive.ubuntu.com_dists_noble_InRelease"
+    echo x > "$ROOT/tmp/zeltro-update-Ab12/Zeltro.deb"; echo x > "$ROOT/tmp/other-file"
+    printf 'zeltro-gui\ndocker-ce\n' > "$S/pkgs"
     tab=$'\t'
     cat > "$S/containers" <<EOF
 zeltro-mariadb${tab}zeltro-cli${tab}/etc/zeltro-cli${tab}mariadb:11${tab}zeltro-cli_vpc
@@ -135,12 +159,17 @@ check "exit 1" "$RC" "1"
 has "listed" "$OUT" "network zeltro-cli_vpc (still used by: intruder)"
 check "intruder still there" "$(names containers)" "intruder linked other "
 
-echo "--purge: data, images and config too; a shared image is kept and reported"
+echo "--purge: everything Zeltro put here except the projects folder"
 setup c; sed -i 's|^\(other\t.*\t\)nginx:1\t|\1redis:7\t|' "$S/containers"; run --purge
-check "exit 1 (one image in use)" "$RC" "1"
+check "exit 0 (a shared image is kept, not a failure)" "$RC" "0"
 check "Zeltro volumes gone" "$(names volumes)" "other_data "
 check "the shared and unrelated images left" "$(names images)" "nginx:1 redis:7 "
-has "shared image reported" "$OUT" "image redis:7 (still used by: other)"
+has "shared image reported" "$OUT" "kept image redis:7, in use by other"
+check "GUI package purged, Docker's kept" "$(cat "$S/pkgs")" "docker-ce"
+check "apt lists: only Zeltro's gone" "$(ls "$ROOT/var/lib/apt/lists")" "archive.ubuntu.com_dists_noble_InRelease"
+check "completions, update downloads, app bundle gone" \
+    "$(ls -A "$ROOT/etc/bash_completion.d" "$ROOT/usr/share/bash-completion/completions" "$ROOT/Applications" "$ROOT/tmp" | grep -v '^/\|^$' | tr '\n' ' ')" "other-file "
+check "~/.zeltro and ~/.cache/zeltro gone" "$(ls -A "$H" "$H/.cache" | grep -v '^/\|^$' | tr '\n' ' ')" ".cache .config "
 hasnt "unrelated image not touched" "$(cat "$S/calls")" "rmi nginx:1"
 has "compose-only image removed" "$OUT" "removed image mailhog/mailhog"
 check "config gone" "$(find "$ROOT/etc" -type f | wc -l | tr -d ' ')" "0"
@@ -155,6 +184,12 @@ check "exit 1" "$RC" "1"
 check "JSON status and leftovers" "$(python3 -c 'import json,sys; d=json.loads(sys.argv[1].splitlines()[-1]); print(d["status"], d["left"])' "$OUT" 2>&1)" \
     "incomplete ['container zeltro-redis', 'network zeltro-cli_vpc (still used by: zeltro-redis)']"
 check "only JSON printed" "$(wc -l <<<"$OUT" | tr -d ' ')" "1"
+
+echo "default leaves the app, its settings and ~/.zeltro alone"
+setup f; run
+check "GUI package kept" "$(head -1 "$S/pkgs")" "zeltro-gui"
+check "~/.zeltro kept" "$(ls -A "$H/.zeltro")" "bus"
+hasnt "no apt call" "$(cat "$S/calls")" "apt-get"
 
 echo "options"
 setup e; run --bogus

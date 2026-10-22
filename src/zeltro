@@ -594,6 +594,9 @@ case "$1" in
         docker_exec developer php artisan route:clear
         docker_exec developer php artisan config:clear
         docker_exec developer composer -d "$(zeltro_container_workdir)" dump-autoload
+        # Rebuild bootstrap/cache/packages.php and services.php, so the app
+        # works even if php-fpm can't write that folder.
+        docker_exec developer php artisan package:discover
         echo-green "Caches cleared!"
         ;;
     

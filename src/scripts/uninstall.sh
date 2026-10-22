@@ -1,6 +1,7 @@
 #!/bin/bash
 # zeltro uninstall: remove Zeltro's containers and networks, and on request its
-# images, data volumes and configuration.
+# images and data volumes, or (--purge) everything Zeltro put on the machine
+# except the projects folder.
 #
 # Never prompts. Every removal is checked afterwards, the summary lists what
 # actually happened, and anything left behind is listed with a non-zero exit.
@@ -36,9 +37,10 @@ usage() {
     echo-white "Options:"
     echo-white "  --delete-images   Also remove the images those containers used"
     echo-white "  --delete-data     Also remove the zeltro-cli_* volumes (ALL shared databases)"
-    echo-white "  --purge           Both of the above, plus /etc/zeltro-cli, the Zeltro package"
-    echo-white "                    repository (apt/dnf) and the app's settings. Docker itself and"
-    echo-white "                    the projects folder are always kept."
+    echo-white "  --purge           Everything Zeltro put on this machine except the projects folder:"
+    echo-white "                    both of the above, plus the Zeltro app, /etc/zeltro-cli, the Zeltro"
+    echo-white "                    package repository and key, bash completion, ~/.zeltro, ~/.cache/zeltro,"
+    echo-white "                    the app's settings and its update downloads. Docker, Node and git stay."
     echo-white "  --json-output     One JSON object instead of text"
     echo-white "  --help            Show this help"
     echo-white ""
@@ -74,7 +76,37 @@ left()    { LEFT+=("$1"); echo-yellow "  NOT removed: $1"; }
 as_root() {
     "$@" 2>/dev/null && return 0
     [ "$(id -u)" = "0" ] && return 1
+    [ -n "$R" ] && return 1      # under test: never the real sudo
     if [ -t 0 ]; then sudo "$@"; else sudo -n "$@"; fi
+}
+
+# Remove one path (file, directory or link) and record the outcome.
+remove_path() { # <path> [root]
+    local f="$1"
+    [ -e "$f" ] || [ -L "$f" ] || return 0
+    if [ "${2:-}" = "root" ]; then
+        if [ -d "$f" ] && [ ! -L "$f" ]; then as_root rm -rf "$f"; else as_root rm -f "$f"; fi
+    else
+        if [ -d "$f" ] && [ ! -L "$f" ]; then rm -rf "$f"; else rm -f "$f"; fi
+    fi 2>/dev/null
+    if [ -e "$f" ] || [ -L "$f" ]; then left "$f"; else removed "$f"; fi
+}
+
+# Remove an installed package (the GUI, or the CLI's own package) with
+# whichever package manager has it. Never prompts.
+remove_package() { # <name>
+    local name="$1"
+    if command -v dpkg >/dev/null 2>&1 && dpkg -s "$name" >/dev/null 2>&1; then
+        as_root env DEBIAN_FRONTEND=noninteractive apt-get purge -y -q "$name" >/dev/null 2>&1
+        if dpkg -s "$name" >/dev/null 2>&1; then left "package $name"; else removed "package $name"; fi
+    elif command -v rpm >/dev/null 2>&1 && rpm -q "$name" >/dev/null 2>&1; then
+        as_root dnf remove -y -q "$name" >/dev/null 2>&1
+        if rpm -q "$name" >/dev/null 2>&1; then left "package $name"; else removed "package $name"; fi
+    elif command -v pacman >/dev/null 2>&1 && pacman -Q "$name" >/dev/null 2>&1; then
+        as_root pacman -Rns --noconfirm "$name" >/dev/null 2>&1
+        if pacman -Q "$name" >/dev/null 2>&1; then left "package $name"; else removed "package $name"; fi
+    fi
+    return 0
 }
 
 # The projects folder, resolved, so container working dirs can be matched to it.
@@ -180,8 +212,8 @@ fi
 
 # --- 4. Images -------------------------------------------------------------------------
 # The images the removed containers ran, plus the services' images from the
-# compose file (some may have no container). One still used by any other
-# container is reported and kept.
+# compose file (some may have no container). Only those: never a prune. One a
+# non-Zeltro container still uses is kept and reported, which is not a failure.
 KEPT_IMAGES=""
 if [ "$DELETE_IMAGES" = "1" ]; then
     echo-cyan "Removing Zeltro images ..."
@@ -196,7 +228,8 @@ if [ "$DELETE_IMAGES" = "1" ]; then
         found=1
         users=$(docker ps -a --filter "ancestor=$img" --format '{{.Names}}' 2>/dev/null | tr '\n' ' ')
         if [ -n "${users// /}" ]; then
-            left "image $img (still used by: ${users% })"
+            KEPT_IMAGES="$KEPT_IMAGES${KEPT_IMAGES:+, }$img (in use by ${users% })"
+            echo-white "  kept image $img, in use by ${users% }"
             continue
         fi
         docker rmi "$img" >/dev/null 2>&1
@@ -206,22 +239,32 @@ if [ "$DELETE_IMAGES" = "1" ]; then
     echo-return
 fi
 
-# --- 5. Configuration (--purge) -------------------------------------------------------
-# Literal paths only. The package repository is what the app's package added
-# (apt and dnf), along with its signing key.
+# --- 5. Everything else Zeltro put on this machine (--purge) ------------------------------
+# All of it except the projects folder. The data volumes went above: a
+# reinstall would otherwise reuse zeltro-cli_mysql_data, and MariaDB would
+# reject the new install's root password. Shared packages the installer may
+# have added (Docker, Node, git) aren't Zeltro's and stay. Literal paths only.
 if [ "$PURGE" = "1" ]; then
-    echo-cyan "Removing Zeltro configuration ..."
-    for f in "$R/etc/zeltro-cli" "$R/etc/apt/sources.list.d/zeltro.list" "$R/etc/apt/keyrings/zeltro.asc" \
-             "$R/etc/yum.repos.d/zeltro.repo" "$R/etc/pki/rpm-gpg/RPM-GPG-KEY-zeltro"; do
-        [ -e "$f" ] || [ -L "$f" ] || continue
-        if [ -d "$f" ] && [ ! -L "$f" ]; then as_root rm -rf "$f" 2>/dev/null; else as_root rm -f "$f" 2>/dev/null; fi
-        if [ -e "$f" ] || [ -L "$f" ]; then left "$f"; else removed "$f"; fi
+    echo-cyan "Removing the Zeltro app and configuration ..."
+    remove_package zeltro-gui
+    remove_path "$R/Applications/Zeltro.app" root
+    for f in "$R/etc/zeltro-cli" \
+             "$R/etc/apt/sources.list.d/zeltro.list" "$R/etc/apt/keyrings/zeltro.asc" \
+             "$R/etc/yum.repos.d/zeltro.repo" "$R/etc/pki/rpm-gpg/RPM-GPG-KEY-zeltro" \
+             "$R/etc/bash_completion.d/zeltro" "$R/usr/share/bash-completion/completions/zeltro" \
+             "$R/usr/local/etc/bash_completion.d/zeltro" "$R/opt/homebrew/etc/bash_completion.d/zeltro" \
+             "$R"/var/lib/apt/lists/packages.zeltro.ai_* "$R"/var/lib/apt/lists/packages.zeltro.build_*; do
+        remove_path "$f" root
+    done
+    # The app's updater downloads into the temp folder (a 100 MB package was
+    # found left behind).
+    for f in "$R${TMPDIR:-/tmp}"/zeltro-update-* "$R/tmp"/zeltro-update-*; do
+        remove_path "$f"
     done
     if [ -n "${HOME:-}" ]; then
-        for d in "$HOME/.config/zeltro-gui" "$HOME/Library/Application Support/zeltro-gui"; do
-            [ -e "$d" ] || continue
-            rm -rf "$d" 2>/dev/null
-            if [ -e "$d" ]; then left "$d"; else removed "$d"; fi
+        for d in "$HOME/.config/zeltro-gui" "$HOME/Library/Application Support/zeltro-gui" \
+                 "$HOME/.zeltro" "$HOME/.cache/zeltro"; do
+            remove_path "$d"
         done
     fi
     echo-return
@@ -238,6 +281,9 @@ for f in "$R/usr/local/bin/zeltro" "$R/usr/local/share/zeltro-cli"; do
     if [ -d "$f" ] && [ ! -L "$f" ]; then as_root rm -rf "$f" 2>/dev/null; else as_root rm -f "$f" 2>/dev/null; fi
     if [ -e "$f" ] || [ -L "$f" ]; then left "$f"; else removed "$f"; fi
 done
+if [ "$PURGE" = "1" ]; then
+    remove_package zeltro-cli
+fi
 if [ -d "$R/opt/zeltro-cli" ]; then
     if command -v dpkg >/dev/null 2>&1 && dpkg -s zeltro-cli >/dev/null 2>&1; then
         CLI_PACKAGE_NOTE="The zeltro-cli package is still installed. Remove it with: sudo apt remove zeltro-cli"
@@ -257,6 +303,7 @@ if [[ "$JSON_OUTPUT" == "1" ]]; then
     ZELTRO_UNINSTALL_REMOVED="$(printf '%s\n' ${REMOVED[@]+"${REMOVED[@]}"})" \
     ZELTRO_UNINSTALL_LEFT="$(printf '%s\n' ${LEFT[@]+"${LEFT[@]}"})" \
     ZELTRO_UNINSTALL_KEPT_VOLUMES="$KEPT_VOLUMES" \
+    ZELTRO_UNINSTALL_KEPT_IMAGES="$KEPT_IMAGES" \
     ZELTRO_UNINSTALL_NOTE="$CLI_PACKAGE_NOTE" \
     python3 -c '
 import json, os
@@ -264,6 +311,7 @@ lines = lambda k: [l for l in os.environ.get(k, "").splitlines() if l]
 print(json.dumps({"action": "uninstall", "status": os.environ["ZELTRO_UNINSTALL_STATUS"],
                   "removed": lines("ZELTRO_UNINSTALL_REMOVED"), "left": lines("ZELTRO_UNINSTALL_LEFT"),
                   "kept_volumes": lines("ZELTRO_UNINSTALL_KEPT_VOLUMES"),
+                  "kept_images": [i for i in os.environ.get("ZELTRO_UNINSTALL_KEPT_IMAGES", "").split(", ") if i],
                   "note": os.environ.get("ZELTRO_UNINSTALL_NOTE", "")}))'
 else
     echo-cyan "Summary"
@@ -272,6 +320,7 @@ else
         echo-white "  Kept data volumes (remove with --delete-data): $(echo $KEPT_VOLUMES)"
     fi
     [ "$DELETE_IMAGES" = "1" ] || echo-white "  Kept Docker images (remove with --delete-images)."
+    [ -z "$KEPT_IMAGES" ] || echo-white "  Kept images other containers use: $KEPT_IMAGES"
     [ "$PURGE" = "1" ] || echo-white "  Kept /etc/zeltro-cli and the app's settings (remove with --purge)."
     [ -n "$PROJECTS_DIR" ] && echo-white "  Your projects folder was not touched: $PROJECTS_DIR"
     if [ ${#LEFT[@]} -gt 0 ]; then
