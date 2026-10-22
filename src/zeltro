@@ -169,7 +169,8 @@ show_help() {
     echo "  zeltro enable-service <n> - Enable an optional shared service (run it bare to list them)"
     echo "  zeltro disable-service <n>- Disable an optional shared service"
     echo "  zeltro stop-services      - Stop shared services"
-    echo "  zeltro uninstall          - Remove Zeltro Docker resources"
+    echo "  zeltro uninstall          - Remove Zeltro's containers, networks and the CLI (never asks)"
+    echo "                              --delete-images, --delete-data (all databases), --purge (also config)"
     echo "  zeltro projects-dir       - Show projects directory path"
     echo
     echo-white "GLOBAL OPTIONS:"

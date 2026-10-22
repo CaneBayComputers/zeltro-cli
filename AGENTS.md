@@ -33,6 +33,7 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 | `zeltro rename <name> <new-name>` | Rename a project: its folder, container, volumes and Claude Code history follow. `--github` renames the GitHub repo too. See "Renaming a project" below. |
 | `zeltro status [name] [--all]` | Show running state. Lists only active (running) projects by default; `--all` includes stopped projects. |
 | `zeltro exec <cmd>` | Run a command inside the project container, no TTY (automation-friendly). Run from the project directory. |
+| `zeltro uninstall` | Remove every Zeltro service and project container, Zeltro's networks and the CLI. Never prompts. Keeps images, the `zeltro-cli_*` data volumes, `/etc/zeltro-cli`, the app's settings and the projects folder (never edited). `--delete-images` and `--delete-data` (all shared databases) remove those too; `--purge` does both plus `/etc/zeltro-cli`, the Zeltro apt/dnf repository and the app's settings. Anything it couldn't remove (e.g. a network another container still uses) is listed, with exit 1. |
 
 **No interactive prompts.** Every command fails with a clear "required argument" error rather than prompting — so nothing ever blocks an agent. Always pass explicit arguments. (`zeltro create` prompts a human only at a terminal; under `--one-off`, `--json-output` or a non-TTY stdin it takes the top recommendation instead. `zeltro configure` prompts unless you pass `--non-interactive` (`-y`), so an agent must always pass it.)
 
