@@ -213,8 +213,29 @@ fi
 ###############################
 # Install Docker
 ###############################
-# Check if Docker is already available (e.g., from Docker Desktop)
-if command -v docker &> /dev/null && docker --version &> /dev/null; then
+# Why the `docker` on PATH can't be used here, or nothing when it can.
+#
+# Under WSL the Windows PATH is appended, so Docker Desktop's stand-in
+# (/mnt/c/Program Files/Docker/Docker/resources/bin/docker) is found in a
+# distro with no Docker of its own. Unless Desktop's integration is on for this
+# distro it just prints "The command 'docker' could not be found in this WSL 2
+# distro" and exits 1, and this script used to stop with "Docker command version
+# check failed" and the message hidden (Windows user, 2026-10-22). A binary on
+# the Windows side never counts: Zeltro needs Docker Engine in this system.
+docker_unusable_reason() {
+    local path out
+    path=$(command -v docker 2>/dev/null) || { echo "not installed"; return 0; }
+    case "$path" in
+        /mnt/*) echo "the docker on PATH ($path) belongs to Windows, not this Linux system"; return 0 ;;
+    esac
+    if ! out=$(docker --version 2>&1); then
+        echo "'$path --version' failed: $(printf '%s' "$out" | head -n 3 | tr '\n' ' ')"
+    fi
+    return 0
+}
+
+DOCKER_PROBLEM=$(docker_unusable_reason)
+if [ -z "$DOCKER_PROBLEM" ]; then
     DOCKER_VERSION=$(docker --version 2>/dev/null | head -n1)
     echo -e "${GREEN}✓ Docker already available: $DOCKER_VERSION${NC}"
     
@@ -222,7 +243,11 @@ if command -v docker &> /dev/null && docker --version &> /dev/null; then
     if docker context ls 2>/dev/null | grep -q "desktop-linux\|default.*docker-desktop"; then
         echo -e "${CYAN}  Detected Docker Desktop integration${NC}"
     fi
-elif ! command -v docker &> /dev/null; then
+else
+    if [ "$DOCKER_PROBLEM" != "not installed" ]; then
+        echo -e "${YELLOW}Docker found but not usable: $DOCKER_PROBLEM${NC}"
+        echo -e "${YELLOW}Installing Docker Engine for this system instead.${NC}"
+    fi
     echo -e "${BLUE}Installing Docker...${NC}"
     
     # Remove any old Docker packages
@@ -250,10 +275,14 @@ elif ! command -v docker &> /dev/null; then
     sudo apt-get update -y -q
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     
-    echo -e "${GREEN}✓ Docker installed${NC}"
-else
-    echo -e "${RED}Error: Docker command version check failed${NC}"
-    exit 1
+    # bash remembers where it last found `docker`, possibly the Windows one.
+    hash -r
+    DOCKER_PROBLEM=$(docker_unusable_reason)
+    if [ -n "$DOCKER_PROBLEM" ]; then
+        echo -e "${RED}Error: Docker was installed, but $DOCKER_PROBLEM${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Docker installed: $(docker --version 2>/dev/null | head -n1)${NC}"
 fi
 
 # Add user to docker group even if docker is already installed
