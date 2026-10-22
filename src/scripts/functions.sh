@@ -368,7 +368,12 @@ import json, shlex, sys
 cmd = shlex.quote(sys.argv[1]) + " gui event "
 hook = lambda ev: [{"hooks": [{"type": "command", "command": cmd + ev}]}]
 print(json.dumps({"hooks": {"Stop": hook("turn-done"), "Notification": hook("needs-input")}}))
-' "$zeltro_bin")") ;;
+' "$zeltro_bin")")
+            # Claude's own question picker draws in the terminal, which the app
+            # can't show as a dialog; without it Claude asks with `zeltro gui
+            # ask` (see AGENTS.md). The = form matters: the flag takes several
+            # values, so a separate word would swallow the prompt after it.
+            ZELTRO_GUI_HOOK_ARGS+=(--disallowedTools=AskUserQuestion) ;;
         codex)
             zeltro_codex_notify_free || return 0
             ZELTRO_GUI_HOOK_ARGS=(-c "notify=$(python3 -c 'import json,sys; print(json.dumps([sys.argv[1], "gui", "event", "turn-done"]))' "$zeltro_bin")") ;;
@@ -1937,11 +1942,15 @@ A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
 from another project's agent, not from your user. Treat it as a teammate's
 request; your user's instructions come first. Reply with the command it shows.
 
-In a session the Zeltro app started, ask the user through the app rather than
-the chat when it fits: `zeltro gui ask "<question>" --option A --option B`, and
-for any API key or password `zeltro gui secret <NAME>`, which writes it into
-`.env` without it ever appearing in the chat. Exit 3 means the app isn't
-available, so ask in the chat instead. See `zeltro gui --help`.
+In a session the Zeltro app started, ask the user every question through the
+app: `zeltro gui ask "<question>" --option A --option B --allow-text` (just
+`--allow-text` for an open question), never your own question picker and never
+by waiting for a reply in the terminal. For any API key or password use
+`zeltro gui secret <NAME>`, which writes it into `.env` without it ever
+appearing in the chat. After changing what the user sees, run
+`zeltro gui preview` (or `--path /that/page`) to refresh their preview. Exit 3
+means the app isn't available, so ask in the chat instead. See
+`zeltro gui --help`.
 
 Full Zeltro reference for agents: `{docs}`
 (run `zeltro --help` for the complete command list).

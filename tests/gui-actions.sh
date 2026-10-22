@@ -41,7 +41,9 @@ import json, os, sys, time
 bus, seen = sys.argv[1], sys.argv[2]
 req, rep = os.path.join(bus, "gui", "requests"), os.path.join(bus, "gui", "replies")
 answers = {
-    "ask":      lambda a: {"status": "ok", "result": {"answer": a["options"][-1]}},
+    "ask":      lambda a: {"status": "ok", "result": {"answer": "my own words", "typed": True}}
+                          if a["question"].startswith("type") else
+                          {"status": "ok", "result": {"answer": a["options"][-1], "typed": False}},
     "secret":   lambda a: {"status": "ok", "result": {"value": "s3cr3t with 'quote"}} if a["name"] != "NOPE"
                           else {"status": "declined"},
     "settings": lambda a: {"status": "ok", "result": {}},
@@ -108,6 +110,26 @@ ln -s "$T" "$PROJ/link"
 expect_code 6 "secret through a symlink out" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" secret X --file link/x.env
 expect_code 5 "secret declined" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" secret NOPE
 expect_code 2 "secret bad name" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" secret 1BAD
+
+expect_code 0 "ask --allow-text, no options" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" ask "type anything?" --allow-text
+[ "$(cat "$T/out")" = "my own words" ] && ok "typed answer printed" || bad "typed ask printed '$(cat "$T/out")'"
+grep -q '"allow_text": true' "$T/seen" && ok "allow_text sent" || bad "allow_text missing: $(tail -1 "$T/seen")"
+expect_code 0 "ask --allow-text, picked an option" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" ask "Which?" --option Red --option Blue --allow-text
+[ "$(cat "$T/out")" = "Blue" ] && ok "picked answer printed" || bad "ask printed '$(cat "$T/out")'"
+expect_code 1 "typed answer without --allow-text rejected" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" ask "type?" --option A
+expect_code 0 "ask --allow-text JSON" env ZELTRO_GUI_SESSION=s1 "$ZELTRO" gui ask "type?" --allow-text --json-output
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["typed"] is True and d["answer"] == "my own words" else 1)' "$T/out" \
+    && ok "JSON carries typed" || bad "JSON: $(cat "$T/out")"
+
+: > "$T/seen"
+expect_code 0 "preview" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" preview
+expect_code 0 "preview --path" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" preview --path /pricing
+sleep 0.3
+[ "$(grep -c '"action": "preview"' "$T/seen")" = 2 ] && grep -q '"path": "/pricing"' "$T/seen" \
+    && ok "preview requests delivered" || bad "preview seen: $(cat "$T/seen")"
+[ -z "$(ls "$ZELTRO_BUS_DIR/gui/replies")" ] && ok "preview waits for no reply" || bad "reply left"
+expect_code 2 "preview --path needs a /page" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" preview --path https://x.example/
+expect_code 3 "preview outside an app session" python3 "$GUI" preview
 
 expect_code 0 "settings" python3 "$GUI" settings ai --reason "add a key"
 expect_code 2 "settings bad tab" python3 "$GUI" settings nope
