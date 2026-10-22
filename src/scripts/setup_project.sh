@@ -863,36 +863,39 @@ PYEOF
         echo-green "Python dependencies installed!"; echo-white
     fi
 
-    # Install and build front-end assets when Vite/Laravel is detected (host-side Node)
-    if [ -f "package.json" ]; then
-        if grep -qi '"vite"' package.json; then
-            debug "Detected Vite configuration in package.json; installing Node dependencies and building assets on host"
-            if [[ "$JSON_OUTPUT" != "1" ]]; then
-                echo-cyan "Installing Node dependencies on host (npm install) ..."; echo-white
+    # Front-end assets for Vite projects (Laravel's resources/js, a Vue or React
+    # app), installed and built in the project container like `zeltro npm`, as
+    # the host user. They used to run on the host: with the host's Node, which
+    # can differ from the container's, and rewriting the lockfile's "name" (a
+    # lockfile made in the container, where the folder is /usr/share/nginx/html,
+    # says "html"), a spurious diff in the user's repo (2026-10-22).
+    if [ -f "package.json" ] && grep -qi '"vite"' package.json; then
+        _npm_in_container() {
+            docker exec -i --user "$(id -u):$(id -g)" -w "$(zeltro_container_workdir "$PROJECT_NAME")" \
+                "$PROJECT_NAME" npm "$@"
+        }
+        # Quiet under --json-output. (Not `> /dev/stdout`: when stdout is a
+        # file, that reopens and truncates it.)
+        _npm_run() {
+            if [[ "$JSON_OUTPUT" == "1" ]]; then _npm_in_container "$@" > /dev/null 2>&1
+            else _npm_in_container "$@"; fi
+        }
+        _npm_ready=1
+        # A Node framework's dependencies were installed just above.
+        if [ "$FRAMEWORK_IS_NODE" != "1" ]; then
+            echo-cyan "Installing Node dependencies in the container (npm install) ..."; echo-white
+            if ! _npm_run install --no-audit --no-fund --no-progress; then
+                echo-yellow "Warning: npm install failed. Vite assets may not be built."; echo-white
+                _npm_ready=0
             fi
-            if [[ "$JSON_OUTPUT" == "1" ]]; then
-                if ! npm install >/dev/null 2>&1; then
-                    echo-yellow "Warning: npm install failed on host. Vite assets may not be built."; echo-white
-                else
-                    if ! npm run build >/dev/null 2>&1; then
-                        echo-yellow "Warning: npm run build failed on host. Vite manifest may be missing."; echo-white
-                    fi
-                fi
+        fi
+        if [ "$_npm_ready" = "1" ]; then
+            echo-cyan "Building front-end assets in the container (npm run build) ..."; echo-white
+            if _npm_run run build; then
+                echo-green "Front-end assets built."; echo-white
             else
-                if ! npm install; then
-                    echo-yellow "Warning: npm install failed on host. Vite assets may not be built."; echo-white
-                else
-                    echo-green "Node dependencies installed."; echo-white
-                    echo-cyan "Building front-end assets on host (npm run build) ..."; echo-white
-                    if ! npm run build; then
-                        echo-yellow "Warning: npm run build failed on host. Vite manifest may be missing."; echo-white
-                    else
-                        echo-green "Front-end assets built successfully."; echo-white
-                    fi
-                fi
+                echo-yellow "Warning: npm run build failed. The Vite manifest may be missing."; echo-white
             fi
-        else
-            debug "package.json found but no Vite references detected; skipping npm install/build"
         fi
     fi
 
@@ -921,26 +924,52 @@ PYEOF
 
     echo-return; echo-return
 
-    # Make storage writable for all
-    if [ -d "storage" ]; then
+    # Folders the web server writes to: storage/, and for Laravel bootstrap/cache
+    # (packages.php and services.php, rebuilt by php-fpm after a cache clear; left
+    # unwritable, every page returned 500 after `optimize:clear`).
+    #
+    # Done as root inside the container. php-fpm runs as www-data (uid 33), so
+    # a project that has logged an error or taken an upload has files the host
+    # user can't chmod: the host-side chmod failed with "Operation not
+    # permitted" and, under set -e, rolled back an otherwise complete setup
+    # (2026-10-22). Root hands everything back to the host user and opens it
+    # up; a default ACL keeps files created later writable for both. Nothing
+    # here may fail the setup: whatever is still not writable is listed.
+    _writable_dirs=()
+    for _d in storage bootstrap/cache; do
+        [ -d "$_d" ] && _writable_dirs+=("$_d")
+    done
+    if [ ${#_writable_dirs[@]} -gt 0 ]; then
 
         echo-cyan 'Setting folder permissions ...'; echo-white
 
-        find storage -type d -exec chmod 777 {} +
+        docker exec -u root -w "$(zeltro_container_workdir "$PROJECT_NAME")" "$PROJECT_NAME" sh -c '
+            u="$1"; g="$2"; shift 2
+            chown -R "$u:$g" "$@" && find "$@" -type d -exec chmod 777 {} + && find "$@" -type f -exec chmod a+rw {} +
+        ' sh "$(id -u)" "$(id -g)" "${_writable_dirs[@]}" > /dev/null 2>&1 \
+            || find "${_writable_dirs[@]}" -type d -exec chmod 777 {} + 2>/dev/null \
+            || true
 
         # setfacl comes from the `acl` package, which is NOT present on a stock
-        # Ubuntu or Fedora install. Under `set -e` a missing binary aborted the
-        # entire setup — a project that was otherwise complete got rolled back.
-        # The chmod above already grants the access needed; the default ACL only
-        # makes it stick for files created later, so its absence is a downgrade,
-        # not a failure.
+        # Ubuntu or Fedora install (nor in the image). Its absence only means
+        # files created later get the creating user's default mode.
         if command -v setfacl >/dev/null 2>&1; then
-            find storage -type d -exec setfacl -m "default:group::rw" {} + || true
+            find "${_writable_dirs[@]}" -type d -exec setfacl -m "d:u::rwX,d:g::rwX,d:o::rwX" {} + 2>/dev/null || true
         else
             echo-yellow "setfacl not found (install the 'acl' package) — skipping default ACLs."
         fi
 
-        echo-green 'Storage folder permissions set!'; echo-white
+        _not_writable=$(find "${_writable_dirs[@]}" -type d ! -perm -0777 2>/dev/null | head -n 10 || true)
+        if [ -n "$_not_writable" ]; then
+            echo-yellow "Warning: these folders may not be writable by the web server:"
+            printf '%s\n' "$_not_writable" | while IFS= read -r _p; do echo-yellow "  $_p"; done
+            echo-yellow "Fix with: zeltro exec-root chmod -R a+rwX ${_writable_dirs[*]}"
+        else
+            echo-green "Folder permissions set: ${_writable_dirs[*]}"; echo-white
+        fi
+    fi
+
+    if [ -d "storage" ]; then
 
         # Create storage symlink for Laravel unless disabled
         if [ "$SKIP_STORAGE_SYMLINK" != "true" ] && [ -f "artisan" ]; then
