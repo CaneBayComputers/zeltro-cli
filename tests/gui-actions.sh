@@ -145,6 +145,41 @@ expect_code 0 "event again (coalesced)" env ZELTRO_GUI_SESSION=s1 "$ZELTRO" gui 
 expect_code 0 "event unknown type" env ZELTRO_GUI_SESSION=s1 "$ZELTRO" gui event bogus
 sleep 0.5
 [ "$(grep -c '"event"' "$T/seen")" = 1 ] && ok "one event delivered" || bad "events seen: $(grep -c '"event"' "$T/seen")"
+
+echo "status and turn-done messages:"
+: > "$T/seen"
+expect_code 0 "status" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" status "Adding a pricing page."
+expect_code 2 "status needs text" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" status "  "
+expect_code 3 "status outside an app session" python3 "$GUI" status "x"
+expect_code 0 "status, long" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" status "$(head -c 3000 /dev/zero | tr '\0' a)"
+sleep 0.3
+python3 - "$T/seen" <<'EOF' && ok "status text sent, long one cut to 2000" || bad "status requests: $(cat "$T/seen")"
+import json, sys
+st = [json.loads(l)["args"]["text"] for l in open(sys.argv[1]) if '"status"' in l]
+sys.exit(0 if st[0] == "Adding a pricing page." and len(st[1]) == 2000 and st[1].endswith("\u2026") else 1)
+EOF
+: > "$T/seen"
+(cd "$PROJ" && ZELTRO_GUI_SESSION=m1 "$ZELTRO" gui event turn-done '{"type":"agent-turn-complete","last-assistant-message":"Codex says done."}' </dev/null)
+echo '{"hook_event_name":"Stop","last_assistant_message":"  Claude says done.\n"}' | (cd "$PROJ" && ZELTRO_GUI_SESSION=m2 "$ZELTRO" gui event turn-done)
+cat > "$T/transcript.jsonl" <<'EOF'
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"id":"m_old","content":[{"type":"text","text":"Earlier reply."}]}}
+{"type":"user","message":{"role":"user","content":"make it blue"}}
+{"type":"assistant","message":{"id":"m_new","content":[{"type":"text","text":"Made the header blue."}]}}
+{"type":"assistant","message":{"id":"m_new","content":[{"type":"text","text":"Reload to see it."}]}}
+{"type":"system","subtype":"stop_hook_summary"}
+EOF
+echo "{\"transcript_path\":\"$T/transcript.jsonl\"}" | (cd "$PROJ" && ZELTRO_GUI_SESSION=m3 "$ZELTRO" gui event turn-done)
+echo '{"message":"Claude needs your permission"}' | (cd "$PROJ" && ZELTRO_GUI_SESSION=m4 "$ZELTRO" gui event needs-input)
+(cd "$PROJ" && ZELTRO_GUI_SESSION=m5 "$ZELTRO" gui event turn-done </dev/null)
+sleep 0.3
+python3 - "$T/seen" <<'EOF' && ok "turn-done carries the last reply (codex, claude, transcript); others don't" || bad "events: $(cat "$T/seen")"
+import json, sys
+got = {r["from"]["session"]: r["args"].get("message") for r in map(json.loads, open(sys.argv[1]))}
+want = {"m1": "Codex says done.", "m2": "Claude says done.",
+        "m3": "Made the header blue.\nReload to see it.", "m4": None, "m5": None}
+sys.exit(0 if got == want else print(got) or 1)
+EOF
 expect_code 0 "event with a broken bus" env ZELTRO_GUI_SESSION=s1 ZELTRO_BUS_DIR=/proc/nope "$ZELTRO" gui event turn-done
 
 perm=$(stat -c %a "$ZELTRO_BUS_DIR/gui/requests" 2>/dev/null || stat -f %Lp "$ZELTRO_BUS_DIR/gui/requests")

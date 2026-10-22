@@ -27,9 +27,10 @@ export ZELTRO_CMD="zeltro${1:+ $1}"
 # `zeltro gui event` runs as an agent hook after every turn. It must be quick,
 # print nothing and never fail, so it skips functions.sh, the update check and
 # the projects-dir setup below and goes straight to the script, which always
-# exits 0.
+# exits 0. Stdin passes through: Claude Code's Stop hook sends the turn's last
+# reply there. gui.py reads it with a short timeout, so it can't hang.
 if [ "$1" = "gui" ] && [ "$2" = "event" ]; then
-    python3 "$SCRIPT_DIR/scripts/gui.py" "${@:2}" </dev/null >/dev/null 2>&1 || true
+    python3 "$SCRIPT_DIR/scripts/gui.py" "${@:2}" >/dev/null 2>&1 || true
     exit 0
 fi
 
