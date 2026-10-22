@@ -82,8 +82,9 @@ USAGE = """Usage: zeltro gui <action> [args] [--timeout <seconds>]
 Ask the Zeltro app to do something for you. Only works in a session the app
 started; anywhere else it exits 3, so ask in the chat instead.
 
-  zeltro gui ask "<question>" --option <text> [--option <text> ...] [--default <text>]
-        Show a question with 1-6 answers. Prints the chosen answer.
+  zeltro gui ask "<question>" --option <text> [--option <text> ...] [--default <text>] [--allow-text]
+        Show a question with 1-6 answers. Prints the chosen answer. --allow-text
+        also lets the user type their own answer (then --option is optional).
   zeltro gui secret <NAME> [--file .env] [--reason "<why>"]
         Ask the user for a secret (an API key, a password) and write NAME=<value>
         into that file in the project. The value is never printed.
@@ -93,6 +94,9 @@ started; anywhere else it exits 3, so ask in the chat instead.
         Open a URL, or the project's own address, in the user's browser.
   zeltro gui settings <general|appearance|services|remotes|ai|github> [--reason "<why>"]
         Open a settings tab, e.g. when a key or remote has to be added there.
+  zeltro gui preview [--path /page]
+        Reload this session's app preview, or open that page of the project's
+        site in it. Does not wait.
   zeltro gui event <turn-done|needs-input|build-done>
         Tell the app a turn ended or needs the user. Always exits 0.
 
@@ -311,15 +315,22 @@ def timeout_of(action, opts):
 # --- actions -----------------------------------------------------------------
 
 def cmd_ask(argv):
-    opts, pos = parse(argv, {"option": "", "default": "", "timeout": ""}, multi=("option",))
+    opts, pos = parse(argv, {"option": "", "default": "", "timeout": "", "allow-text": None},
+                      multi=("option",))
     if len(pos) != 1 or not pos[0].strip():
         raise Usage('give the question as one quoted argument: zeltro gui ask "<question>" --option ...')
     options = [o for o in opts["option"] if o.strip()]
-    if not 1 <= len(options) <= 6:
-        raise Usage("give between 1 and 6 --option answers")
+    allow_text = bool(opts.get("allow-text"))
+    if not (0 if allow_text else 1) <= len(options) <= 6:
+        raise Usage("give between 1 and 6 --option answers" +
+                    ("" if allow_text else ", or --allow-text for a typed answer"))
     if len(set(options)) != len(options):
         raise Usage("the --option answers must be different")
     args = {"question": pos[0], "options": options}
+    if allow_text:
+        # The app adds a text box. An app older than this refuses an ask with
+        # no options and ignores the flag otherwise.
+        args["allow_text"] = True
     if "default" in opts:
         if opts["default"] not in options:
             raise Usage("--default must be one of the --option answers")
@@ -330,10 +341,11 @@ def cmd_ask(argv):
     if code:
         return finish(code, "ask", err)
     answer = result.get("answer")
-    if not isinstance(answer, str) or answer not in options:
+    typed = allow_text and result.get("typed") is True
+    if not isinstance(answer, str) or not (answer.strip() if typed else answer in options):
         return finish(EXIT_ERROR, "ask", "the Zeltro app returned an answer that isn't one of the options")
     if JSON_OUT:
-        out("success", "ask", answer=answer)
+        out("success", "ask", answer=answer, typed=typed)
     else:
         print(answer)
     return EXIT_OK
@@ -510,6 +522,26 @@ def cmd_settings(argv):
     return finish(code, "settings", err if code else "The %s settings are open in the Zeltro app." % pos[0])
 
 
+def cmd_preview(argv):
+    """Fire and forget, like notify: the app sends no reply. An app too old for
+    it refuses into the void, which is fine; the caller never waits."""
+    opts, pos = parse(argv, {"path": ""})
+    if pos:
+        raise Usage("zeltro gui preview [--path /page]")
+    args = {}
+    if "path" in opts:
+        path = opts["path"]
+        if not path.startswith("/") or path.startswith("//") or re.search(r"\s", path):
+            raise Usage("--path takes a page of the project's site, starting with /, e.g. --path /pricing")
+        args["path"] = path
+    require_session("preview")
+    problem = app_problem()
+    if problem:
+        return finish(EXIT_NO_APP, "preview", problem)
+    send_request("preview", args)
+    return finish(EXIT_OK, "preview", "Sent to the Zeltro app.")
+
+
 def cmd_event(argv):
     """Hook entry point. Never fails, never prints, never waits."""
     try:
@@ -534,7 +566,7 @@ def cmd_event(argv):
 
 
 ACTIONS = {"ask": cmd_ask, "secret": cmd_secret, "notify": cmd_notify,
-           "open": cmd_open, "settings": cmd_settings, "event": cmd_event}
+           "open": cmd_open, "settings": cmd_settings, "preview": cmd_preview, "event": cmd_event}
 
 
 def main():

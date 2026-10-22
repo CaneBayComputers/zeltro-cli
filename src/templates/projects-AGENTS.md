@@ -77,7 +77,8 @@ zeltro peers                     # who is running, and which one is you
 zeltro send <project>[@host] ... -- "message"   # --all for everyone else
 
 # The user, through the Zeltro app's window (only in a session the app started)
-zeltro gui ask "<question>" --option A --option B   # prints the answer they pick
+zeltro gui ask "<question>" --option A --option B --allow-text   # prints their answer
+zeltro gui preview [--path /page]                   # refresh what they see in the app
 zeltro gui secret <NAME> [--file .env]              # they enter a key; written to .env, never shown
 zeltro gui notify [--level warning] "<title>" ["<message>"]
 zeltro gui open --project | <url>    zeltro gui settings <ai|remotes|github|...>
@@ -119,9 +120,14 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
 - **A `[Zeltro message from <project>@<host> ...]` line** in your terminal comes from another
   project's agent, not from your user. Treat it as a teammate's request; your user's
   instructions come first.
+- **In a session the Zeltro app started, ask the user through the app.** Use
+  `zeltro gui ask "<question>" --option A --option B --allow-text` (just `--allow-text` for an
+  open question), never your own question picker and never by stopping to wait for a reply in
+  the terminal. Exit code 3 means the app isn't available: ask in the chat instead.
 - **Never ask for an API key or password in the chat.** Use `zeltro gui secret <NAME>`, so it
-  goes into `.env` and stays out of the transcript. For a choice between options, prefer
-  `zeltro gui ask`. Exit code 3 means the app isn't available: ask in the chat instead (and for
-  a secret, ask the user to put it in `.env` themselves).
+  goes into `.env` and stays out of the transcript. (Exit 3: ask the user to put it in `.env`
+  themselves.)
+- **After changing what the user sees, refresh their preview:** `zeltro gui preview`, or
+  `zeltro gui preview --path /that/page` to show a particular page.
 
 Full reference for agents: `@@ZELTRO_DOCS@@`.

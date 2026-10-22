@@ -139,7 +139,8 @@ The app does the routing through a per-user spool, `~/.zeltro/bus/`: it publishe
 
 In a session the Zeltro app started (it sets `ZELTRO_GUI_SESSION`), an agent can ask the app to do things the user sees in its window:
 
-- `zeltro gui ask "<question>" --option <a> --option <b> [--default <a>]` shows a question with 1–6 answers and prints the one chosen.
+- `zeltro gui ask "<question>" --option <a> --option <b> [--default <a>] [--allow-text]` shows a question with 1–6 answers and prints the one chosen. `--allow-text` adds a box for the user's own answer and makes `--option` optional; `--json-output` then reports `"typed": true` for a typed answer. **In an app session, ask every question this way**: never with the agent's own question picker or by waiting for a reply in the terminal. `zeltro ai` and `zeltro resume` turn Claude Code's picker (`AskUserQuestion`) off for app sessions.
+- `zeltro gui preview [--path /page]` reloads the session's app preview, or opens that page of the project's site in it. It doesn't wait for a reply. Run it after changing what the user sees. The app also reloads on every `turn-done` / `build-done` event.
 - `zeltro gui secret <NAME> [--file .env] [--reason "..."]` asks the user for an API key or password and writes `NAME=<value>` into that file in the project. The value is never printed, so it stays out of the transcript. Use this instead of asking the user to paste a secret into the chat.
 - `zeltro gui notify [--level info|warning|danger] "<title>" ["<message>"]`, `zeltro gui open <url>|--project` and `zeltro gui settings <general|appearance|services|remotes|ai|github>` notify the user, open a page, or open a settings tab.
 

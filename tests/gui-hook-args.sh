@@ -44,6 +44,11 @@ out="$( cd "$REPO/src" && set +u && source scripts/functions.sh >/dev/null 2>&1;
 src="$( cd "$REPO/src" && set +u && source scripts/functions.sh >/dev/null 2>&1; cd "$T"; echo "$ZELTRO_SRC_DIR" )"
 [ "$src" = "$REPO/src" ] && ok "ZELTRO_SRC_DIR resolved at source time" || bad "ZELTRO_SRC_DIR='$src'"
 
+echo "Claude's own question picker is off in app sessions"
+args="$(hook_args claude)"
+grep -qx -- "--disallowedTools=AskUserQuestion" <<<"$args" && ok "claude gets --disallowedTools=AskUserQuestion" \
+    || bad "claude hook args: $args"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
