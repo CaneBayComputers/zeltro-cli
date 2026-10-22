@@ -47,6 +47,10 @@ answers = {
     "secret":   lambda a: {"status": "ok", "result": {"value": "s3cr3t with 'quote"}} if a["name"] != "NOPE"
                           else {"status": "declined"},
     "settings": lambda a: {"status": "ok", "result": {}},
+    "screenshot": lambda a: {"status": "refused", "error": "the capture was empty"} if a.get("path") == "/blank"
+                            else {"status": "ok", "result": {"file": ".zeltro-uploads/screenshot-1.png",
+                                                             "url": "http://10.0.0.5" + a.get("path", "/")}},
+    "report":   lambda a: {"status": "ok", "result": {"sent": True}},
     "open":     lambda a: {"status": "refused", "error": "not the project's URL"} if "evil" in a.get("url", "")
                           else {"status": "ok", "result": {}},
 }
@@ -130,6 +134,24 @@ sleep 0.3
 [ -z "$(ls "$ZELTRO_BUS_DIR/gui/replies")" ] && ok "preview waits for no reply" || bad "reply left"
 expect_code 2 "preview --path needs a /page" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" preview --path https://x.example/
 expect_code 3 "preview outside an app session" python3 "$GUI" preview
+
+: > "$T/seen"
+expect_code 0 "screenshot" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" screenshot --path /pricing
+[ "$(cat "$T/out")" = ".zeltro-uploads/screenshot-1.png" ] && ok "screenshot prints the file" || bad "screenshot printed '$(cat "$T/out")'"
+expect_code 0 "screenshot JSON" env ZELTRO_GUI_SESSION=s1 "$ZELTRO" gui screenshot --json-output
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["file"].endswith(".png") and d["url"] == "http://10.0.0.5/" else 1)' "$T/out" \
+    && ok "JSON has file and url" || bad "JSON: $(cat "$T/out")"
+expect_code 6 "screenshot refused (empty capture)" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" screenshot --path /blank
+grep -q "empty" "$T/err" && ok "refusal reason printed" || bad "stderr: $(cat "$T/err")"
+expect_code 2 "screenshot bad path" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" screenshot --path pricing
+expect_code 0 "report" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" report "$(head -c 300 /dev/zero | tr '\0' t)" --details "ran zeltro up; got exit 1"
+python3 - "$T/seen" <<'EOF' && ok "report args (title cut to 200)" || bad "report seen: $(grep report "$T/seen")"
+import json, sys
+r = [json.loads(l) for l in open(sys.argv[1]) if '"report"' in l][0]["args"]
+sys.exit(0 if len(r["title"]) == 200 and r["details"] == "ran zeltro up; got exit 1" else 1)
+EOF
+expect_code 2 "report needs a title" env ZELTRO_GUI_SESSION=s1 python3 "$GUI" report ""
+expect_code 3 "report outside an app session" python3 "$GUI" report "x"
 
 expect_code 0 "settings" python3 "$GUI" settings ai --reason "add a key"
 expect_code 2 "settings bad tab" python3 "$GUI" settings nope

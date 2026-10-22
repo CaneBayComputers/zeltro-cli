@@ -77,7 +77,8 @@ STATUS_EXIT = {"ok": EXIT_OK, "declined": EXIT_DECLINED, "refused": EXIT_REFUSED
 TABS = ("general", "appearance", "services", "remotes", "ai", "github")
 LEVELS = ("info", "warning", "danger")
 EVENTS = ("turn-done", "needs-input", "build-done")
-DEFAULT_TIMEOUT = {"ask": 300, "secret": 300, "open": 120, "settings": 15}
+DEFAULT_TIMEOUT = {"ask": 300, "secret": 300, "open": 120, "settings": 15, "screenshot": 30, "report": 15}
+REPORT_TITLE_MAX, REPORT_DETAILS_MAX = 200, 4000
 
 USAGE = """Usage: zeltro gui <action> [args] [--timeout <seconds>]
 
@@ -99,6 +100,11 @@ started; anywhere else it exits 3, so ask in the chat instead.
   zeltro gui preview [--path /page]
         Reload this session's app preview, or open that page of the project's
         site in it. Does not wait.
+  zeltro gui screenshot [--path /page]
+        Capture this session's app preview (that page first, with --path) as a
+        PNG in .zeltro-uploads/. Prints the file's path.
+  zeltro gui report "<what went wrong>" [--details "<what you ran, what happened>"]
+        Report a bug in Zeltro itself (not the project) to its developers.
   zeltro gui status "<text>"
         Show the user, in the app's panel, what you're doing or what changed.
         One or two plain sentences. Does not wait.
@@ -535,16 +541,61 @@ def cmd_preview(argv):
         raise Usage("zeltro gui preview [--path /page]")
     args = {}
     if "path" in opts:
-        path = opts["path"]
-        if not path.startswith("/") or path.startswith("//") or re.search(r"\s", path):
-            raise Usage("--path takes a page of the project's site, starting with /, e.g. --path /pricing")
-        args["path"] = path
+        args["path"] = page_path(opts)
     require_session("preview")
     problem = app_problem()
     if problem:
         return finish(EXIT_NO_APP, "preview", problem)
     send_request("preview", args)
     return finish(EXIT_OK, "preview", "Sent to the Zeltro app.")
+
+
+def page_path(opts):
+    """--path for preview and screenshot: a page of the project's own site."""
+    path = opts["path"]
+    if not path.startswith("/") or path.startswith("//") or re.search(r"\s", path):
+        raise Usage("--path takes a page of the project's site, starting with /, e.g. --path /pricing")
+    return path
+
+
+def cmd_screenshot(argv):
+    """Waits: the app loads the page (if --path), captures it and replies with
+    the PNG it saved in the project's .zeltro-uploads/."""
+    opts, pos = parse(argv, {"path": "", "timeout": ""})
+    if pos:
+        raise Usage("zeltro gui screenshot [--path /page]")
+    args = {"path": page_path(opts)} if "path" in opts else {}
+    timeout = timeout_of("screenshot", opts)
+    require_session("screenshot")
+    code, result, err = request("screenshot", args, timeout)
+    if code:
+        return finish(code, "screenshot", err)
+    rel = result.get("file")
+    if not isinstance(rel, str) or not rel:
+        return finish(EXIT_ERROR, "screenshot", "the Zeltro app returned no file")
+    url = result.get("url") if isinstance(result.get("url"), str) else ""
+    if JSON_OUT:
+        out("success", "screenshot", file=rel, url=url)
+    else:
+        print(rel)
+    return EXIT_OK
+
+
+def cmd_report(argv):
+    """A bug in Zeltro itself, sent to its error tracker by the app (scrubbed,
+    project name removed). Not for the project's own bugs."""
+    opts, pos = parse(argv, {"details": "", "timeout": ""})
+    if len(pos) != 1 or not pos[0].strip():
+        raise Usage('zeltro gui report "<what went wrong>" [--details "<what you ran, what happened>"]')
+    args = {"title": pos[0].strip()[:REPORT_TITLE_MAX]}
+    if opts.get("details", "").strip():
+        args["details"] = opts["details"].strip()[:REPORT_DETAILS_MAX]
+    timeout = timeout_of("report", opts)
+    require_session("report")
+    code, result, err = request("report", args, timeout)
+    if code:
+        return finish(code, "report", err)
+    return finish(EXIT_OK, "report", "Reported to the Zeltro developers.")
 
 
 def cmd_status(argv):
@@ -663,7 +714,8 @@ def cmd_event(argv):
 
 ACTIONS = {"ask": cmd_ask, "secret": cmd_secret, "notify": cmd_notify,
            "open": cmd_open, "settings": cmd_settings, "preview": cmd_preview,
-           "status": cmd_status, "event": cmd_event}
+           "status": cmd_status, "screenshot": cmd_screenshot, "report": cmd_report,
+           "event": cmd_event}
 
 
 def main():

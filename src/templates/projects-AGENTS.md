@@ -80,6 +80,8 @@ zeltro send <project>[@host] ... -- "message"   # --all for everyone else
 zeltro gui ask "<question>" --option A --option B --allow-text   # prints their answer
 zeltro gui preview [--path /page]                   # refresh what they see in the app
 zeltro gui status "<one or two plain sentences>"    # what you're doing / what changed
+zeltro gui screenshot [--path /page]                # PNG of the preview, to check your work
+zeltro gui report "<title>" --details "<what ran>"  # a bug in Zeltro itself
 zeltro gui secret <NAME> [--file .env]              # they enter a key; written to .env, never shown
 zeltro gui notify [--level warning] "<title>" ["<message>"]
 zeltro gui open --project | <url>    zeltro gui settings <ai|remotes|github|...>
@@ -133,5 +135,12 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
 - **Keep the app's status panel current.** When you start a piece of work and when you finish
   it, run `zeltro gui status "<one or two sentences>"`: what you're doing, or what changed and
   what to look at. Write it for someone who isn't a developer, and don't post every step.
+- **Check visible changes yourself:** `zeltro gui screenshot` (or `--path /page`) saves a PNG of
+  the preview in `.zeltro-uploads/` and prints its path; open it to look. It can't capture a page
+  behind a login you don't have.
+- **When Zeltro itself misbehaves** (a `zeltro` command fails unexpectedly, the app's preview or
+  a `zeltro gui` action doesn't work), report it: `zeltro gui report "<short title>" --details
+  "<what you ran and what happened>"`. It's for Zeltro's bugs, not the project's. Never include
+  the user's code, file contents, secrets or personal data.
 
 Full reference for agents: `@@ZELTRO_DOCS@@`.
