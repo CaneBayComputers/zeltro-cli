@@ -1799,14 +1799,27 @@ write_aider_seed_file() {
 # Idempotent: the generated content lives between markers. A re-run refreshes
 # only that block and leaves anything the user wrote outside it untouched.
 #
+# A repo that tracks its own AGENTS.md without Zeltro's block (a Lovable app
+# ships one) gets the context in ZELTRO.md instead, kept out of git locally: an
+# edit to a tracked AGENTS.md would be pushed with the user's next commit, and a
+# Lovable repo syncs it into their Lovable project. ZELTRO_AGENTS_FILE is set to
+# the name written.
+#
 # Args:
 #   $1  project name (required)
 #   $2  optional project directory (defaults to $PROJECTS_DIR_PATH/$1)
 write_project_agents_md() {
     local project_name="$1"
     local project_dir="${2:-$PROJECTS_DIR_PATH/$project_name}"
+    ZELTRO_AGENTS_FILE="AGENTS.md"
     [[ -z "$project_name" ]] && return 0
     [[ ! -d "$project_dir" ]] && return 0
+    if zeltro_is_repo_root "$project_dir" \
+       && git -C "$project_dir" ls-files --error-unmatch -- AGENTS.md > /dev/null 2>&1 \
+       && ! grep -qF "<!-- BEGIN ZELTRO CONTEXT -->" "$project_dir/AGENTS.md" 2>/dev/null; then
+        ZELTRO_AGENTS_FILE="ZELTRO.md"
+        zeltro_git_exclude "$project_dir" ZELTRO.md
+    fi
 
     local env_file="$project_dir/.env"
     local db_conn="" db_name="" db_host=""
@@ -1837,7 +1850,7 @@ write_project_agents_md() {
     ZELTRO_PROJECT_URL="$project_url" \
     ZELTRO_DOCS_PATH="$docs_path" \
     ZELTRO_SVC_NAMES="$(zeltro_service_container postgres) $(zeltro_service_container mysql) $(zeltro_service_container redis) $(zeltro_service_container mongo) $(zeltro_service_container memcached) $(zeltro_service_container mailhog)" \
-    python3 - "$project_dir/AGENTS.md" << 'PYAGENTS'
+    python3 - "$project_dir/$ZELTRO_AGENTS_FILE" << 'PYAGENTS'
 import os, re, sys
 
 path = sys.argv[1]
@@ -2011,12 +2024,14 @@ ai_handoff() {
         write_project_agents_md "$project_name" "$project_dir"
     fi
 
+    local agents_file="${ZELTRO_AGENTS_FILE:-AGENTS.md}" also=""
+    [[ "$agents_file" != "AGENTS.md" ]] && also=" Then read the repo's own AGENTS.md."
     if [[ -z "$seed_prompt" ]]; then
-        seed_prompt="Read AGENTS.md in this directory first — it describes this Zeltro-managed project, its local URL, its database, and the commands to use. Then read README.md if present. The project is running at $(zeltro_project_url "$project_name" || true). You are the developer on it."
+        seed_prompt="Read $agents_file in this directory first — it describes this Zeltro-managed project, its local URL, its database, and the commands to use.$also Then read README.md if present. The project is running at $(zeltro_project_url "$project_name" || true). You are the developer on it."
     fi
 
     echo-return
-    zeltro_project_is_folder "$project_name" || echo-cyan "Wrote AGENTS.md handoff context to $project_name."
+    zeltro_project_is_folder "$project_name" || echo-cyan "Wrote $agents_file handoff context to $project_name."
     echo-cyan "Starting AI session in $project_name..."
     echo-white "(skip with --one-off; configure agent with 'zeltro ai-set')"
     echo-return
@@ -2090,6 +2105,141 @@ EOF
     fi
 }
 
+# npm install in a project container, retried the ways npm actually breaks.
+#   $1 container   $2 exec user ("" = the image's default, root)   $3 1 = quiet
+#
+# A failed first attempt clears node_modules and tries again: an interrupted
+# install dies with ENOTEMPTY on overlayfs and cannot recover the tree in place.
+# If that fails too, the last try adds --legacy-peer-deps. npm 10's arborist
+# crashes outright on some peer sets ("Cannot read properties of null (reading
+# 'edgesOut')", resolving vitest's optional canvas/jsdom peers in a Lovable app,
+# 2026-10-22), and legacy peer resolution never walks that code. It isn't the
+# first choice because it also skips auto-installing peers.
+zeltro_npm_install() {
+    local c="$1" user="$2" quiet="${3:-0}" wd
+    wd="$(zeltro_container_workdir "$c")"
+    _zni_exec() {
+        if [ -n "$user" ]; then docker exec --user "$user" -w "$wd" "$c" "$@"
+        else docker exec -w "$wd" "$c" "$@"; fi
+    }
+    _zni_npm() {
+        if [ "$quiet" = "1" ]; then _zni_exec npm install --no-audit --no-fund --no-progress "$@" > /dev/null 2>&1
+        else _zni_exec npm install --no-audit --no-fund --no-progress "$@"; fi
+    }
+    local rc=0
+    if ! _zni_npm; then
+        echo-yellow "npm install failed — clearing node_modules and retrying once ..."; echo-white
+        docker exec "$c" rm -rf "$wd/node_modules" 2>/dev/null || true
+        if ! _zni_npm; then
+            echo-yellow "npm install failed again — retrying with --legacy-peer-deps ..."; echo-white
+            docker exec "$c" rm -rf "$wd/node_modules" 2>/dev/null || true
+            _zni_npm --legacy-peer-deps || rc=1
+        fi
+    fi
+    unset -f _zni_exec _zni_npm
+    return $rc
+}
+
+# The dev server command for a project whose package.json "dev" script is a
+# plain Vite invocation, with Zeltro's address forced on the command line.
+# Prints it and returns 0; returns 1 when the script isn't plain Vite or already
+# pins --port 3000 (Zeltro's own scaffolds), so the caller keeps `npm run dev`.
+#
+# The image's nginx proxies to port 3000. `npm run dev` on a cloned Vite app
+# serves wherever its config says: 5173 by default, and 8080 with strictPort in a
+# Lovable app (@lovable.dev/vite-tanstack-config), which got a 502 at the
+# project address (2026-10-22). Command-line flags win over the config file.
+# NODE_APP_COMMAND is word-split with no shell, so a script using shell syntax
+# or quoted spaces is left alone.
+zeltro_vite_dev_command() {
+    python3 - << 'PYEOF'
+import json, shlex, sys
+try:
+    dev = (json.load(open('package.json')).get('scripts') or {}).get('dev', '')
+    t = shlex.split(dev) if isinstance(dev, str) else []
+except Exception:
+    sys.exit(1)
+if not t or t[0] != 'vite' or any(c in dev for c in '&|;<>$`()') or any(' ' in a for a in t):
+    sys.exit(1)
+rest, out, i = t[1:], [], 0
+if '--port' in rest and rest[rest.index('--port') + 1:][:1] == ['3000']:
+    sys.exit(1)
+if '--port=3000' in rest:
+    sys.exit(1)
+while i < len(rest):
+    a = rest[i]
+    if a == '--port':
+        i += 2; continue
+    if a == '--host':
+        i += 2 if i + 1 < len(rest) and not rest[i + 1].startswith('-') else 1
+        continue
+    if a.startswith(('--port=', '--host=')) or a in ('--strictPort', '--strict-port'):
+        i += 1; continue
+    out.append(a); i += 1
+print(' '.join(['npx', 'vite'] + out + ['--host', '0.0.0.0', '--port', '3000', '--strictPort']))
+PYEOF
+}
+
+# Is <dir> the top of its own git repo? A project folder that isn't a repo can
+# still sit inside one (a home directory kept in git), and that repo isn't the
+# project's.
+zeltro_is_repo_root() {
+    local top
+    top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 1
+    [ "$(cd "$top" && pwd -P)" = "$(cd "$1" && pwd -P)" ]
+}
+
+# Hide Zeltro's own files from git in <dir>'s repo, locally.
+#   $1 dir   $2... paths relative to it
+#
+# Written to .git/info/exclude, which is never committed or pushed, rather than
+# .gitignore, which is a tracked file: in a repo synced two ways (a Lovable app
+# syncs every push back into the user's Lovable project) an edited .gitignore
+# shows up on the other side. Tracked paths are skipped; exclude can't hide
+# them anyway. No-op unless <dir> is a repo's root. Idempotent.
+zeltro_git_exclude() {
+    local dir="$1"; shift
+    zeltro_is_repo_root "$dir" || return 0
+    local common; common="$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null)" || return 0
+    case "$common" in /*) ;; *) common="$dir/$common" ;; esac
+    local ex="$common/info/exclude" f
+    mkdir -p "$common/info" 2>/dev/null || return 0
+    for f in "$@"; do
+        git -C "$dir" ls-files --error-unmatch -- "$f" > /dev/null 2>&1 && continue
+        grep -qxF "/$f" "$ex" 2>/dev/null && continue
+        grep -qxF "# Zeltro's local files (never committed)" "$ex" 2>/dev/null \
+            || printf '\n%s\n' "# Zeltro's local files (never committed)" >> "$ex"
+        echo "/$f" >> "$ex"
+    done
+    return 0
+}
+
+# Make sure a project's compose publishes its host port on the web service.
+#   $1 compose file   $2 container name   $3 host port
+#
+# The port is how `zeltro status` finds the project's address (and its only URL
+# on macOS and Windows). The fold used to tell the agent to publish no ports at
+# all, so a folded clone came up with ADDRESS: NOT FOUND and no local_url, and
+# the app couldn't preview it (2026-10-22). The file is only rewritten when no
+# mapping exists, since rewriting through PyYAML drops its comments.
+zeltro_compose_publish_port() {
+    local f="$1" name="$2" port="$3"
+    [ -f "$f" ] && [ -n "$port" ] || return 0
+    grep -qE "^[[:space:]]*-[[:space:]]*[\"']?[0-9]+:[0-9]+" "$f" 2>/dev/null && return 0
+    python3 - "$f" "$name" "$port" << 'PYEOF'
+import sys, yaml
+f, name, port = sys.argv[1:4]
+doc = yaml.safe_load(open(f)) or {}
+svcs = doc.get('services') or {}
+web = next((k for k, s in svcs.items() if (s or {}).get('container_name') == name), None)
+if web is None:
+    sys.exit(1)
+svcs[web]['ports'] = ['%s:80' % port]
+with open(f, 'w') as out:
+    yaml.dump(doc, out, default_flow_style=False, allow_unicode=True, sort_keys=False)
+PYEOF
+}
+
 # Install project dependencies based on FILES PRESENT, not on framework
 # classification. This is the fix for "doesn't fit the Zeltro mold": the old
 # gating ran npm only when FRAMEWORK_IS_NODE was set and pip only when
@@ -2131,7 +2281,9 @@ install_project_dependencies() {
         elif [ -f "yarn.lock" ];      then pm="yarn"; pm_args="install"
         fi
         echo-cyan "package.json found — installing Node dependencies with $pm ..."; echo-white
-        if _has_in_container "$pm"; then
+        if [ "$pm" = "npm" ] && _has_in_container npm; then
+            zeltro_npm_install "$project_name" "$(id -u):$(id -g)" || echo-yellow "npm install failed — continuing."
+        elif _has_in_container "$pm"; then
             _in_container "$pm" $pm_args || echo-yellow "$pm install failed — continuing."
         elif command -v "$pm" >/dev/null 2>&1; then
             echo-yellow "$pm not in the container; installing on the host instead."
@@ -2272,8 +2424,13 @@ Produce a working docker-compose.yaml and matching app configuration:
          default:
            external: true
            name: zeltro-cli_vpc
-   - Do NOT publish ports with 'ports:' on any service. Projects are reached by hostname on
-     the shared network; published ports collide with other Zeltro projects.
+   - The web service publishes exactly one port, the host port above to the container's
+     nginx:
+       ports:
+         - "$port:80"
+     No other mapping on it, and no 'ports:' on any other service: fixed ports like 3000 or
+     8080 collide with other Zeltro projects. That one mapping is how Zeltro finds this
+     project's address.
 
 5. **Create the database if the app needs one.** The shared servers are running but this
    project's database may not exist yet. Use the project name with dashes replaced by
@@ -2334,7 +2491,8 @@ zeltro_fold_project() {
         local err; err="$(docker compose config 2>&1 | head -20)"
         bash "$ai_script" "The docker-compose.yaml you just wrote is invalid. Fix it in place.
 Do not change the networking contract described earlier: external network zeltro-cli_vpc,
-container_name $project_name, ipv4_address $ip, and no published ports.
+container_name $project_name, ipv4_address $ip, and the web service publishing only
+\"$port:80\" (no ports on any other service).
 
 docker compose config reported:
 $err" || true
@@ -2355,6 +2513,8 @@ $err" || true
     if ! grep -q "$ip" docker-compose.yaml 2>/dev/null; then
         echo-yellow "Warning: generated compose does not pin $ip — the project will not answer at its assigned address."
     fi
+    zeltro_compose_publish_port docker-compose.yaml "$project_name" "$port" \
+        || echo-yellow "Warning: generated compose publishes no host port and has no service named $project_name — zeltro status will not find its address."
 
     echo-green "Fold complete and compose validates."
     return 0

@@ -65,8 +65,10 @@ EOF
 
 framework_python_start_command() { echo ""; }
 
+# A cloned app's own Vite dev script gets Zeltro's port and host forced on
+# the command line (see zeltro_vite_dev_command).
 framework_node_start_command() {
-    echo "node server.js"
+    zeltro_vite_dev_command || echo "node server.js"
 }
 
 framework_setup_env() {
