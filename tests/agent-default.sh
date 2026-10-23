@@ -86,6 +86,34 @@ json=$( export HOME="$H" PATH=/usr/bin:/bin NO_COLOR=1; "$REPO/src/zeltro" ai-se
 check "valid JSON with agent_auto" "$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(type(d["agent_auto"]).__name__)' "$json" 2>&1)" "bool"
 check "installed_agents sees ~/.local/bin etc." "$(python3 -c 'import json,sys; print(" ".join(sorted(json.loads(sys.argv[1])["installed_agents"])))' "$json" 2>&1)" "claude gemini qwen"
 
+echo "ai-install on a fresh account (no ~/.local/bin yet)"
+# A fake curl whose "installer" creates ~/.local/bin/<agent> and prints the
+# native installers' PATH advice.
+H="$T/fresh"; mkdir -p "$H" "$T/fakebin"
+cat > "$T/fakebin/curl" <<'FAKE'
+#!/bin/sh
+case "$*" in *claude.ai*) a=claude ;; *aider*) a=aider ;; *) exit 22 ;; esac
+cat <<EOS
+mkdir -p "\$HOME/.local/bin"
+printf '#!/bin/sh\necho "2.1.309 (Claude Code)"\n' > "\$HOME/.local/bin/$a"; chmod +x "\$HOME/.local/bin/$a"
+echo "Installing $a ..."
+echo "⚠ Setup notes:"
+echo "  • Native installation exists but ~/.local/bin is not in your PATH. Run:"
+echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc then open a new terminal or run: source ~/.bashrc"
+echo "warning: \$HOME/.local/bin is not on your PATH. To use installed tools, run export PATH=\"\$HOME/.local/bin:\$PATH\""
+echo "✅ Installation complete!"
+EOS
+FAKE
+chmod +x "$T/fakebin/curl"
+for a in claude aider; do
+    rm -rf "$H/.local"
+    err="$T/install-$a.err"
+    json=$( export HOME="$H" PATH="$T/fakebin:/usr/bin:/bin" NO_COLOR=1; "$REPO/src/zeltro" ai-install --agent "$a" --json-output 2>"$err" </dev/null | tail -n 1 )
+    check "$a: installed, found right after" "$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d["status"], d["installed"])' "$json" 2>&1)" "success True"
+    check "$a: installer output still shown" "$(grep -c 'Installation complete' "$err")" "1"
+    check "$a: PATH advice filtered" "$(grep -cE 'not (in|on) your PATH|Setup notes|export PATH' "$err")" "0"
+done
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
