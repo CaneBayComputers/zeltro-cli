@@ -12,6 +12,8 @@
 #
 #   bash tests/agent-default.sh
 set -u
+# The sandboxed HOMEs carry their own ~/.nvm; an NVM_DIR from the caller would win.
+unset NVM_DIR
 
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT

@@ -85,8 +85,19 @@ def run(cmd, timeout=15, env=None):
         return None, ""
 
 
+def which(cmd):
+    """shutil.which, skipping Windows binaries that WSL puts on PATH (/mnt/c/...)."""
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if re.match(r"/mnt/[a-zA-Z]/", d + "/"):
+            continue
+        p = shutil.which(cmd, path=d) if d else None
+        if p:
+            return p
+    return None
+
+
 def installed(agent):
-    if not shutil.which(agent):
+    if not which(agent):
         return False
     if agent == "hermes":
         # Meta's Hermes JavaScript engine installs a "hermes" binary too.
