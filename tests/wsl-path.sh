@@ -97,11 +97,47 @@ FAKE_PREFIX=/usr fn "$T/sys:$BASE_PATH" '_npm_install_global @openai/codex' >/de
 check "unwritable prefix: sudo gets npm by path and this PATH" "$(tr '\n' ' ' < "$T/sudo-ran" 2>/dev/null)" \
     "-n env PATH=$T/sys:/usr/bin:/bin:$NVM_BIN:$WIN_NODE:$WIN_NPM_GLOBAL:/mnt/c/Windows/system32 $NVM_BIN/npm install -g @openai/codex "
 
+# curl: offline (exit 7), or serving a fake nvm whose `nvm install` makes a
+# Node whose npm logs what it installs.
+mkdir -p "$T/offline" "$T/online"
+printf '#!/bin/sh\nexit 7\n' > "$T/offline/curl"
+cat > "$T/online/curl" <<FAKE
+#!/bin/sh
+case "\$*" in
+    *api.github.com*) echo '{"tag_name": "v0.40.9"}' ;;
+    *nvm-sh/nvm/v0.40.9/install.sh*) cat <<'EOS'
+mkdir -p "\$NVM_DIR"
+cat > "\$NVM_DIR/nvm.sh" <<'EON'
+nvm() {
+    case "\$1" in
+        install) b="\$NVM_DIR/versions/node/v24.0.0/bin"; mkdir -p "\$b" "\$NVM_DIR/versions/node/v24.0.0/lib/node_modules"
+                 printf '#!/bin/sh\necho v24.0.0\n' > "\$b/node"
+                 printf '#!/bin/sh\n[ "\$1" = prefix ] && { echo "%s"; exit 0; }\necho "\$0 \$*" >> "%s"\n' "\$NVM_DIR/versions/node/v24.0.0" "\$NVM_DIR/../npm-ran" > "\$b/npm"
+                 chmod +x "\$b/node" "\$b/npm" ;;
+        alias) mkdir -p "\$NVM_DIR/alias"; echo "\$3" > "\$NVM_DIR/alias/default" ;;
+    esac
+}
+EON
+EOS
+    ;;
+    *) exit 22 ;;
+esac
+FAKE
+chmod +x "$T/offline/curl" "$T/online/curl"
+
 mv "$T/home/.nvm" "$T/nvm-off"
-out="$(fn "$BASE_PATH" '_npm_install_global @openai/codex; echo "rc=$?"' 2>&1)"
-mv "$T/nvm-off" "$T/home/.nvm"
+out="$(fn "$T/offline:$BASE_PATH" '_npm_install_global @openai/codex; echo "rc=$?"' 2>&1)"
 check "only Windows' npm: fails" "$(echo "$out" | grep -o 'rc=[0-9]*')" "rc=1"
 check "and says Linux has no Node.js" "$(echo "$out" | grep -c "isn't installed in Linux")" "1"
+check "and nothing half-installed is left as Node" "$(ls "$T/home/.nvm/versions" 2>/dev/null)" ""
+
+echo "no Linux Node at all: installed for this user"
+rm -rf "$T/home/.nvm"
+out="$(fn "$T/online:$BASE_PATH" '_npm_install_global @openai/codex; echo "rc=$?"; command -v npm' 2>&1)"
+check "succeeds" "$(echo "$out" | grep -o 'rc=[0-9]*')" "rc=0"
+check "through the new nvm Node's npm" "$(cat "$T/home/npm-ran" 2>/dev/null)" "$T/home/.nvm/versions/node/v24.0.0/bin/npm install -g @openai/codex"
+check "which now wins on PATH" "$(echo "$out" | tail -n 1)" "$T/home/.nvm/versions/node/v24.0.0/bin/npm"
+rm -rf "$T/home/.nvm"; mv "$T/nvm-off" "$T/home/.nvm"
 check "Windows' npm and codex were never run" "$(cat "$T/windows-ran" 2>/dev/null)" ""
 
 echo
