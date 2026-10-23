@@ -90,6 +90,15 @@ How a profile reaches each agent:
 - **aider.** `--openai-api-base`, with the model as `openai/<model>` (except `ollama/` and `ollama_chat/` routes) and the key as `openai=<key>`.
 - **opencode, hermes.** See their notes in `functions.sh`.
 
+**First-run screens are pre-answered** (`scripts/agent_firstrun.py`, run before every session, after `ai-install` and after `ai-login`), so the app's first session goes straight to work. Each answer goes where the agent itself stores it, only when the user hasn't answered, and an unparseable file is never touched:
+- **claude:** `hasCompletedOnboarding` (+ `lastOnboardingVersion`) in `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when set), only once it's signed in or runs on a key, since the wizard is how a subscription user signs in. A profile's `ANTHROPIC_API_KEY` is pre-approved (its last 20 characters in `customApiKeyResponses.approved`) unless the user rejected it. Unattended mode also writes `skipDangerousModePermissionPrompt` (settings) and `hasSeenAutoDefaultNudge` (global): without them Claude Code 2.1 shows the "Bypass Permissions mode" disclaimer, ignores bypass in background runs, and offers "Make auto mode your default?". `ai-unattended` reads Claude as on only with that consent recorded.
+- **codex:** `check_for_update_on_startup = false` ("Update available! … Update now").
+- **gemini:** `security.auth.selectedType = "gemini-api-key"` ("How would you like to authenticate?").
+- **aider:** `gitignore`, `show-release-notes`, `show-model-warnings`, `check-update` off and `analytics-disable` in `~/.aider.conf.yml`; `.aider*` goes in the project's `.git/info/exclude` instead.
+- **qwen, opencode:** nothing blocks when Zeltro passes the key.
+- **Folder trust** ("Is this a project you created or one you trust?", "Do you trust the files in this folder?", Codex's "Trust this folder?") is answered for projects Zeltro itself creates (`new`, `install`, `create`): Claude's `projects[DIR].hasTrustDialogAccepted`, Gemini's `trustedFolders.json` and Codex's `trust_level = "trusted"`. A clone keeps the question, since a cloned repo can carry hooks and MCP servers.
+- `ZELTRO_NO_AGENT_FIRSTRUN=1` skips all of it.
+
 The commands:
 - **`zeltro ai-status --agent <a> --json-output`** (or `--json`). Local and fast. Gives `{"installed", "version", "auth", "signed_in", "account", "subscription", "api_key", "endpoint", "login_supported", "unattended"}`. `unattended` is `"true"`, `"false"` or `"unknown"`, read from the agent's own config as `ai-set` and `ai-unattended` read it.
   - `auth` is `subscription`, `api_key`, `endpoint`, `none`, or `unknown` (a key-only agent with no key).

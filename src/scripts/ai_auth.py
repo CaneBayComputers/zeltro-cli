@@ -96,6 +96,18 @@ def which(cmd):
     return None
 
 
+def firstrun(agent):
+    """Pre-answer the agent's first-run screens now that it's signed in (Claude's
+    `auth login` before 2.1.3xx left the whole onboarding wizard for the first
+    session)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import agent_firstrun
+        agent_firstrun.main([agent])
+    except Exception:
+        pass
+
+
 def installed(agent):
     if not which(agent):
         return False
@@ -318,6 +330,7 @@ class Login:
             return 1
         st = status(self.agent)
         if st["signed_in"]:
+            firstrun(self.agent)
             self.emit("done", signed_in=True, account=st["account"], auth=st["auth"])
             return 0
         self.emit("error", message=self.last_line())
@@ -463,6 +476,7 @@ def main(argv):
         if not force:
             st = status(agent)
             if st["signed_in"] and st["auth"] == "subscription":
+                firstrun(agent)
                 login.emit("done", signed_in=True, account=st["account"], auth=st["auth"], already=True)
                 return 0
         deadline = time.time() + timeout
