@@ -95,6 +95,7 @@ How a profile reaches each agent:
 - **codex:** `check_for_update_on_startup = false` ("Update available! … Update now").
 - **gemini:** `security.auth.selectedType = "gemini-api-key"` ("How would you like to authenticate?").
 - **aider:** `gitignore`, `show-release-notes`, `show-model-warnings`, `check-update` off and `analytics-disable` in `~/.aider.conf.yml`; `.aider*` goes in the project's `.git/info/exclude` instead.
+- **hermes:** `telemetry.shared_metrics.offer_version: 2` through `hermes config set` ("Help improve Hermes?"; sharing stays off, its default). Hermes is only started when its `config.yaml` exists and lacks the marker.
 - **qwen, opencode:** nothing blocks when Zeltro passes the key.
 - **Folder trust** ("Is this a project you created or one you trust?", "Do you trust the files in this folder?", Codex's "Trust this folder?") is answered for projects Zeltro itself creates (`new`, `install`, `create`): Claude's `projects[DIR].hasTrustDialogAccepted`, Gemini's `trustedFolders.json` and Codex's `trust_level = "trusted"`. A clone keeps the question, since a cloned repo can carry hooks and MCP servers.
 - `ZELTRO_NO_AGENT_FIRSTRUN=1` skips all of it.
