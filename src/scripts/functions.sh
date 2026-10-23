@@ -194,14 +194,30 @@ zeltro_agent_display_name() {
 
 # Whether agent $1's CLI can run here. Plain `command -v`, except for hermes (below).
 zeltro_agent_installed() {
-    if [ "$1" = "hermes" ]; then zeltro_hermes_is_agent; else command -v "$1" >/dev/null 2>&1; fi
+    if [ "$1" = "hermes" ]; then zeltro_hermes_is_agent; else [ -n "$(zeltro_host_cmd "$1")" ]; fi
+}
+
+# The path of command $1 on PATH, skipping Windows binaries. Inside WSL the
+# Windows PATH is appended (/mnt/c/...), so `command -v npm` can find Windows'
+# npm, or a Windows install of an agent, when Linux has none. Those can't run
+# Linux tools or write Linux folders, so they never count. Prints nothing when
+# only a Windows one exists.
+zeltro_host_cmd() {
+    local p
+    while IFS= read -r p; do
+        case "$p" in /mnt/[a-zA-Z]/*) continue ;; esac
+        echo "$p"; return 0
+    done <<EOF_ZHC
+$(type -aP "$1" 2>/dev/null)
+EOF_ZHC
+    return 1
 }
 
 # Meta's Hermes JavaScript engine (React Native) also installs a "hermes" binary.
 # Returns 0 when the one on PATH is Nous Research's Hermes Agent.
 zeltro_hermes_is_agent() {
-    command -v hermes >/dev/null 2>&1 || return 1
-    hermes --version 2>/dev/null | grep -q "Hermes Agent"
+    local h; h=$(zeltro_host_cmd hermes) || return 1
+    "$h" --version 2>/dev/null | grep -q "Hermes Agent"
 }
 
 # Per-user bin directories that agent installers use: Claude's native installer,
@@ -211,6 +227,10 @@ zeltro_hermes_is_agent() {
 # so an installed agent looked missing and couldn't be launched. Appended, so
 # anything already on PATH still wins. Detection and launch both go through
 # PATH, so they agree. Runs once, when this file is sourced.
+#
+# Inside WSL, Windows' PATH (/mnt/c/...) is moved after all of these. Otherwise
+# Windows' npm or node shadows an nvm Node that only ~/.bashrc loads (the app
+# runs commands non-interactively), and `npm install -g` goes to Windows.
 zeltro_add_agent_bin_dirs() {
     [ -n "${HOME:-}" ] || return 0
     local d prefix="${NPM_CONFIG_PREFIX:-${npm_config_prefix:-}}" nvm_bin=""
@@ -220,19 +240,29 @@ zeltro_add_agent_bin_dirs() {
     fi
     # nvm: the Node its default alias names (e.g. "20" -> the newest v20.x), else
     # the newest installed. Global npm packages live per Node version.
-    if [ -d "$HOME/.nvm/versions/node" ]; then
+    local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+    if [ -d "$nvm_dir/versions/node" ]; then
         local nvm_default=""
-        [ -f "$HOME/.nvm/alias/default" ] && nvm_default=$(head -n 1 "$HOME/.nvm/alias/default" | tr -d ' \r')
+        [ -f "$nvm_dir/alias/default" ] && nvm_default=$(head -n 1 "$nvm_dir/alias/default" | tr -d ' \r')
         nvm_default="${nvm_default#v}"
         case "$nvm_default" in
-            [0-9]*) nvm_bin=$(ls -d "$HOME/.nvm/versions/node/v$nvm_default/bin" "$HOME/.nvm/versions/node/v$nvm_default".*/bin 2>/dev/null | sort -V | tail -n 1) ;;
+            [0-9]*) nvm_bin=$(ls -d "$nvm_dir/versions/node/v$nvm_default/bin" "$nvm_dir/versions/node/v$nvm_default".*/bin 2>/dev/null | sort -V | tail -n 1) ;;
         esac
-        [ -n "$nvm_bin" ] || nvm_bin=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -n 1)
+        [ -n "$nvm_bin" ] || nvm_bin=$(ls -d "$nvm_dir"/versions/node/*/bin 2>/dev/null | sort -V | tail -n 1)
     fi
     for d in "$HOME/.local/bin" "${prefix:+$prefix/bin}" "$HOME/.npm-global/bin" "$HOME/.bun/bin" "$HOME/.opencode/bin" "$nvm_bin"; do
         [ -n "$d" ] && [ -d "$d" ] || continue
         case ":$PATH:" in *":$d:"*) ;; *) PATH="$PATH:$d" ;; esac
     done
+    case ":$PATH:" in
+        *:/mnt/[a-zA-Z]/*)
+            local linux="" windows="" IFS=:
+            for d in $PATH; do
+                case "$d" in /mnt/[a-zA-Z]/*) windows="$windows${windows:+:}$d" ;; *) linux="$linux${linux:+:}$d" ;; esac
+            done
+            PATH="$linux${windows:+:$windows}"
+            ;;
+    esac
     export PATH
 }
 zeltro_add_agent_bin_dirs
@@ -481,18 +511,24 @@ zeltro_ai_agent_problem() {
 # functions.sh already puts on PATH. The app installs agents with no terminal to
 # type a password into.
 _npm_install_global() {
-    if ! command -v npm >/dev/null 2>&1; then
-        echo-red "npm is not installed, so $1 can't be installed. Install Node.js first."
+    local npm; npm=$(zeltro_host_cmd npm)
+    if [ -z "$npm" ]; then
+        if command -v npm >/dev/null 2>&1; then
+            echo-red "Node.js isn't installed in Linux (only Windows' npm is visible), so $1 can't be installed. Install Node.js inside WSL first."
+        else
+            echo-red "npm is not installed, so $1 can't be installed. Install Node.js first."
+        fi
         return 1
     fi
-    local prefix; prefix="$(npm prefix -g 2>/dev/null)"
+    local prefix; prefix="$("$npm" prefix -g 2>/dev/null)"
     if [ -w "$prefix/lib/node_modules" ] || { [ ! -d "$prefix/lib/node_modules" ] && [ -w "$prefix" ]; }; then
-        npm install -g "$@"
+        "$npm" install -g "$@"
     elif sudo -n true 2>/dev/null; then
-        sudo -n npm install -g "$@"
+        # By path, with this PATH: npm and node may live outside sudo's secure_path.
+        sudo -n env PATH="$PATH" "$npm" install -g "$@"
     else
         echo-cyan "npm's global folder ($prefix) isn't writable; installing into ~/.npm-global instead."
-        mkdir -p "$HOME/.npm-global" && npm install -g --prefix "$HOME/.npm-global" "$@" || return 1
+        mkdir -p "$HOME/.npm-global" && "$npm" install -g --prefix "$HOME/.npm-global" "$@" || return 1
         case ":$PATH:" in *":$HOME/.npm-global/bin:"*) ;; *) export PATH="$PATH:$HOME/.npm-global/bin" ;; esac
     fi
 }
