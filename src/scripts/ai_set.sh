@@ -495,6 +495,14 @@ configure_gemini_auth() {
     esac
 }
 
+# The native installers (Claude, aider's uv, Hermes) end with "~/.local/bin is
+# not in your PATH, run: echo 'export PATH=...' >> ~/.bashrc". Zeltro adds those
+# folders itself (zeltro_add_agent_bin_dirs), so in the app that advice is only
+# confusing. Drops just those lines; everything else passes through unbuffered.
+_quiet_path_advice() {
+    awk '/not (in|on) your PATH|export PATH=|to your PATH|open a new terminal or run: source|^[^A-Za-z]*Setup notes:[[:space:]]*$/ { next } { print; fflush() }'
+}
+
 ensure_ai_agent_installed() {
     local cli_command="$1"
     local exec_command="$cli_command"
@@ -525,7 +533,7 @@ ensure_ai_agent_installed() {
             _npm_install_global @qwen-code/qwen-code
             ;;
         claude)
-            curl -fsSL https://claude.ai/install.sh | bash
+            { curl -fsSL https://claude.ai/install.sh | bash; } 2>&1 | _quiet_path_advice
             ;;
         opencode)
             _npm_install_global opencode-ai
@@ -533,25 +541,20 @@ ensure_ai_agent_installed() {
         hermes)
             # --non-interactive skips Hermes's setup wizard (Zeltro passes the model and
             # key); the browser and computer-use extras download Chromium and aren't used.
-            curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive --skip-browser --skip-computer-use
-            case ":$PATH:" in
-                *":$HOME/.local/bin:"*) ;;
-                *) export PATH="$HOME/.local/bin:$PATH" ;;
-            esac
+            { curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive --skip-browser --skip-computer-use; } 2>&1 | _quiet_path_advice
             ;;
         aider)
-            curl -LsSf https://aider.chat/install.sh | sh
-            # aider installs into ~/.local/bin, which isn't necessarily on PATH
-            # in this shell yet — make the check below (and this run) see it.
-            case ":$PATH:" in
-                *":$HOME/.local/bin:"*) ;;
-                *) export PATH="$HOME/.local/bin:$PATH" ;;
-            esac
+            { curl -LsSf https://aider.chat/install.sh | sh; } 2>&1 | _quiet_path_advice
             ;;
         *)
             echo-yellow "Automatic installation for '$cli_command' is not configured. Please install it manually."
             ;;
     esac
+    # The agent bin dirs were added when Zeltro started, but only those that
+    # existed then. A fresh account's first install creates ~/.local/bin (or an
+    # npm prefix), so look again, as ai-status and every later run do.
+    zeltro_add_agent_bin_dirs
+    hash -r
 
     if zeltro_agent_installed "$exec_command"; then
         echo-green "AI agent CLI '$cli_command' installed successfully (command: $exec_command)."
