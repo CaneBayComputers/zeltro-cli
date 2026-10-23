@@ -283,9 +283,17 @@ class Login:
         return None
 
     def last_line(self):
-        lines = [l.strip() for l in self.text().splitlines() if l.strip()]
+        """The sign-in's last error, readable. Claude prints its paste prompt
+        without a newline, so the error after a code lands on the same line."""
+        lines = [re.sub(r"^.*?Paste code here if prompted >\s*", "", l).strip() for l in self.text().splitlines()]
+        lines = [l for l in lines if l]
         useful = [l for l in lines if re.search(r"error|fail|invalid|denied|expired|timed out", l, re.I)]
-        return (useful or lines or ["the sign-in process exited"])[-1][:300]
+        line = (useful or lines or ["the sign-in process exited"])[-1][:300]
+        # Claude 2.1.309 exits on a well-formed but wrong code with "Login
+        # failed: Request failed with status code 400".
+        if self.agent == "claude" and re.search(r"status code 400|invalid_grant", line):
+            return "That code wasn't accepted. Start the sign-in again and copy the whole code from the sign-in page."
+        return line
 
     def finish(self, deadline):
         while self.proc.poll() is None and time.time() < deadline:
