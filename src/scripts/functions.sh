@@ -379,6 +379,24 @@ zeltro_agent_env() {
             _export_agent_base GOOGLE_GEMINI_BASE_URL
             ;;
     esac
+    # With the key and endpoint in place, so Claude can tell it runs on a key.
+    zeltro_agent_firstrun "$1"
+    return 0
+}
+
+# Pre-answer the agent's first-run screens (theme and sign-in wizards, update
+# pickers, "use this API key?", aider's questions) where the user hasn't
+# answered yet, so the app's first session goes straight to work. Runs before
+# every session, after ai-install and after ai-login; idempotent and cheap once
+# answered. See scripts/agent_firstrun.py for each agent's screens and keys.
+# Aider's .aider* files go in the project's .git/info/exclude, as Zeltro's own
+# do, instead of the .gitignore aider offers to edit. ZELTRO_NO_AGENT_FIRSTRUN=1
+# skips it all.
+zeltro_agent_firstrun() {
+    [ "${ZELTRO_NO_AGENT_FIRSTRUN:-0}" = "1" ] && return 0
+    [ -n "${1:-}" ] || return 0
+    python3 "$ZELTRO_SRC_DIR/scripts/agent_firstrun.py" "$1" >/dev/null 2>&1 || true
+    [ "$1" = "aider" ] && zeltro_git_exclude "$PWD" ".aider*" >/dev/null 2>&1
     return 0
 }
 
@@ -1358,9 +1376,12 @@ handle_docker_compose_conflict() {
 # a cloned repo can carry hooks or MCP servers, which is exactly what that
 # dialog protects against, so a clone keeps its one-time question.
 #
-# Claude Code: projects[DIR].hasTrustDialogAccepted in ~/.claude.json, written
-#   atomically (temp file + rename), retried if Claude rewrote the file
-#   meanwhile, and skipped (never truncated) if the file doesn't parse.
+# Claude Code: projects[DIR].hasTrustDialogAccepted in ~/.claude.json (or
+#   $CLAUDE_CONFIG_DIR/.claude.json), written atomically (temp file + rename),
+#   retried if Claude rewrote the file meanwhile, and skipped (never truncated)
+#   if the file doesn't parse.
+# Gemini CLI: DIR -> "TRUST_FOLDER" in ~/.gemini/trustedFolders.json ("Do you
+#   trust the files in this folder?").
 # Codex: [projects."DIR"] trust_level = "trusted" in config.toml, the entry
 #   Codex writes itself; appended only if the project has no entry.
 # Best effort: never fails the caller. Set ZELTRO_NO_AGENT_TRUST=1 to skip.
@@ -1372,31 +1393,39 @@ zeltro_trust_project_for_agents() {
     projects="$(cd "$projects" 2>/dev/null && pwd -P)" || return 0
     case "$dir" in "$projects"/*) ;; *) return 0 ;; esac
 
-    if [ -f "$HOME/.claude.json" ]; then
-        python3 - "$HOME/.claude.json" "$dir" <<'PYTRUST' >/dev/null 2>&1 || true
-import json, os, sys, tempfile, time
-path, proj = sys.argv[1], sys.argv[2]
-for _ in range(5):
-    try:
-        before = os.stat(path).st_mtime_ns
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        sys.exit(0)                      # unreadable or mid-write: leave it alone
+    # Claude's file is created when missing: on a fresh account the first
+    # project can come before Claude's first start.
+    # Only for agents that are installed or already have the file, so a machine
+    # without Gemini doesn't grow a ~/.gemini.
+    local claude_json="${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/.claude.json}" gemini_json="$HOME/.gemini/trustedFolders.json"
+    claude_json="${claude_json:-$HOME/.claude.json}"
+    [ -f "$claude_json" ] || zeltro_agent_installed claude || claude_json=""
+    [ -f "$gemini_json" ] || zeltro_agent_installed gemini || gemini_json=""
+    python3 - "$claude_json" "$dir" "$gemini_json" "$ZELTRO_SRC_DIR/scripts" <<'PYTRUST' >/dev/null 2>&1 || true
+import sys
+claude_path, proj, gemini_path, scripts = sys.argv[1:5]
+sys.dont_write_bytecode = True   # no __pycache__ in the install
+sys.path.insert(0, scripts)
+from agent_firstrun import update_json
+
+def claude(data):
     entry = data.setdefault("projects", {}).setdefault(proj, {})
     if entry.get("hasTrustDialogAccepted") is True:
-        sys.exit(0)
+        return False
     entry["hasTrustDialogAccepted"] = True
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".claude.json.zeltro-")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    os.chmod(tmp, os.stat(path).st_mode & 0o777)
-    if os.stat(path).st_mtime_ns != before:  # Claude wrote it meanwhile: redo on the new copy
-        os.unlink(tmp); time.sleep(0.2); continue
-    os.replace(tmp, path)
-    sys.exit(0)
+    return True
+
+def gemini(data):
+    if data.get(proj):
+        return False
+    data[proj] = "TRUST_FOLDER"
+    return True
+
+if claude_path:
+    update_json(claude_path, claude)
+if gemini_path:
+    update_json(gemini_path, gemini)
 PYTRUST
-    fi
 
     local codex_cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
     if [ -f "$codex_cfg" ] && command -v codex >/dev/null 2>&1; then
@@ -2903,7 +2932,7 @@ zeltro_offer_agent_autonomy() {
     local cfg desc
 
     case "$agent" in
-        claude) cfg="$HOME/.claude/settings.json"; desc='"permissions": {"defaultMode": "bypassPermissions"}' ;;
+        claude) cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; desc='"permissions": {"defaultMode": "bypassPermissions"}' ;;
         codex)  cfg="$HOME/.codex/config.toml";    desc='approval_policy = "never", sandbox_mode = "danger-full-access"' ;;
         gemini) cfg="$HOME/.gemini/settings.json"; desc='"autoAccept": true' ;;
         qwen)   cfg="$HOME/.qwen/settings.json";   desc='"autoAccept": true' ;;
@@ -2984,6 +3013,9 @@ if os.path.exists(path):
         print("UNPARSEABLE"); sys.exit(2)
 if agent == "claude":
     data.setdefault("permissions", {})["defaultMode"] = "bypassPermissions"
+    # Claude Code 2.1 ignores bypassPermissions (or shows its "Bypass
+    # Permissions mode ... No, exit" disclaimer) until this consent is recorded.
+    data["skipDangerousModePermissionPrompt"] = True
 else:
     data["autoAccept"] = True
 with open(path, "w") as f:
@@ -2996,6 +3028,23 @@ PYEOF
                 echo-yellow "$cfg exists but is not valid JSON — leaving it untouched."
                 echo-white  "Add this yourself once it parses."
                 return 1
+            fi
+            if [ "$agent" = "claude" ]; then
+                # With bypass on, Claude Code 2.1 opens on "Make auto mode your
+                # default permission mode?" until this is in its global config.
+                local gj="${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/.claude.json}"
+                python3 - "${gj:-$HOME/.claude.json}" "$ZELTRO_SRC_DIR/scripts" <<'PYNUDGE' >/dev/null 2>&1 || true
+import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[2])
+from agent_firstrun import update_json
+def change(d):
+    if d.get("hasSeenAutoDefaultNudge") is True:
+        return False
+    d["hasSeenAutoDefaultNudge"] = True
+    return True
+update_json(sys.argv[1], change)
+PYNUDGE
             fi
             ;;
         codex)
@@ -3074,7 +3123,7 @@ zeltro_read_agent_autonomy() {
     local agent="$1" cfg
 
     case "$agent" in
-        claude) cfg="$HOME/.claude/settings.json" ;;
+        claude) cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" ;;
         codex)  cfg="$HOME/.codex/config.toml" ;;
         gemini) cfg="$HOME/.gemini/settings.json" ;;
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
@@ -3117,7 +3166,20 @@ try:
 except Exception:
     print("unknown"); sys.exit(0)
 if agent == "claude":
-    print("true" if data.get("permissions", {}).get("defaultMode") == "bypassPermissions" else "false")
+    # bypassPermissions alone is downgraded by Claude Code 2.1 until the consent
+    # is recorded: skipDangerousModePermissionPrompt in settings, or the older
+    # bypassPermissionsModeAccepted in the global config.
+    import os
+    bypass = data.get("permissions", {}).get("defaultMode") == "bypassPermissions"
+    consent = data.get("skipDangerousModePermissionPrompt") is True
+    if bypass and not consent:
+        g = os.environ.get("CLAUDE_CONFIG_DIR")
+        g = os.path.join(g, ".claude.json") if g else os.path.expanduser("~/.claude.json")
+        try:
+            consent = json.load(open(g)).get("bypassPermissionsModeAccepted") is True
+        except Exception:
+            pass
+    print("true" if bypass and consent else "false")
 else:
     print("true" if data.get("autoAccept") is True else "false")
 PYEOF
@@ -3151,7 +3213,7 @@ zeltro_revoke_agent_autonomy() {
     local agent="$1" cfg
 
     case "$agent" in
-        claude) cfg="$HOME/.claude/settings.json" ;;
+        claude) cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" ;;
         codex)  cfg="$HOME/.codex/config.toml" ;;
         gemini) cfg="$HOME/.gemini/settings.json" ;;
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
@@ -3239,7 +3301,7 @@ PYEOF
 # offer/write/read/revoke and drifts the moment one of them is edited alone.
 zeltro_agent_config_path() {
     case "$1" in
-        claude) echo "$HOME/.claude/settings.json" ;;
+        claude) echo "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" ;;
         codex)  echo "$HOME/.codex/config.toml" ;;
         gemini) echo "$HOME/.gemini/settings.json" ;;
         qwen)   echo "$HOME/.qwen/settings.json" ;;

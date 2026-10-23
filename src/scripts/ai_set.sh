@@ -558,6 +558,7 @@ ensure_ai_agent_installed() {
 
     if zeltro_agent_installed "$exec_command"; then
         echo-green "AI agent CLI '$cli_command' installed successfully (command: $exec_command)."
+        zeltro_agent_firstrun "$cli_command"
         echo-white
         zeltro_offer_agent_autonomy "$cli_command"
         return 0
