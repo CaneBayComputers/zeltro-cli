@@ -8,6 +8,7 @@ KOEL_APP_KEY="base64:$(openssl rand -base64 32)"
 pre_install() {
     docker exec zeltro-postgres psql -U root -d postgres -c "CREATE DATABASE koel;" 2>/dev/null || true
 
+    zeltro_pull_image phanan/koel:latest
     # Koel's init writes back to .env; bind-mounting the file fails due to AppArmor on the host.
     # Write .env inside the ephemeral container and run koel:init there, then use SKIP_INIT for the main container.
     docker run --rm --network "$(zeltro_network_name)" \

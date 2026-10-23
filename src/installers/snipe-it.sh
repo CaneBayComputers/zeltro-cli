@@ -2,7 +2,8 @@ INSTALL_DISPLAY="Snipe-IT"
 INSTALL_NOTES="Setup wizard appears on first visit — create admin account there."
 
 pre_install() {
-    echo-white "  Generating Snipe-IT APP_KEY (pulling image, this takes a moment)..."
+    zeltro_pull_image snipe/snipe-it
+    echo-white "  Generating Snipe-IT APP_KEY ..."
     SNIPEIT_APP_KEY=$(docker run --rm snipe/snipe-it php artisan key:generate --show 2>/dev/null | tr -d '\r\n')
     if [ -z "$SNIPEIT_APP_KEY" ]; then
         echo-red "  Failed to generate APP_KEY. Is Docker running?"

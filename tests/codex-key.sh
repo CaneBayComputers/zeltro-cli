@@ -31,6 +31,7 @@ case "${FAKE_CODEX:-ok}" in
     ok) echo '{"project_name":"todo","recommended":"framework","customization_requested":true,"framework":{"slug":"flask","reason":"small"},"apps":[],"folder":null,"database":{"slug":"sqlite","reason":"tiny"}}' ;;
     401) echo "ERROR: unexpected status 401 Unauthorized: Incorrect API key provided: sk-proj-****0000. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, request id: req_1" >&2; sleep 60; exit 1 ;;
     garbage) echo "I am not sure what you mean." ;;
+    markdown) echo '{"project_name":"pedal-lending","recommended":"app","customization_requested":false,"framework":{"slug":"flask","reason":"**Custom** tracker, see https://flask.palletsprojects.com."},"apps":[{"slug":"snipe-it","reason":"Tracks pedals [checked out to friends](https://snipe-it.readme.io/docs/overview) and checked back in upon return."}],"folder":null,"database":{"slug":"sqlite","reason":"`sqlite` is tiny"}}' ;;
 esac
 FAKE
 chmod +x "$T/bin/codex"
@@ -81,6 +82,10 @@ check "a 401 is agent_failed" "$(field "$out" error)" "agent_failed"
 check "with the agent's own words" "$(field "$out" message | grep -c 'Codex: unexpected status 401 Unauthorized: Incorrect API key provided')" "1"
 check "url and request id trimmed" "$(field "$out" message | grep -c 'request id')" "0"
 check "stopped early, not after the agent's retries ($took s)" "$([ "$took" -lt 30 ] && echo fast)" "fast"
+out="$(run_classify markdown)"
+reasons="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(" | ".join(c["reason"] for c in d["candidates"]) + " | " + d["database"]["reason"])' "$out" 2>/dev/null)"
+check "markdown stripped from reasons" "$reasons" \
+    "Tracks pedals checked out to friends and checked back in upon return. | Custom tracker, see. | sqlite is tiny"
 out="$(run_classify garbage)"
 check "an unusable answer is no_stack" "$(field "$out" error)" "no_stack"
 out="$( ( export HOME="$T/home" PATH="$T/bin:$PATH" FAKE_CODEX=401 ZELTRO_TEST_PROJECTS_DIR="$T/projects"; cd "$T" && ZELTRO_AI_AGENT=codex ZELTRO_AI_MODEL=gpt-test ZELTRO_AI_API_BASE= ZELTRO_AI_API_KEY=sk-proj-one "$REPO/src/zeltro" create --one-off --json-output "A simple to-do list website" 2>/dev/null | tail -n 1 ) )"

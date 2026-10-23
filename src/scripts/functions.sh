@@ -730,6 +730,18 @@ echo-return() { if [[ "$JSON_OUTPUT" != "1" ]]; then echo "$@"; fi; return 0; }
 # every existing project's compose file names that network explicitly. Baking
 # the current product name in here meant a freshly created project asked for a
 # network that does not exist on such a machine and refused to start.
+# Pull image $1 with docker's own progress, unless it's already here. An
+# installer whose first step is `docker run --rm <big image> ...` inside $( )
+# pulled implicitly with its output swallowed: Snipe-IT's 1.5 GB sat silent for
+# 12 minutes on a fresh machine. With --json-output the progress goes to stderr.
+# A failed pull isn't fatal here; the `docker run` after it reports the error.
+zeltro_pull_image() {
+    docker image inspect "$1" >/dev/null 2>&1 && return 0
+    echo-white "  Downloading $1 (first time only; large images take several minutes) ..."
+    if [[ "$JSON_OUTPUT" == "1" ]]; then docker pull "$1" >&2; else docker pull "$1"; fi
+    return 0
+}
+
 zeltro_network_name() {
     echo "${VPC_NETWORK_NAME:-${COMPOSE_PROJECT_NAME:-zeltro-cli}_vpc}"
 }
