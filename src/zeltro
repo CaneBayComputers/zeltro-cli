@@ -160,7 +160,7 @@ show_help() {
     echo "  zeltro ai-install --agent <a>  - Install one agent CLI (doesn't change the default)"
     echo "  zeltro ai-status --agent <a>   - Installed? Version? Signed in? (--json-output)"
     echo "  zeltro ai-login --agent <a>    - Sign an agent in with its subscription (claude, codex)"
-    echo "  zeltro ai-unattended [agent] - Let an agent run without approval prompts (--status, --revoke)"
+    echo "  zeltro ai-unattended --agent <a> on|off|status - Let an agent act without approval prompts (--json-output)"
     echo "  zeltro peers              - List agent sessions running in the Zeltro app (all hosts)"
     echo "  zeltro send <p>[@host] ... -- <msg>"
     echo "                            - Message other agent sessions (--all for everyone else;"
@@ -776,6 +776,18 @@ case "$1" in
         "$SCRIPT_DIR/scripts/ai_set.sh" --install-only "${@:2}"
         ;;
     "ai-status")
+        # The approval setting is read by the same bash code ai-set and
+        # ai-unattended use, so all three report it alike.
+        _ua_agent=""; _ua_prev=""
+        for _ua in "${@:2}"; do
+            if [ "$_ua_prev" = "--agent" ]; then _ua_agent="$_ua"; fi
+            _ua_prev="$_ua"
+        done
+        if [ -n "$_ua_agent" ]; then
+            case " $ZELTRO_KNOWN_AI_AGENTS " in
+                *" $_ua_agent "*) export ZELTRO_UNATTENDED_AGENT="$_ua_agent" ZELTRO_UNATTENDED_STATE="$(zeltro_read_agent_autonomy "$_ua_agent")" ;;
+            esac
+        fi
         # What a run would use (ZELTRO_AI_* overrides, else the .env), so a
         # profile with its own key or endpoint reports ready.
         ZELTRO_PROFILE_AGENT="${AI_AGENT:-}" \

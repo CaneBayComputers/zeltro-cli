@@ -91,11 +91,12 @@ How a profile reaches each agent:
 - **opencode, hermes.** See their notes in `functions.sh`.
 
 The commands:
-- **`zeltro ai-status --agent <a> --json-output`** (or `--json`). Local and fast. Gives `{"installed", "version", "auth", "signed_in", "account", "subscription", "api_key", "endpoint", "login_supported"}`.
+- **`zeltro ai-status --agent <a> --json-output`** (or `--json`). Local and fast. Gives `{"installed", "version", "auth", "signed_in", "account", "subscription", "api_key", "endpoint", "login_supported", "unattended"}`. `unattended` is `"true"`, `"false"` or `"unknown"`, read from the agent's own config as `ai-set` and `ai-unattended` read it.
   - `auth` is `subscription`, `api_key`, `endpoint`, `none`, or `unknown` (a key-only agent with no key).
   - A run's own key or endpoint (`ZELTRO_AI_*`, else the `.env`) counts as signed in for that agent.
   - Claude uses `claude auth status`, Codex `codex login status`, OpenCode its `auth.json`, Hermes `hermes auth status`. These see stored credentials, not whether the server still accepts them.
 - **`zeltro ai-install --agent <a> [--json-output]`** is the same as `ai-set --install-only`. It never prompts. npm-installed agents go to npm's global folder when writable, else through passwordless sudo (npm by absolute path, with Zeltro's `PATH`), else into `~/.npm-global`. Only a Linux npm is used; inside WSL with only Windows' npm visible, it fails and says Node.js isn't installed in Linux.
+- **`zeltro ai-unattended --agent <a> on|off|status [--json-output]`** turns the agent's own approval setting on or off (in its own config file: Claude's `permissions.defaultMode`, Codex's `approval_policy`, and so on; `--help` lists each file) and changes nothing else: not the `.env`, not the default agent, and it never installs. It reads the setting back afterwards. JSON: `{"action": "ai_unattended", "status": "success", "agent", "unattended": "true"|"false"|"unknown", "config_file"}`. Errors carry `"error"`: `not_installed` (install first with `ai-install`), `unknown_agent`, `no_agent`, `write_failed` or `not_applied` (the setting doesn't read as asked after the write). `status` works for an agent that isn't installed. It doesn't need Docker. The older form `ai-unattended <a> [--revoke|--status]` still works.
 - **`zeltro ai-login --agent <a> --json-output [--local-browser] [--force]`** runs the agent's sign-in, printing JSON lines:
   - `{"event":"open","url","code"?}`: show the link. A `code` means a device-code flow (codex): the user types it on that page.
   - `{"event":"need_code","retry"?,"message"?}`: write the code the sign-in page shows, plus a newline, to stdin. `retry` means the last one was rejected.

@@ -142,6 +142,12 @@ update-installer version wp"
             COMPREPLY=( $(compgen -W "--one-off" -- "$cur") ) ;;
         ai-set)
             COMPREPLY=( $(compgen -W "--agent --model --api-key --json-output" -- "$cur") ) ;;
+        ai-unattended)
+            if [ "$prev" = "--agent" ]; then
+                COMPREPLY=( $(compgen -W "claude codex gemini qwen aider opencode hermes" -- "$cur") )
+            else
+                COMPREPLY=( $(compgen -W "--agent on off status --json-output" -- "$cur") )
+            fi ;;
         ai-install|ai-status|ai-login)
             if [ "$prev" = "--agent" ]; then
                 COMPREPLY=( $(compgen -W "claude codex gemini qwen aider opencode hermes" -- "$cur") )

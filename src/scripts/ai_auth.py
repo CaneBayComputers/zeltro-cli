@@ -192,6 +192,9 @@ def status(agent):
            "version": "", "auth": "none", "signed_in": False, "account": ""}
     out.update({k: v for k, v in CAPABILITIES[agent].items()})
     out["login_supported"] = agent in LOGIN_SUPPORTED
+    # true | false | unknown, read by the dispatcher (zeltro_read_agent_autonomy).
+    out["unattended"] = (os.environ.get("ZELTRO_UNATTENDED_STATE") or "unknown") \
+        if os.environ.get("ZELTRO_UNATTENDED_AGENT") == agent else "unknown"
     if not out["installed"]:
         return out
     out["version"] = version(agent)
