@@ -1404,6 +1404,7 @@ zeltro_trust_project_for_agents() {
     python3 - "$claude_json" "$dir" "$gemini_json" "$ZELTRO_SRC_DIR/scripts" <<'PYTRUST' >/dev/null 2>&1 || true
 import sys
 claude_path, proj, gemini_path, scripts = sys.argv[1:5]
+sys.dont_write_bytecode = True   # no __pycache__ in the install
 sys.path.insert(0, scripts)
 from agent_firstrun import update_json
 
@@ -3034,6 +3035,7 @@ PYEOF
                 local gj="${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/.claude.json}"
                 python3 - "${gj:-$HOME/.claude.json}" "$ZELTRO_SRC_DIR/scripts" <<'PYNUDGE' >/dev/null 2>&1 || true
 import sys
+sys.dont_write_bytecode = True
 sys.path.insert(0, sys.argv[2])
 from agent_firstrun import update_json
 def change(d):

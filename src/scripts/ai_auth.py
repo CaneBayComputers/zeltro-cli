@@ -101,6 +101,7 @@ def firstrun(agent):
     `auth login` before 2.1.3xx left the whole onboarding wizard for the first
     session)."""
     try:
+        sys.dont_write_bytecode = True
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import agent_firstrun
         agent_firstrun.main([agent])
