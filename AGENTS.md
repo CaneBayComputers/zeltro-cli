@@ -234,6 +234,8 @@ Use these hostnames + credentials when configuring projects. Do not inspect cont
 
 **Optional shared services** — off by default, enabled per machine with `zeltro enable-service <name>`. Once enabled they start with every `zeltro up`, exactly like the core ones. Check `OPTIONAL_SERVICES` in `/etc/zeltro-cli/.env` to see what a machine has on.
 
+**A host port the shared services publish is taken** (Mailpit's 8025, an admin UI's port): `zeltro start-services` (and `configure`) checks before starting and stops with the holder's name instead of Docker's "port is already allocated". The usual holder is an old Podium install's `podium-mailhog` still running beside a fresh Zeltro. Nothing is stopped for the user. With `--json-output`: `{"action": "start_services", "status": "error", "error": "port_conflict", "conflicts": [{"port", "container"}], "podium": bool, "fix": "docker update --restart=no <names> && docker stop <names>", "message"}`. `container` is empty for a program outside Docker, and `fix` is empty then too. Any other failed start gives `"error": "start_failed"` with Docker's last lines. `configure --json-output` passes either one through as `services_result`.
+
 | Service | Host | Port | Credentials |
 |---|---|---|---|
 | MinIO (S3-compatible storage; runs Silo, the maintained MinIO fork) | `zeltro-minio` | API 9000 / console 9001 | `root` / `password` |

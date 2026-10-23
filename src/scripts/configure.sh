@@ -470,7 +470,11 @@ if [[ "$JSON_OUTPUT" == "1" ]]; then
         # Merge the start_services JSON output with configure result
         echo "{\"action\": \"configure\", \"status\": \"success\", \"services_result\": $START_SERVICES_OUTPUT}"
     else
-        echo "{\"action\": \"configure\", \"status\": \"success\", \"warning\": \"Services failed to start but configuration completed\", \"services_result\": null}"
+        # Pass start_services' own error (e.g. port_conflict naming the holder)
+        # through when it is JSON, so the app can show what to do.
+        _sr=$(printf '%s\n' "$START_SERVICES_OUTPUT" | tail -n 1)
+        printf '%s' "$_sr" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null || _sr=null
+        echo "{\"action\": \"configure\", \"status\": \"success\", \"warning\": \"Services failed to start but configuration completed\", \"services_result\": $_sr}"
     fi
     cd "$ORIG_DIR"
     exit 0

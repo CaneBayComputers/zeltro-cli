@@ -798,6 +798,55 @@ zeltro_profile_args() {
     done
 }
 
+# Host ports the shared services publish (Mailhog's 8025, admin UIs) that
+# something else already holds, checked before `docker compose up` so the error
+# names the holder instead of Docker's "Bind for 0.0.0.0:8025 failed: port is
+# already allocated". The usual holder is an old Podium install's podium-mailhog
+# still running next to a fresh Zeltro (Joe's laptop, 2026-10-23).
+# Prints "<port>\t<holder>" per conflict: a container name, or "-" for a
+# program outside Docker. A service whose own container is running is skipped
+# (it holds its own port). Prints nothing if compose can't report its ports.
+zeltro_service_port_conflicts() {
+    local profiles=() line ports p svc proto holder
+    while IFS= read -r line; do profiles+=("$line"); done < <(zeltro_profile_args)
+    ports=$(cd /etc/zeltro-cli 2>/dev/null && docker compose ${profiles[@]+"${profiles[@]}"} config --format json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for name, s in (d.get("services") or {}).items():
+    for p in s.get("ports") or []:
+        if isinstance(p, dict) and p.get("published"):
+            print("%s\t%s\t%s" % (p["published"], s.get("container_name") or name, p.get("protocol") or "tcp"))
+' 2>/dev/null)
+    while IFS="$(printf '\t')" read -r p svc proto; do
+        [ -n "$p" ] || continue
+        docker container inspect -f '{{.State.Running}}' "$svc" 2>/dev/null | grep -q true && continue
+        holder=$(docker ps --filter "publish=$p" --format '{{.Names}}' 2>/dev/null | grep -vx "$svc" | head -n 1)
+        if [ -z "$holder" ] && [ "$proto" = "tcp" ] && (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then
+            holder="-"
+        fi
+        [ -n "$holder" ] && printf '%s\t%s\n' "$p" "$holder"
+    done <<EOF_ZSPC
+$ports
+EOF_ZSPC
+    return 0
+}
+
+# Podium projects still on this machine (the install before the rename kept its
+# own /etc/podium-cli and ~/podium-projects). Prints "<count>\t<dir>".
+zeltro_podium_projects() {
+    local dir="" n=0 d
+    [ -f /etc/podium-cli/.env ] && dir=$(sed -n 's/^PROJECTS_DIR=//p' /etc/podium-cli/.env | tail -n 1 | tr -d "\"'")
+    case "$dir" in "~"/*) dir="$HOME/${dir#"~/"}" ;; esac
+    [ -n "$dir" ] || dir="$HOME/podium-projects"
+    for d in "$dir"/*/; do
+        [ -f "$d/docker-compose.yaml" ] || [ -f "$d/docker-compose.yml" ] && n=$((n + 1))
+    done
+    printf '%s\t%s\n' "$n" "$dir"
+}
+
 dockerup() { 
     if [[ "$JSON_OUTPUT" == "1" ]]; then
         # Clear the log file first, then pipe Docker output to temp file for JSON mode

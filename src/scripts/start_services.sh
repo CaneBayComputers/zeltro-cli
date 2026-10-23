@@ -87,10 +87,77 @@ for _svc in redis memcached mailhog ${OPTIONAL_SERVICES:-}; do
     docker container inspect -f '{{.State.Running}}' "$_cname" 2>/dev/null | grep -q true || _services_up=0
 done
 
+# Report a port another container or program holds, by name, and stop here:
+# compose would only say "port is already allocated". Nothing is stopped for
+# the user; their old containers may still serve something.
+_report_port_conflicts() { # $1 = conflict lines from zeltro_service_port_conflicts
+    local port holder names="" podium="" msg="" lines="" json_items=""
+    while IFS="$(printf '\t')" read -r port holder; do
+        [ -n "$port" ] || continue
+        if [ "$holder" = "-" ]; then
+            lines="$lines  Port $port is in use by a program outside Docker.\n"
+        else
+            lines="$lines  Port $port is held by the container $holder.\n"
+            names="$names${names:+ }$holder"
+            case "$holder" in podium-*) podium=1 ;; esac
+        fi
+        json_items="$json_items${json_items:+,}{\"port\": $port, \"container\": \"$( [ "$holder" = "-" ] || echo "$holder")\"}"
+    done <<EOF_RPC
+$1
+EOF_RPC
+    msg="Zeltro's shared services can't start: a port they need is taken."
+    local fix=""
+    if [ -n "$podium" ]; then
+        local pp pn pd
+        pp=$(zeltro_podium_projects); pn=$(printf '%s' "$pp" | cut -f 1); pd=$(printf '%s' "$pp" | cut -f 2)
+        msg="$msg It is held by an older Podium install (Zeltro's previous name), whose shared services are still running."
+        if [ "$pn" -gt 0 ] 2>/dev/null; then
+            msg="$msg Podium still has $pn project(s) in $pd, which use those services; stopping them stops those projects' databases."
+        fi
+    fi
+    if [ -n "$names" ]; then
+        fix="docker update --restart=no $names && docker stop $names"
+        msg="$msg Stop it (its data is kept; 'docker start' brings it back), then run 'zeltro start-services' again: $fix"
+    else
+        msg="$msg Stop the program using that port, then run 'zeltro start-services' again."
+    fi
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        python3 -c 'import json,sys; print(json.dumps({"action": "start_services", "status": "error", "error": "port_conflict", "conflicts": json.loads("[" + sys.argv[1] + "]"), "podium": sys.argv[2] == "1", "fix": sys.argv[3], "message": sys.argv[4]}))' \
+            "$json_items" "$podium" "$fix" "$msg"
+    else
+        echo-red "Zeltro's shared services can't start: a port they need is taken."
+        printf "$lines"
+        local why="${msg#*taken. }"
+        if [ -n "$fix" ]; then
+            echo-yellow "${why%%: docker update*}:"
+            echo-white "  $fix"
+        else
+            echo-yellow "$why"
+        fi
+    fi
+    cd "$ORIG_DIR"
+    exit 1
+}
+
 if [ "$_services_up" = "0" ]; then
+    _conflicts="$(zeltro_service_port_conflicts)"
+    [ -z "$_conflicts" ] || _report_port_conflicts "$_conflicts"
     echo-cyan "Starting services ..."; echo-white
     cd /etc/zeltro-cli
-    dockerup
+    if ! dockerup; then
+        cd "$DEV_DIR"
+        # Taken between the check and the start, or a port the check can't see.
+        _conflicts="$(zeltro_service_port_conflicts)"
+        [ -z "$_conflicts" ] || _report_port_conflicts "$_conflicts"
+        if [[ "$JSON_OUTPUT" == "1" ]]; then
+            python3 -c 'import json,sys; print(json.dumps({"action": "start_services", "status": "error", "error": "start_failed", "message": sys.argv[1]}))' \
+                "$(tail -n 5 /tmp/zeltro-docker-progress.log 2>/dev/null | tr '\n' ' ')"
+        else
+            echo-red "Zeltro's shared services failed to start (see Docker's message above)."
+        fi
+        cd "$ORIG_DIR"
+        exit 1
+    fi
     cd "$DEV_DIR"
 fi
 
