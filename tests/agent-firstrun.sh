@@ -86,6 +86,22 @@ fresh; printf 'model: openai/x\ncheck-update: true' > "$H/.aider.conf.yml"; firs
 check "the user's own value kept" "$(grep -c '^check-update: true$' "$H/.aider.conf.yml") $(grep -c '^check-update' "$H/.aider.conf.yml")" "1 1"
 check "appended after their last line" "$(sed -n 2,3p "$H/.aider.conf.yml" | tr '\n' '|')" "check-update: true|gitignore: false|"
 
+echo "hermes"
+cat > "$T/bin/hermes" <<FAKE
+#!/bin/sh
+echo "\$*" >> "$T/hermes.log"
+FAKE
+chmod +x "$T/bin/hermes"
+fresh; rm -f "$T/hermes.log"; firstrun hermes
+check "no config (never set up, or a throwaway HOME): hermes not started" "$([ -e "$T/hermes.log" ] && echo started || echo no)" "no"
+mkdir -p "$H/.hermes"; printf 'telemetry:\n  shared_metrics:\n    enabled: false\n' > "$H/.hermes/config.yaml"; firstrun hermes
+check "not asked yet: recorded through hermes's own setter" "$(cat "$T/hermes.log" 2>/dev/null)" "config set telemetry.shared_metrics.offer_version 2"
+rm -f "$T/hermes.log"; printf 'telemetry:\n  shared_metrics:\n    enabled: true\n    offer_version: 2\n' > "$H/.hermes/config.yaml"; firstrun hermes
+check "already answered: left alone" "$([ -e "$T/hermes.log" ] && echo started || echo no)" "no"
+printf 'telemetry:\n  shared_metrics:\n    offer_version: 1\n' > "$H/.hermes/config.yaml"; firstrun hermes
+check "an older answer: asked-again marker raised" "$(cat "$T/hermes.log" 2>/dev/null)" "config set telemetry.shared_metrics.offer_version 2"
+rm -f "$T/bin/hermes"
+
 echo "zeltro_agent_firstrun (shell)"
 fresh; mkdir -p "$T/proj"; git -C "$T/proj" init -q
 ( export HOME="$H" PATH="$T/bin:/usr/bin:/bin"; cd "$REPO/src" && set +u && source scripts/functions.sh >/dev/null 2>&1; cd "$T/proj" && zeltro_agent_firstrun aider )

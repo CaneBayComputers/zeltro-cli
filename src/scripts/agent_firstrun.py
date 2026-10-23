@@ -17,6 +17,8 @@ on a pseudo-terminal (2026-10-23):
                   "gemini-api-key" (Zeltro runs Gemini on a key only)
   aider 0.86      .gitignore, release-notes, model-warning and analytics questions ->
                   ~/.aider.conf.yml keys (Zeltro hides .aider* in .git/info/exclude instead)
+  hermes          "Help improve Hermes?" -> telemetry.shared_metrics.offer_version (via
+                  `hermes config set`; sharing stays off, its default)
   qwen, opencode  nothing blocks when Zeltro passes the key.
 
 Folder trust is per project and lives in zeltro_trust_project_for_agents.
@@ -182,7 +184,31 @@ def aider():
         f.write(text + ("# Zeltro: answers to aider's first-run questions\n" if not text else "") + add)
 
 
-AGENTS = {"claude": claude, "codex": codex, "gemini": gemini, "aider": aider}
+# The "Help improve Hermes?" question asks again whenever the recorded
+# offer_version is below the current one ("Asking once more ..."); 2 as of
+# 2026-10-23. Answering "No thanks" writes telemetry.shared_metrics.offer_version
+# with sharing left off, which is also the default.
+HERMES_OFFER_VERSION = 2
+
+
+def hermes():
+    home = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    path = os.path.join(home, "config.yaml")
+    # No config means Hermes was never set up here (or this is a throwaway
+    # HOME): don't start it. Run under another HOME, Hermes rewrites the shared
+    # install's launchers to that HOME.
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        return
+    m = re.search(r"(?m)^\s+offer_version:\s*(\d+)", text)
+    if m and int(m.group(1)) >= HERMES_OFFER_VERSION:
+        return
+    # Hermes's own setter keeps the file's comments and layout.
+    run(["hermes", "config", "set", "telemetry.shared_metrics.offer_version", str(HERMES_OFFER_VERSION)], timeout=60)
+
+
+AGENTS = {"claude": claude, "codex": codex, "gemini": gemini, "aider": aider, "hermes": hermes}
 
 
 def main(argv):
