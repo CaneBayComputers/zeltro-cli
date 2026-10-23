@@ -163,9 +163,8 @@ case "$AI_AGENT_CLI_NAME" in
     codex)
         codex_args=()
         [[ -n "$AI_MODEL" ]] && codex_args+=("--model" "$AI_MODEL")
-        _export_agent_key OPENAI_API_KEY "sk-"
-        _export_agent_base OPENAI_BASE_URL
-        zeltro_codex_prepare || exit 1
+        zeltro_agent_env codex || exit 1
+        codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         codex_args+=(--dangerously-bypass-approvals-and-sandbox)
         if [[ "$ONE_OFF" == "1" ]]; then
             codex exec "${codex_args[@]}" "$PROMPT"
@@ -177,14 +176,12 @@ case "$AI_AGENT_CLI_NAME" in
         claude_args=(--dangerously-skip-permissions)
         [[ "$ONE_OFF" == "1" ]] && claude_args+=(-p)
         [[ -n "$AI_MODEL" ]] && claude_args+=("--model" "$AI_MODEL")
-        _export_agent_key ANTHROPIC_API_KEY "sk-ant-"
-        _export_agent_base ANTHROPIC_BASE_URL
+        zeltro_agent_env claude
         claude_args+=("$PROMPT")
         claude "${claude_args[@]}"
         ;;
     qwen)
-        _export_agent_key OPENAI_API_KEY ""
-        _export_agent_base OPENAI_BASE_URL
+        zeltro_agent_env qwen
         export QWEN_CODE_SUPPRESS_YOLO_WARNING=1
         qwen_args=(--yolo --auth-type openai)
         [[ -n "$AI_MODEL" ]] && qwen_args+=("--model" "$AI_MODEL")
@@ -195,6 +192,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         ;;
     gemini)
+        zeltro_agent_env gemini
         gemini_args=(--yolo --skip-trust)
         [[ -n "$AI_MODEL" ]] && gemini_args+=("--model" "$AI_MODEL")
         gemini_args+=(--include-directories "$DEV_DIR")

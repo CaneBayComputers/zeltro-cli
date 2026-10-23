@@ -516,19 +516,19 @@ ensure_ai_agent_installed() {
 
     case "$cli_command" in
         codex)
-            npm install -g @openai/codex
+            _npm_install_global @openai/codex
             ;;
         gemini)
-            npm install -g @google/gemini-cli
+            _npm_install_global @google/gemini-cli
             ;;
         qwen)
-            npm install -g @qwen-code/qwen-code
+            _npm_install_global @qwen-code/qwen-code
             ;;
         claude)
             curl -fsSL https://claude.ai/install.sh | bash
             ;;
         opencode)
-            npm install -g opencode-ai
+            _npm_install_global opencode-ai
             ;;
         hermes)
             # --non-interactive skips Hermes's setup wizard (Zeltro passes the model and
@@ -584,7 +584,7 @@ print_config_json() {
     # it cannot parse should not stop the whole settings panel from loading.
     local unattended
     unattended=$(zeltro_read_agent_autonomy "${AI_AGENT:-}")
-    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"agent_auto\": $([[ "${ZELTRO_AI_AGENT_AUTO:-0}" == "1" ]] && echo true || echo false), \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"ai_language\": true, \"agent_bus\": 1, \"gui_actions\": 1, \"gui_event_agents\": $(zeltro_gui_event_agents_json), \"installed_agents\": $(installed_agents_json)}"
+    echo "{\"action\": \"ai_set\", \"status\": \"success\", \"agent\": \"${AI_AGENT:-}\", \"agent_auto\": $([[ "${ZELTRO_AI_AGENT_AUTO:-0}" == "1" ]] && echo true || echo false), \"model\": \"${AI_MODEL:-}\", \"api_base\": \"${AI_API_BASE:-}\", \"has_api_key\": $has_api_key, \"unattended\": \"$unattended\", \"session_overrides\": true, \"ai_language\": true, \"agent_bus\": 1, \"gui_actions\": 1, \"gui_event_agents\": $(zeltro_gui_event_agents_json), \"installed_agents\": $(installed_agents_json), \"agent_auth\": $(python3 "$DEV_DIR/scripts/ai_auth.py" capabilities 2>/dev/null || echo null)}"
 }
 
 # --install-only: make an agent runnable here without making it the default,

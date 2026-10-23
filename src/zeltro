@@ -42,7 +42,7 @@ source "$SCRIPT_DIR/scripts/functions.sh"
 # Check for --json-output flag and set JSON_OUTPUT environment variable
 new_args=()
 for arg in "$@"; do
-    if [[ "$arg" == "--json-output" ]]; then
+    if [[ "$arg" == "--json-output" || ( "$arg" == "--json" && "$1" == ai-status ) ]]; then
         export JSON_OUTPUT=1
     else
         new_args+=("$arg")
@@ -157,6 +157,9 @@ show_help() {
     echo "  zeltro configure          - Configure Zeltro environment"
     echo "  zeltro ai \"<prompt>\"      - Send a one-off prompt to the AI agent (--interactive for a session)"
     echo "  zeltro ai-set             - Configure AI agent and model"
+    echo "  zeltro ai-install --agent <a>  - Install one agent CLI (doesn't change the default)"
+    echo "  zeltro ai-status --agent <a>   - Installed? Version? Signed in? (--json-output)"
+    echo "  zeltro ai-login --agent <a>    - Sign an agent in with its subscription (claude, codex)"
     echo "  zeltro ai-unattended [agent] - Let an agent run without approval prompts (--status, --revoke)"
     echo "  zeltro peers              - List agent sessions running in the Zeltro app (all hosts)"
     echo "  zeltro send <p>[@host] ... -- <msg>"
@@ -768,6 +771,20 @@ case "$1" in
         ;;
     "ai-set")
         "$SCRIPT_DIR/scripts/ai_set.sh" "${@:2}"
+        ;;
+    "ai-install")
+        "$SCRIPT_DIR/scripts/ai_set.sh" --install-only "${@:2}"
+        ;;
+    "ai-status")
+        # What a run would use (ZELTRO_AI_* overrides, else the .env), so a
+        # profile with its own key or endpoint reports ready.
+        ZELTRO_PROFILE_AGENT="${AI_AGENT:-}" \
+        ZELTRO_PROFILE_HAS_KEY="$([ -n "${AI_API_KEY:-}" ] && echo 1)" \
+        ZELTRO_PROFILE_HAS_BASE="$([ -n "${AI_API_BASE:-}" ] && echo 1)" \
+            python3 "$SCRIPT_DIR/scripts/ai_auth.py" status "${@:2}"
+        ;;
+    "ai-login")
+        python3 "$SCRIPT_DIR/scripts/ai_auth.py" login "${@:2}"
         ;;
     "peers")
         "$SCRIPT_DIR/scripts/bus.sh" peers "${@:2}"

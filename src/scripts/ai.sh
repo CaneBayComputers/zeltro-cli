@@ -119,10 +119,7 @@ case "$AI_AGENT_CLI_NAME" in
         if [[ -n "$AI_MODEL" ]]; then
             codex_args+=("--model" "$AI_MODEL")
         fi
-        _export_agent_key OPENAI_API_KEY "sk-"
-        _export_agent_base OPENAI_BASE_URL
-        zeltro_codex_prepare || exit 1
-        zeltro_codex_base_args
+        zeltro_agent_env codex || exit 1
         codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && codex_args+=(--dangerously-bypass-approvals-and-sandbox)
         codex_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
@@ -145,8 +142,7 @@ case "$AI_AGENT_CLI_NAME" in
         if [[ -n "$AI_MODEL" ]]; then
             claude_args+=("--model" "$AI_MODEL")
         fi
-        _export_agent_key ANTHROPIC_API_KEY "sk-ant-"
-        _export_agent_base ANTHROPIC_BASE_URL
+        zeltro_agent_env claude
         claude_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         claude_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         claude_args+=("$INIT_PROMPT")
@@ -157,8 +153,7 @@ case "$AI_AGENT_CLI_NAME" in
         # OpenAI-compatible by design and reads OPENAI_API_KEY / OPENAI_BASE_URL,
         # which is why it pairs well with `--api-base` pointed at OpenRouter,
         # DeepInfra or a local Ollama.
-        _export_agent_key OPENAI_API_KEY ""
-        _export_agent_base OPENAI_BASE_URL
+        zeltro_agent_env qwen
         # --auth-type is required: without it qwen refuses non-interactive runs
         # with "No auth type is selected", even when the key and endpoint are set.
         # The yolo warning is printed on every headless run and would land in the
@@ -181,6 +176,7 @@ case "$AI_AGENT_CLI_NAME" in
         qwen "${qwen_args[@]}"
         ;;
     gemini)
+        zeltro_agent_env gemini
         # Both --yolo (action approval) and --skip-trust (directory trust) are
         # safety prompts, so both are gated rather than only the obvious one.
         gemini_args=()

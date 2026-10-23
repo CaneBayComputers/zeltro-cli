@@ -126,10 +126,7 @@ case "$AI_AGENT_CLI_NAME" in
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
-        _export_agent_key OPENAI_API_KEY "sk-"
-        _export_agent_base OPENAI_BASE_URL
-        zeltro_codex_prepare || exit 1
-        zeltro_codex_base_args
+        zeltro_agent_env codex || exit 1
         common_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-bypass-approvals-and-sandbox)
         common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
@@ -145,8 +142,7 @@ case "$AI_AGENT_CLI_NAME" in
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
-        _export_agent_key ANTHROPIC_API_KEY "sk-ant-"
-        _export_agent_base ANTHROPIC_BASE_URL
+        zeltro_agent_env claude
         common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
         common_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if ! claude --continue "${common_args[@]}"; then
@@ -155,8 +151,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         ;;
     qwen)
-        _export_agent_key OPENAI_API_KEY ""
-        _export_agent_base OPENAI_BASE_URL
+        zeltro_agent_env qwen
         export QWEN_CODE_SUPPRESS_YOLO_WARNING=1
         # --auth-type is required for headless runs; --yolo is the approval bypass.
         common_args=(--auth-type openai)
@@ -174,6 +169,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         ;;
     gemini)
+        zeltro_agent_env gemini
         common_args=()
         [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo --skip-trust)
         if [[ -n "$AI_MODEL" ]]; then
