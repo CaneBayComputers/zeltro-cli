@@ -523,6 +523,28 @@ zeltro_ai_agent_problem() {
     return 0
 }
 
+# Node.js (LTS) for this user through nvm, the way the installers do it: no
+# sudo, everything under ${NVM_DIR:-~/.nvm}, and nvm's lines in the shell rc so
+# a terminal finds it too. Zeltro itself finds nvm's default Node without
+# sourcing nvm.sh (zeltro_add_agent_bin_dirs), so it's put on PATH right away.
+ZELTRO_NVM_FALLBACK_VERSION="v0.40.1"
+zeltro_install_user_node() {
+    local nvm_dir="${NVM_DIR:-$HOME/.nvm}" tag
+    echo-cyan "Node.js isn't installed for $(id -un 2>/dev/null || echo this user); installing it (nvm, Node LTS) ..."
+    if [ ! -s "$nvm_dir/nvm.sh" ]; then
+        mkdir -p "$nvm_dir" || return 1    # nvm's installer refuses an NVM_DIR that doesn't exist
+        tag="$(curl -fsSL --max-time 15 "https://api.github.com/repos/nvm-sh/nvm/releases/latest" 2>/dev/null \
+            | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+        curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${tag:-$ZELTRO_NVM_FALLBACK_VERSION}/install.sh" \
+            | NVM_DIR="$nvm_dir" bash || return 1
+    fi
+    # In a child shell: nvm.sh isn't safe under the caller's set -e / set -u.
+    NVM_DIR="$nvm_dir" bash -c '. "$NVM_DIR/nvm.sh" && nvm install --lts && nvm alias default "lts/*"' || return 1
+    NVM_DIR="$nvm_dir" zeltro_add_agent_bin_dirs
+    hash -r
+    [ -n "$(zeltro_host_cmd npm)" ]
+}
+
 # `npm install -g` without a password prompt. A system Node (apt, dnf) has its
 # global folder under /usr, which a user can't write: then sudo if it needs no
 # password, else a per-user prefix in ~/.npm-global, whose bin directory
@@ -530,6 +552,13 @@ zeltro_ai_agent_problem() {
 # type a password into.
 _npm_install_global() {
     local npm; npm=$(zeltro_host_cmd npm)
+    if [ -z "$npm" ]; then
+        # No Linux Node for this user: someone else installed Zeltro on the
+        # machine, or inside WSL only Windows' npm is visible. Install Node for
+        # this user the way the installer does.
+        zeltro_install_user_node || true
+        npm=$(zeltro_host_cmd npm)
+    fi
     if [ -z "$npm" ]; then
         if command -v npm >/dev/null 2>&1; then
             echo-red "Node.js isn't installed in Linux (only Windows' npm is visible), so $1 can't be installed. Install Node.js inside WSL first."
