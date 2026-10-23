@@ -96,7 +96,8 @@ Judge only what the user actually wrote; do not invent extra work.
 
 Give every option a "reason": one short sentence saying why it fits this
 specific idea. The user sees these side by side and decides from them, so make
-them concrete and comparative, not generic praise.
+them concrete and comparative, not generic praise. Plain text only: no
+markdown, links or URLs (the app shows them as-is).
 $(_classifier_language_line)
 Recommend ONE database for the framework you chose, from that framework's
 allowed list only, and say why in one short sentence. Judge it on the actual
@@ -158,18 +159,30 @@ try:
 except Exception:
     sys.exit(1)
 
+# The app shows reasons as plain text, and models still reach for markdown
+# ("[checked out to friends](https://...)"): keep a link's text, drop the URL,
+# bare URLs and emphasis marks.
+def plain(v):
+    v = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", str(v or ""))
+    v = re.sub(r"\s*\(\s*<?https?://[^)\s]*>?\s*\)", "", v)
+    v = re.sub(r"\s*<?https?://[^\s<>]*?>?(?=[.,;:!?)]*(\s|$))", "", v)
+    v = re.sub(r"(\*\*|__)(?=\S)(.+?)(?<=\S)\1", r"\2", v)
+    v = re.sub(r"`([^`]*)`", r"\1", v)
+    v = re.sub(r"(?<![\w*])\*(?!\s)([^*]+?)(?<!\s)\*(?![\w*])", r"\1", v)
+    return re.sub(r"\s+", " ", v.replace("\t", " ")).strip()[:120]
+
 # Apps first (ready immediately), framework last (always present as the
 # build-it-yourself path). Unknown slugs are dropped rather than passed on.
 out = []
 for a in (doc.get("apps") or []):
     slug = (a.get("slug") or "").strip()
-    why = (a.get("reason") or a.get("why") or "").strip().replace("\t", " ")[:120]
+    why = plain(a.get("reason") or a.get("why"))
     if slug in apps:
         out.append(("app", slug, apps[slug]["display"], apps[slug]["database"], why))
 
 fw = doc.get("framework") or {}
 fw_slug = (fw.get("slug") or "").strip()
-fw_why = (fw.get("reason") or fw.get("why") or "").strip().replace("\t", " ")[:120]
+fw_why = plain(fw.get("reason") or fw.get("why"))
 if fw_slug in fws:
     out.append(("framework", fw_slug, fws[fw_slug]["display"],
                 ",".join(fws[fw_slug]["databases"]), fw_why))
@@ -179,7 +192,7 @@ _fo = doc.get("folder")
 folder = None
 if isinstance(_fo, dict):
     folder = ("folder", "folder", "Just a folder", "",
-              (_fo.get("reason") or _fo.get("why") or "").strip().replace("\t", " ")[:120])
+              plain(_fo.get("reason") or _fo.get("why")))
 
 rec = (doc.get("recommended") or "").strip().lower()
 if rec == "folder" and folder is None:
@@ -230,7 +243,7 @@ db_rec, db_reason = "", ""
 _db = doc.get("database")
 if isinstance(_db, dict):
     db_rec = (_db.get("slug") or "").strip().lower()
-    db_reason = (_db.get("reason") or "").strip().replace("\t", " ")[:120]
+    db_reason = plain(_db.get("reason"))
 elif isinstance(_db, str):
     db_rec = _db.strip().lower()
 if not db_rec:
@@ -413,7 +426,7 @@ classify_project() {
             if [[ "${kinds[$n]}" == "${recommended_kind}" ]]; then idx=$((n + 1)); break; fi
         done
     else
-        # Apps come first (running in ~2 minutes), the framework last (does
+        # Apps come first (running in minutes), the framework last (does
         # exactly what was asked, but costs real time and tokens). Mark whichever
         # the model actually recommends rather than always the first row, so the
         # marker means something.
@@ -423,7 +436,7 @@ classify_project() {
         done
         for n in "${!slugs[@]}"; do
             if [[ "${kinds[$n]}" == "app" ]]; then
-                tag="ready to run — live in about 2 minutes"
+                tag="ready to run — live in minutes, no build"
             elif [[ "${kinds[$n]}" == "folder" ]]; then
                 tag="no web server — your AI works in a plain folder"
             else

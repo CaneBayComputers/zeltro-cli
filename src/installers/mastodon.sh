@@ -15,6 +15,7 @@ write_files() {
 
     # Generate VAPID keys using the mastodon image
     local vapid_output
+    zeltro_pull_image ghcr.io/mastodon/mastodon:v4.5.9
     vapid_output=$(docker run --rm \
         -e RAILS_ENV=production \
         -e SECRET_KEY_BASE=bootstrap \
