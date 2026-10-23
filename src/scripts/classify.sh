@@ -319,7 +319,14 @@ _run_classifier() {
         rm -f "$tmp" "$tmp.err"
         if [[ "$fatal" == "1" || ( "$rc" != "0" && -n "$msg" ) ]]; then
             if [[ -n "${CLASSIFY_ERR_FILE:-}" ]]; then
-                printf 'agent_failed\t%s: %s\n' "$(zeltro_agent_display_name "${AI_AGENT:-agent}")" "${msg:-the AI agent exited with an error}" > "$CLASSIFY_ERR_FILE"
+                # A 401 with no profile key means the agent's own sign-in is
+                # missing or no longer valid: Codex says "Missing bearer or basic
+                # authentication" (a Windows user's WSL, 2026-10-22).
+                if [[ -z "${AI_API_KEY:-}" && "$msg" =~ 401|[Uu]nauthori[sz]ed|[Mm]issing\ bearer|[Nn]ot\ logged\ in ]]; then
+                    printf 'ai_not_signed_in\t%s\n' "$(zeltro_ai_not_signed_in_message)" > "$CLASSIFY_ERR_FILE"
+                else
+                    printf 'agent_failed\t%s: %s\n' "$(zeltro_agent_display_name "${AI_AGENT:-agent}")" "${msg:-the AI agent exited with an error}" > "$CLASSIFY_ERR_FILE"
+                fi
             fi
             return 1
         fi

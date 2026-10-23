@@ -181,6 +181,18 @@ if ! _ai_problem=$(zeltro_ai_agent_problem); then
     exit 1
 fi
 
+# A missing sign-in is said plainly up front, rather than surfacing later as
+# the agent's raw 401 (Codex: "Missing bearer or basic authentication").
+if ! _ai_problem=$(zeltro_ai_signin_problem); then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+        _action=create; [[ "$CLASSIFY_ONLY" == "1" ]] && _action=classify
+        python3 -c 'import json,sys; print(json.dumps({"action": sys.argv[1], "status": "error", "error": "ai_not_signed_in", "agent": sys.argv[3], "message": sys.argv[2]}))' "$_action" "$_ai_problem" "$AI_AGENT"
+    else
+        echo-red "$_ai_problem" >&2
+    fi
+    exit 1
+fi
+
 # Menus need a human. Anything scripted takes the top recommendation silently,
 # preserving the promise that no zeltro command ever blocks an agent.
 # --classify-only stops here: run phase 1, report, and create nothing. Placed

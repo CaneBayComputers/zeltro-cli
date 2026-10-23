@@ -284,14 +284,71 @@ zeltro_env_set_noprompt() {
     return $rc
 }
 
-# Codex stopped reading OPENAI_BASE_URL, so an endpoint set with --api-base (or
-# ZELTRO_AI_API_BASE) was silently ignored and requests went to OpenAI. Its own
-# config key still works as a per-run override: -c openai_base_url="<url>".
+# A custom endpoint for Codex: a model provider of its own, defined per run with
+# -c, so ~/.codex/config.toml is never written. Codex ignores OPENAI_BASE_URL,
+# and its built-in provider with openai_base_url sends OpenAI's own auth, which
+# OpenRouter rejected with 401 (2026-10-23). The provider reads the key from
+# ZELTRO_CODEX_ENDPOINT_KEY. Codex 0.128 only speaks the Responses API
+# (`wire_api = "chat"` is a config error now), so the endpoint must offer
+# /v1/responses: OpenRouter, Ollama and LM Studio do; a chat-completions-only
+# server needs a gateway such as LiteLLM. Verified against OpenRouter.
 # Sets ZELTRO_CODEX_BASE_ARGS; empty when no endpoint is set.
 zeltro_codex_base_args() {
     ZELTRO_CODEX_BASE_ARGS=()
     [ -n "${AI_API_BASE:-}" ] || return 0
-    ZELTRO_CODEX_BASE_ARGS=(-c "openai_base_url=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$AI_API_BASE")")
+    # Local servers ignore the key, but Codex refuses to start without one.
+    export ZELTRO_CODEX_ENDPOINT_KEY="${AI_API_KEY:-zeltro-no-key}"
+    ZELTRO_CODEX_BASE_ARGS=(
+        -c "model_provider=zeltro"
+        -c 'model_providers.zeltro.name="Zeltro endpoint"'
+        -c "model_providers.zeltro.base_url=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$AI_API_BASE")"
+        -c 'model_providers.zeltro.env_key="ZELTRO_CODEX_ENDPOINT_KEY"'
+        -c 'model_providers.zeltro.wire_api="responses"'
+    )
+    return 0
+}
+
+# Hand the profile's key, endpoint and model to an agent through its own
+# variables, before it starts. One place for what ai, resume, create-installer
+# and update-installer each used to do inline.
+#   codex   key: a Zeltro CODEX_HOME signed in with it (zeltro_codex_prepare);
+#           endpoint: its own model provider (zeltro_codex_base_args).
+#   claude  key: ANTHROPIC_API_KEY (sk-ant- keys only). Endpoint: Anthropic's
+#           Messages format at ANTHROPIC_BASE_URL with the key as
+#           ANTHROPIC_AUTH_TOKEN (a Bearer token, which is how DeepSeek, Kimi,
+#           GLM and LiteLLM take it), and the model also as the background
+#           model, or Claude Code asks the endpoint for a Haiku it doesn't have.
+#   qwen    OPENAI_API_KEY / OPENAI_BASE_URL.
+#   gemini  GEMINI_API_KEY; endpoint (Gemini's format) GOOGLE_GEMINI_BASE_URL.
+# Returns 1 only when Codex can't sign in with the key.
+zeltro_agent_env() {
+    case "$1" in
+        codex)
+            [ -n "${AI_API_BASE:-}" ] || _export_agent_key OPENAI_API_KEY "sk-"
+            zeltro_codex_prepare || return 1
+            zeltro_codex_base_args
+            ;;
+        claude)
+            if [ -n "${AI_API_BASE:-}" ]; then
+                export ANTHROPIC_BASE_URL="$AI_API_BASE"
+                [ -n "${AI_API_KEY:-}" ] && export ANTHROPIC_AUTH_TOKEN="$AI_API_KEY"
+                if [ -n "${AI_MODEL:-}" ]; then
+                    export ANTHROPIC_MODEL="$AI_MODEL" ANTHROPIC_SMALL_FAST_MODEL="$AI_MODEL" \
+                        ANTHROPIC_DEFAULT_HAIKU_MODEL="$AI_MODEL"
+                fi
+            else
+                _export_agent_key ANTHROPIC_API_KEY "sk-ant-"
+            fi
+            ;;
+        qwen)
+            _export_agent_key OPENAI_API_KEY ""
+            _export_agent_base OPENAI_BASE_URL
+            ;;
+        gemini)
+            _export_agent_key GEMINI_API_KEY ""
+            _export_agent_base GOOGLE_GEMINI_BASE_URL
+            ;;
+    esac
     return 0
 }
 
@@ -308,9 +365,12 @@ zeltro_codex_base_args() {
 # Exports CODEX_HOME; returns 1 with a message on stderr if the login fails.
 zeltro_codex_prepare() {
     [ -n "${AI_API_KEY:-}" ] || return 0
-    # Same rule as _export_agent_key: without a custom endpoint, a value that
-    # isn't an OpenAI-style key is ignored and Codex uses its own sign-in.
-    [ -z "${AI_API_BASE:-}" ] && [[ "$AI_API_KEY" != sk-* ]] && return 0
+    # A custom endpoint takes the key from the environment instead (see
+    # zeltro_codex_base_args); no sign-in, and the user's own CODEX_HOME.
+    [ -n "${AI_API_BASE:-}" ] && return 0
+    # Same rule as _export_agent_key: a value that isn't an OpenAI-style key is
+    # ignored and Codex uses its own sign-in.
+    [[ "$AI_API_KEY" != sk-* ]] && return 0
     local user_home="${CODEX_HOME:-$HOME/.codex}" base="$HOME/.zeltro/codex" h dir f
     h="$(printf '%s' "$AI_API_KEY" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])')" || return 1
     dir="$base/$h"
@@ -413,6 +473,58 @@ zeltro_ai_agent_problem() {
         return 1
     fi
     return 0
+}
+
+# `npm install -g` without a password prompt. A system Node (apt, dnf) has its
+# global folder under /usr, which a user can't write: then sudo if it needs no
+# password, else a per-user prefix in ~/.npm-global, whose bin directory
+# functions.sh already puts on PATH. The app installs agents with no terminal to
+# type a password into.
+_npm_install_global() {
+    if ! command -v npm >/dev/null 2>&1; then
+        echo-red "npm is not installed, so $1 can't be installed. Install Node.js first."
+        return 1
+    fi
+    local prefix; prefix="$(npm prefix -g 2>/dev/null)"
+    if [ -w "$prefix/lib/node_modules" ] || { [ ! -d "$prefix/lib/node_modules" ] && [ -w "$prefix" ]; }; then
+        npm install -g "$@"
+    elif sudo -n true 2>/dev/null; then
+        sudo -n npm install -g "$@"
+    else
+        echo-cyan "npm's global folder ($prefix) isn't writable; installing into ~/.npm-global instead."
+        mkdir -p "$HOME/.npm-global" && npm install -g --prefix "$HOME/.npm-global" "$@" || return 1
+        case ":$PATH:" in *":$HOME/.npm-global/bin:"*) ;; *) export PATH="$PATH:$HOME/.npm-global/bin" ;; esac
+    fi
+}
+
+# Is the agent signed in, when it has to use its own sign-in? Only claude and
+# codex, and only with no profile key or endpoint: then the run depends on the
+# login stored on this machine. Both checks are local and fast (`claude auth
+# status`, `codex login status`); they see stored credentials, not whether the
+# server still accepts them. Only an explicit "not logged in" counts, so an
+# older CLI without these commands is never blocked.
+# Prints the message and returns 1 when not signed in.
+zeltro_ai_signin_problem() {
+    [ -z "${AI_API_KEY:-}" ] && [ -z "${AI_API_BASE:-}" ] || return 0
+    local out
+    case "${AI_AGENT:-}" in
+        claude)
+            [ -n "${ANTHROPIC_API_KEY:-}${ANTHROPIC_AUTH_TOKEN:-}${CLAUDE_CODE_OAUTH_TOKEN:-}${CLAUDE_CODE_USE_BEDROCK:-}${CLAUDE_CODE_USE_VERTEX:-}" ] && return 0
+            out="$(claude auth status --json 2>/dev/null)" || true
+            echo "$out" | grep -qE '"loggedIn":[[:space:]]*false' || return 0
+            ;;
+        codex)
+            out="$(codex login status 2>&1)" || true
+            echo "$out" | grep -qi "not logged in" || return 0
+            ;;
+        *) return 0 ;;
+    esac
+    zeltro_ai_not_signed_in_message
+    return 1
+}
+
+zeltro_ai_not_signed_in_message() {
+    echo "$(zeltro_agent_display_name "${AI_AGENT:-agent}") isn't signed in on $(hostname). Sign in from the Zeltro app, or run: zeltro ai-login --agent ${AI_AGENT:-<agent>}"
 }
 
 # Load primary configuration if available (for container names, paths, etc.)
@@ -1739,11 +1851,25 @@ build_aider_args() {
     # 12k tokens sent, down to 0 files and 2.5k.
     AIDER_ARGS+=(--subtree-only)
 
-    if [[ -n "$AI_MODEL" ]]; then
-        AIDER_ARGS+=("--model" "$AI_MODEL")
+    # With a custom endpoint the model goes to LiteLLM as openai/<model>, which
+    # means "this model, at the OpenAI-compatible --openai-api-base". Prefixed
+    # unconditionally: an OpenRouter id like deepseek/deepseek-v4.1-flash would
+    # otherwise pick LiteLLM's own deepseek provider, and openai/gpt-5 has to
+    # reach OpenRouter as "openai/gpt-5". ollama/ and ollama_chat/ are LiteLLM's
+    # Ollama routes and are kept as given.
+    local model="$AI_MODEL"
+    if [[ -n "$AI_API_BASE" && -n "$model" && "$model" != ollama/* && "$model" != ollama_chat/* ]]; then
+        model="openai/$model"
+    fi
+    if [[ -n "$model" ]]; then
+        AIDER_ARGS+=("--model" "$model")
     fi
 
-    if [[ -n "$AI_API_KEY" ]]; then
+    if [[ -n "$AI_API_BASE" && "$AI_API_KEY" != *=* ]]; then
+        # The endpoint is reached through LiteLLM's openai provider, so that's
+        # the key it reads; local servers ignore it but LiteLLM wants one set.
+        AIDER_ARGS+=("--api-key" "openai=${AI_API_KEY:-zeltro-no-key}")
+    elif [[ -n "$AI_API_KEY" ]]; then
         # Aider wants `provider=key` (it exports PROVIDER_API_KEY). Zeltro
         # stores a bare key, so tag it with the provider implied by the model
         # prefix — `openai/gpt-4o` -> openai, `anthropic/...` -> anthropic.

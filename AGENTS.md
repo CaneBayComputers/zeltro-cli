@@ -72,14 +72,50 @@ Unset means "use the `ai-set` value"; set but empty means "clear it for this run
 
 **Default agent when none is set.** A fresh install leaves `AI_AGENT` blank. Then every command uses the first installed agent in the order claude, codex, gemini, qwen, aider, opencode, hermes. `zeltro configure` and `zeltro ai-set` save that choice. `ai-set --json-output` saves it only if it can without a password prompt, and reports `"agent_auto": true` when it picked the agent this way. An agent counts as installed when its binary is on `PATH`. Zeltro adds the usual per-user bin directories (`~/.local/bin`, the npm global prefix's `bin`, `~/.npm-global/bin`, `~/.bun/bin`, `~/.opencode/bin`, the newest nvm Node's `bin`) when they aren't already on `PATH`, so a non-login ssh shell finds the same agents a login shell does.
 
+### Agent sign-in, install and profiles
+
+An AI profile runs its agent one of three ways: its **subscription** sign-in, the provider's own **API key** (`ZELTRO_AI_API_KEY`), or a **custom endpoint** (`ZELTRO_AI_API_BASE` + key + model). Which agent supports which, and the format its endpoint must speak, is in `zeltro ai-set --json-output` under `agent_auth`: `{"agents": {"<agent>": {"subscription", "api_key", "endpoint"}}, "login_supported": [...]}`. The endpoint formats:
+- `openai`: chat completions (qwen, aider, opencode, hermes);
+- `openai-responses`: OpenAI's Responses API (codex). Codex 0.128 dropped chat completions. OpenRouter, Ollama and LM Studio offer Responses; anything else needs a gateway such as LiteLLM;
+- `anthropic`: the Messages API (claude). OpenRouter's `https://openrouter.ai/api`, DeepSeek, Kimi, GLM and LiteLLM offer it;
+- `gemini` (gemini).
+
+Subscription sign-in: claude, codex, opencode (ChatGPT only; a Claude Pro/Max sign-in must never be used outside Claude Code itself) and hermes. Gemini CLI, Qwen Code and aider take keys only.
+
+How a profile reaches each agent:
+- **claude.** With an endpoint: `ANTHROPIC_BASE_URL`, with the key as `ANTHROPIC_AUTH_TOKEN` and the model also as `ANTHROPIC_MODEL` and the background (Haiku) model. Without one: `ANTHROPIC_API_KEY` (`sk-ant-` keys only).
+- **codex.** With an endpoint: a model provider of its own, passed with `-c` (`model_providers.zeltro`, `wire_api = "responses"`, key in `ZELTRO_CODEX_ENDPOINT_KEY`), so `~/.codex/config.toml` is never written. With only a key: the managed `CODEX_HOME` below.
+- **qwen.** `OPENAI_API_KEY` / `OPENAI_BASE_URL`.
+- **gemini.** `GEMINI_API_KEY` / `GOOGLE_GEMINI_BASE_URL`.
+- **aider.** `--openai-api-base`, with the model as `openai/<model>` (except `ollama/` and `ollama_chat/` routes) and the key as `openai=<key>`.
+- **opencode, hermes.** See their notes in `functions.sh`.
+
+The commands:
+- **`zeltro ai-status --agent <a> --json-output`** (or `--json`). Local and fast. Gives `{"installed", "version", "auth", "signed_in", "account", "subscription", "api_key", "endpoint", "login_supported"}`.
+  - `auth` is `subscription`, `api_key`, `endpoint`, `none`, or `unknown` (a key-only agent with no key).
+  - A run's own key or endpoint (`ZELTRO_AI_*`, else the `.env`) counts as signed in for that agent.
+  - Claude uses `claude auth status`, Codex `codex login status`, OpenCode its `auth.json`, Hermes `hermes auth status`. These see stored credentials, not whether the server still accepts them.
+- **`zeltro ai-install --agent <a> [--json-output]`** is the same as `ai-set --install-only`. It never prompts. npm-installed agents go to npm's global folder when writable, else through passwordless sudo, else into `~/.npm-global`.
+- **`zeltro ai-login --agent <a> --json-output [--local-browser] [--force]`** runs the agent's sign-in, printing JSON lines:
+  - `{"event":"open","url","code"?}`: show the link. A `code` means a device-code flow (codex): the user types it on that page.
+  - `{"event":"need_code","retry"?,"message"?}`: write the code the sign-in page shows, plus a newline, to stdin. `retry` means the last one was rejected.
+  - `{"event":"done","signed_in":true,"account","auth","already"?}` or `{"event":"error","message"}`.
+
+  Notes on `ai-login`:
+  - Claude uses the paste flow by default, which works wherever the browser is. `--local-browser` gives the link that redirects to the waiting process on `localhost` instead: no code to paste, but the browser has to be on the same machine.
+  - It's already signed in with a subscription: `done` at once with `"already": true`, unless `--force`.
+  - Killing the process ends the sign-in it started.
+  - Supported for claude and codex. Others give `{"event":"error","message":"not supported yet"}`.
+
 ### Classify and create errors
 
 When `create --classify-only --json-output` (or `create --json-output`) fails, it gives `{"action":"classify"|"create","status":"error","error":<code>,"message"}`. The codes:
 
 - **`agent_failed`**: the AI agent itself failed, for example a wrong key, a model the account can't use, no credit left, or not signed in. `message` is the agent's own last error line, prefixed with its name, e.g. `Codex: unexpected status 401 Unauthorized: Incorrect API key provided: ...`. A run that shows a 400, 401, 403 or 404 is stopped at once rather than after the agent's own retries. It is not retried.
 - **`no_stack`**: the agent answered, but not with a usable recommendation. Retried once.
+- **`ai_not_signed_in`**: claude or codex has no key or endpoint in the profile and isn't signed in on this machine. This is checked before the agent runs, and also reported when it fails with a 401. The message names the agent and host and suggests `zeltro ai-login --agent <a>`. The JSON also carries `"agent"`.
 
-**Codex with an API key:** Codex ignores `OPENAI_API_KEY`, so Zeltro signs it in with `codex login --with-api-key` in a managed `CODEX_HOME`, `~/.zeltro/codex/<hash of the key>`. That home is stable per key, so `codex resume --last` finds the profile's earlier sessions. The user's `config.toml` and `AGENTS.md` are symlinked into it, and the user's own `~/.codex` (and any ChatGPT sign-in in it) is never written to. This applies to `ai`, `resume`, `create`, `create-installer` and `update-installer`.
+**Codex with an API key (no endpoint):** Codex ignores `OPENAI_API_KEY`, so Zeltro signs it in with `codex login --with-api-key` in a managed `CODEX_HOME`, `~/.zeltro/codex/<hash of the key>`. That home is stable per key, so `codex resume --last` finds the profile's earlier sessions. The user's `config.toml` and `AGENTS.md` are symlinked into it, and the user's own `~/.codex` (and any ChatGPT sign-in in it) is never written to. This applies to `ai`, `resume`, `create`, `create-installer` and `update-installer`.
 
 ### Folder projects
 

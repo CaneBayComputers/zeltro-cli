@@ -42,7 +42,7 @@ _zeltro() {
     cword=$COMP_CWORD
     verb="${COMP_WORDS[1]}"
 
-    local verbs="add ai ai-set ai-unattended art artisan bash cache-refresh clone composer configure create \
+    local verbs="add ai ai-install ai-login ai-set ai-status ai-unattended art artisan bash cache-refresh clone composer configure create \
 create-installer db-refresh disable disable-service django down down-all drush enable \
 enable-service exec exec-root exec-tty exec-tty-root get-metadata gui help install memcache memcache-flush \
 memcache-stats migrate-names mysql new node npm npx peers php phpcbf phpcs phpmd pip pip3 projects-dir \
@@ -142,6 +142,12 @@ update-installer version wp"
             COMPREPLY=( $(compgen -W "--one-off" -- "$cur") ) ;;
         ai-set)
             COMPREPLY=( $(compgen -W "--agent --model --api-key --json-output" -- "$cur") ) ;;
+        ai-install|ai-status|ai-login)
+            if [ "$prev" = "--agent" ]; then
+                COMPREPLY=( $(compgen -W "claude codex gemini qwen aider opencode hermes" -- "$cur") )
+            else
+                COMPREPLY=( $(compgen -W "--agent --json-output --local-browser --force" -- "$cur") )
+            fi ;;
         configure)
             COMPREPLY=( $(compgen -W "--git-name --git-email --projects-dir --vpc-subnet --json-output" -- "$cur") ) ;;
         django)
