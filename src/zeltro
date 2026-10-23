@@ -781,10 +781,13 @@ case "$1" in
         ZELTRO_PROFILE_AGENT="${AI_AGENT:-}" \
         ZELTRO_PROFILE_HAS_KEY="$([ -n "${AI_API_KEY:-}" ] && echo 1)" \
         ZELTRO_PROFILE_HAS_BASE="$([ -n "${AI_API_BASE:-}" ] && echo 1)" \
-            python3 "$SCRIPT_DIR/scripts/ai_auth.py" status "${@:2}"
+            exec python3 "$SCRIPT_DIR/scripts/ai_auth.py" status "${@:2}"
         ;;
     "ai-login")
-        python3 "$SCRIPT_DIR/scripts/ai_auth.py" login "${@:2}"
+        # exec, so the zeltro PID is the login process: a SIGTERM to it ends the
+        # agent's sign-in too. Run as a child, bash died on the signal and left
+        # python and `codex login` running (2026-10-23).
+        exec python3 "$SCRIPT_DIR/scripts/ai_auth.py" login "${@:2}"
         ;;
     "peers")
         "$SCRIPT_DIR/scripts/bus.sh" peers "${@:2}"

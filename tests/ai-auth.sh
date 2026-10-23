@@ -40,6 +40,7 @@ case "\$1 \$2" in
     printf 'Paste code here if prompted > '
     while IFS= read -r code; do
       if [ "\$code" = "GOOD-CODE" ]; then touch "\$S"; echo "Login successful."; exit 0; fi
+      if [ "\$code" = "WRONG-400" ]; then echo "Login failed: Request failed with status code 400"; exit 1; fi
       echo " Invalid code. Please make sure the full code was copied."
     done
     exit 1 ;;
@@ -55,7 +56,7 @@ case "\$1 \$2" in
   "login status") if [ -f "\$S" ]; then cat "\$S"; exit 0; fi; echo "Not logged in"; exit 1 ;;
   "login --device-auth")
     printf '1. Open this link in your browser and sign in to your account\n   \033[94mhttps://auth.openai.com/codex/device\033[0m\n\n2. Enter this one-time code (expires in 15 minutes)\n   \033[94mABCD-12345\033[0m\n'
-    sleep 1; echo "Logged in using ChatGPT" > "\$S"; echo "Successfully logged in" ;;
+    sleep "\${FAKE_WAIT:-1}"; echo "Logged in using ChatGPT" > "\$S"; echo "Successfully logged in" ;;
 esac
 EOF
 printf '#!/bin/sh\necho "gemini 0.1.0"\n' > "$B/gemini"
@@ -137,6 +138,24 @@ exec 4>&-
 check "exits 130" "$rc" "130"
 sleep 0.5
 check "its sign-in process is gone" "$(pgrep -f "$B/claude auth login" | wc -l | tr -d ' ')" "0"
+
+# Through `zeltro`, the way the app calls it: the signal goes to the zeltro PID.
+( export FAKE_WAIT=30; z ai-login --agent codex --json-output --timeout 60 < /dev/null > "$T/out3" ) &
+for _ in $(seq 1 100); do grep -q '"open"' "$T/out3" 2>/dev/null && break; sleep 0.1; done
+P="$(pgrep -f "ai_auth.py login --agent codex" | head -1)"
+check "zeltro ai-login's PID is the login process" "$(ps -o args= -p "$P" 2>/dev/null | grep -c ai_auth.py)" "1"
+kill -TERM "$P"
+for _ in $(seq 1 50); do [ "$(pgrep -f "$B/codex login" | wc -l)" -eq 0 ] && break; sleep 0.1; done
+check "SIGTERM to it ends codex's sign-in too" "$(pgrep -f "$B/codex login" | wc -l | tr -d ' ')" "0"
+wait 2>/dev/null; rm -f "$T/codex-in"
+
+echo "ai-login: claude, a wrong code that Claude rejects"
+mkfifo "$T/in4"; exec 5<> "$T/in4"
+( export HOME="$T/home" PATH="$B:/usr/bin:/bin"; exec python3 "$REPO/src/scripts/ai_auth.py" login --agent claude --json-output --timeout 20 ) < "$T/in4" > "$T/out4" 2>&1 &
+P=$!
+for _ in $(seq 1 100); do grep -q need_code "$T/out4" 2>/dev/null && break; sleep 0.1; done
+echo "WRONG-400" >&5; wait "$P" 2>/dev/null; exec 5>&-
+check "a readable error, no prompt text" "$(tail -1 "$T/out4")" '{"event": "error", "message": "That code wasn'"'"'t accepted. Start the sign-in again and copy the whole code from the sign-in page."}'
 
 echo "profile translation (zeltro_agent_env, aider)"
 envrun() { # <agent> <model> <key> <base> <vars...>
