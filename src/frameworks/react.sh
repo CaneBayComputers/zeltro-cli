@@ -104,8 +104,10 @@ EOF
     echo-green "React project structure created!"
 }
 
+# A cloned app's own Vite dev script gets Zeltro's port and host forced on
+# the command line (see zeltro_vite_dev_command).
 framework_node_start_command() {
-    echo "npm run dev"
+    zeltro_vite_dev_command || echo "npm run dev"
 }
 
 framework_python_start_command() { echo ""; }

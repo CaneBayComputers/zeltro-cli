@@ -344,11 +344,13 @@ After `zeltro clone` of a complex project, the agent's checklist:
 
 ### Upstream compose preservation
 
-Whenever the project already had a `docker-compose.yaml`, `setup_project.sh`:
-- Copies the original to `docker-compose.upstream.yaml` (first run only — never overwrites a previous backup, so the true original survives across re-runs).
-- Appends `docker-compose.yaml` to `.gitignore` (idempotent), so a Zeltro dev doesn't commit the Zeltro-mangled compose back to a shared repo.
+Whenever the project already had a `docker-compose.yaml` of its own (one the repo tracks; an untracked compose in a git repo is Zeltro's from an earlier setup or fold), `setup_project.sh` copies the original to `docker-compose.upstream.yaml` (first run only — never overwrites a previous backup, so the true original survives across re-runs).
 
-Greenfield projects (no existing compose) are unaffected.
+### Keeping Zeltro's files out of an adopted repo
+
+A cloned or set-up repo gets Zeltro's local files hidden through `.git/info/exclude`, which is never committed or pushed: `docker-compose.yaml`, `docker-compose.upstream.yaml`, and `package-lock.json` when the repo is locked by bun, yarn or pnpm. Tracked files are left alone: setup doesn't edit a tracked `.gitignore`, and when the repo tracks its own `AGENTS.md` (a Lovable app does), Zeltro's project context goes to `ZELTRO.md` instead. A repo synced two ways, like a Lovable app, would otherwise carry these edits back to its other side. A compose the repo tracks still shows as modified. `zeltro new` projects keep the old `.gitignore` behaviour.
+
+A cloned Vite app whose `dev` script is plain `vite` runs as `npx vite … --host 0.0.0.0 --port 3000 --strictPort`, since the image's nginx proxies to 3000 and the app's config may pin another port (Lovable's pins 8080). A failing `npm install` is retried with `node_modules` cleared, then with `--legacy-peer-deps`.
 
 ---
 
