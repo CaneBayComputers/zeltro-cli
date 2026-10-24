@@ -102,15 +102,21 @@ fi
 # pointless, and so anyone depending on the old behaviour has a way back.
 AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
 
-# ZELTRO_AI_LANGUAGE: a system-level instruction where the agent has one (see
-# zeltro_ai_language_args). Gemini, OpenCode and agy have none, so it rides on the prompt.
-zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
+# Refresh the project's Zeltro context (AGENTS.md or ZELTRO.md), then point the
+# agent at it and carry ZELTRO_AI_LANGUAGE as a system-level instruction where
+# the agent has one (see zeltro_ai_system_args). Gemini, OpenCode and agy have
+# none, so it rides on the prompt.
+zeltro_prepare_project_context "$(zeltro_project_of_dir "$PWD")"
+zeltro_ai_system_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
-if zeltro_ai_language_in_prompt "$AI_AGENT_CLI_NAME" && [[ -n "${AI_LANGUAGE:-}" ]]; then
-    INIT_PROMPT="$(zeltro_ai_language_instruction)
+if zeltro_ai_system_in_prompt "$AI_AGENT_CLI_NAME"; then
+    _instr="$(zeltro_ai_system_instruction "$AI_AGENT_CLI_NAME")"
+    if [[ -n "$_instr" ]]; then
+        INIT_PROMPT="$_instr
 
 $INIT_PROMPT"
+    fi
 fi
 
 case "$AI_AGENT_CLI_NAME" in
@@ -122,7 +128,7 @@ case "$AI_AGENT_CLI_NAME" in
         zeltro_agent_env codex || exit 1
         codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && codex_args+=(--dangerously-bypass-approvals-and-sandbox)
-        codex_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        codex_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         codex_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             # A read-only question from Zeltro itself (the create classifier)
@@ -143,7 +149,7 @@ case "$AI_AGENT_CLI_NAME" in
             claude_args+=("--model" "$AI_MODEL")
         fi
         zeltro_agent_env claude
-        claude_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        claude_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         claude_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         claude_args+=("$INIT_PROMPT")
         claude "${claude_args[@]}"
@@ -164,7 +170,7 @@ case "$AI_AGENT_CLI_NAME" in
         # so it stays unconditional; --yolo is the approval bypass and is gated.
         qwen_args=(--auth-type openai)
         [[ "$AUTO_APPROVE" == "1" ]] && qwen_args+=(--yolo)
-        qwen_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        qwen_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             qwen_args+=("--model" "$AI_MODEL")
         fi
@@ -234,7 +240,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     aider)
         build_aider_args
-        AIDER_ARGS+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        AIDER_ARGS+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         AIDER_ARGS+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             aider "${AIDER_ARGS[@]}" --message "$INIT_PROMPT"
