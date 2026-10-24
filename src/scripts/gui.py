@@ -683,6 +683,20 @@ def last_reply(argv):
     return ""
 
 
+def _is_codex_title(message):
+    """Codex names a new thread with a side turn that answers {"title": "..."},
+    and notify fires for it too, before the real turn has done anything. It is
+    not the end of a turn: no message, no preview refresh, and it mustn't use up
+    the event gap the real turn-done needs."""
+    if not message.startswith("{"):
+        return False
+    try:
+        data = json.loads(message)
+    except ValueError:
+        return False
+    return isinstance(data, dict) and set(data) == {"title"} and isinstance(data["title"], str)
+
+
 def cmd_event(argv):
     """Hook entry point. Never fails, never prints, never waits."""
     try:
@@ -691,6 +705,9 @@ def cmd_event(argv):
         # as the event.
         event = argv[0] if argv else ""
         if not session or event not in EVENTS or app_problem():
+            return EXIT_OK
+        message = last_reply(argv).strip() if event == "turn-done" else ""
+        if _is_codex_title(message):
             return EXIT_OK
         ensure_dirs()
         stamp = os.path.join(GUI, ".last-%s-%s" % (re.sub(r"[^A-Za-z0-9_.-]", "_", session)[:80], event))
@@ -702,10 +719,8 @@ def cmd_event(argv):
         with open(stamp, "w"):
             pass
         args = {"event": event}
-        if event == "turn-done":
-            message = last_reply(argv).strip()
-            if message:
-                args["message"] = message[:MESSAGE_MAX]
+        if message:
+            args["message"] = message[:MESSAGE_MAX]
         send_request("event", args)
     except Exception:  # noqa: BLE001 -- a hook must never fail the agent
         pass

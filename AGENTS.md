@@ -37,7 +37,7 @@ Zeltro is infrastructure for **multi-project local dev** and **AI-driven workflo
 
 **No interactive prompts.** Every command fails with a clear "required argument" error rather than prompting — so nothing ever blocks an agent. Always pass explicit arguments. (`zeltro create` prompts a human only at a terminal; under `--one-off`, `--json-output` or a non-TTY stdin it takes the top recommendation instead. `zeltro configure` prompts unless you pass `--non-interactive` (`-y`), so an agent must always pass it.)
 
-`zeltro create`, `zeltro new`, `zeltro clone`, and `zeltro install` write an `AGENTS.md` handoff file into the new project, then `cd` into it and send the AI agent a one-off prompt telling it to read that file. Pass `--one-off` (or run with `--json-output` / non-TTY / no AI agent configured) to skip the handoff entirely.
+`zeltro create`, `zeltro new`, `zeltro clone`, and `zeltro install` write an `AGENTS.md` handoff file into the new project, then `cd` into it and send the AI agent a one-off prompt telling it to read that file. Pass `--one-off` (or run with `--json-output` / non-TTY / no AI agent configured) to skip the agent session; the `AGENTS.md` is still written, for an agent started later (the GUI does this). Its Zeltro block goes first and overrides a framework's own advice to install PHP, Node and the like on the host.
 
 `zeltro ai "<prompt>"` is a one-off prompt by default — durable project context lives in the project's `AGENTS.md`, not in a long-lived session. Pass `--interactive` for a persistent session.
 
@@ -204,7 +204,7 @@ Exit codes: 0 ok, 1 error, 2 usage, **3 the app isn't available (ask in the chat
 
 **Element picker contract (`data-zeltro-src`).** The app's preview can freeze a page and let the user click an element; the note it hands the agent includes the nearest named section (`Inside: section#pricing`). In development, a web app can also mark each section's root with `data-zeltro-src="<project-relative path>[:<line>]"`, the file that renders it (e.g. `resources/views/pricing.blade.php:12`). The attribute name is exactly `data-zeltro-src`. The picker reads the nearest one at or above the clicked element and adds `Source: <path>` to the note. Emit it only in development (gated on `APP_DEBUG`/`APP_ENV=local`, `DEBUG`, `import.meta.env.DEV` or `NODE_ENV`), so production HTML doesn't publish file paths. The projects' `AGENTS.md` tells agents to add these and stable section ids.
 
-`zeltro gui event <turn-done|needs-input|build-done>` tells the app a turn ended; `zeltro ai` and `zeltro resume` wire it up as a hook for Claude Code, Codex (unless you set your own `notify`) and aider, per run, without changing their config files. It always exits 0. Requests travel through `~/.zeltro/bus/gui/{requests,replies,cancel}/`.
+`zeltro gui event <turn-done|needs-input|build-done>` tells the app a turn ended; `zeltro ai` and `zeltro resume` wire it up as a hook for Claude Code, Codex (unless you set your own `notify`) and aider, per run, without changing their config files. Codex's thread-title side turn (a reply of just `{"title": ...}`) is not a turn end and is ignored. It always exits 0. Requests travel through `~/.zeltro/bus/gui/{requests,replies,cancel}/`.
 
 ---
 

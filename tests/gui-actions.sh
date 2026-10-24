@@ -194,12 +194,16 @@ EOF
 echo "{\"transcript_path\":\"$T/transcript.jsonl\"}" | (cd "$PROJ" && ZELTRO_GUI_SESSION=m3 "$ZELTRO" gui event turn-done)
 echo '{"message":"Claude needs your permission"}' | (cd "$PROJ" && ZELTRO_GUI_SESSION=m4 "$ZELTRO" gui event needs-input)
 (cd "$PROJ" && ZELTRO_GUI_SESSION=m5 "$ZELTRO" gui event turn-done </dev/null)
+# Codex's thread-title side turn, then the real turn end straight after.
+(cd "$PROJ" && ZELTRO_GUI_SESSION=m6 "$ZELTRO" gui event turn-done '{"type":"agent-turn-complete","last-assistant-message":"{\"title\":\"Build a simple guestbook\"}"}' </dev/null)
+(cd "$PROJ" && ZELTRO_GUI_SESSION=m6 "$ZELTRO" gui event turn-done '{"type":"agent-turn-complete","last-assistant-message":"The guestbook is ready."}' </dev/null)
 sleep 0.3
-python3 - "$T/seen" <<'EOF' && ok "turn-done carries the last reply (codex, claude, transcript); others don't" || bad "events: $(cat "$T/seen")"
+python3 - "$T/seen" <<'EOF' && ok "turn-done carries the last reply (codex, claude, transcript); others don't; codex title turn skipped" || bad "events: $(cat "$T/seen")"
 import json, sys
 got = {r["from"]["session"]: r["args"].get("message") for r in map(json.loads, open(sys.argv[1]))}
 want = {"m1": "Codex says done.", "m2": "Claude says done.",
-        "m3": "Made the header blue.\nReload to see it.", "m4": None, "m5": None}
+        "m3": "Made the header blue.\nReload to see it.", "m4": None, "m5": None,
+        "m6": "The guestbook is ready."}
 sys.exit(0 if got == want else print(got) or 1)
 EOF
 expect_code 0 "event with a broken bus" env ZELTRO_GUI_SESSION=s1 ZELTRO_BUS_DIR=/proc/nope "$ZELTRO" gui event turn-done
