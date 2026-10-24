@@ -276,9 +276,11 @@ When writing a custom compose: give the entry-point service a static IP in `.100
 
 Greenfield projects (`zeltro new`) build from one of three cbc base images on Docker Hub under `canebaycomputers/cbc`. Each runs nginx + supervisor on Ubuntu Noble. Sources live in the `CaneBayComputers/docker-images` repo, one directory per image. Override the per-framework default with `--image <ref>` on `zeltro new`, `zeltro clone`, `zeltro setup`, or `zeltro install` (for an adapted complex compose it overrides the web-facing service's image).
 
+**Updates reach existing machines on the next start.** `compose up` never re-pulls an image it already has, so `zeltro up` (and every path that starts a project: new, clone, setup, install, the GUI's start) first re-pulls any `canebaycomputers/cbc:*` image the project's compose names, at most once a day per image (stamps in `~/.cache/zeltro/image-checks/`). A changed image recreates the container then, never a running one. An image not on the machine yet is left to compose; an offline pull is retried next time. `ZELTRO_NO_IMAGE_REFRESH=1` skips it.
+
 ### `canebaycomputers/cbc:nginx-node` — Node.js projects
 - **GitHub**: `CaneBayComputers/docker-images` → `cbc-docker-node-nginx/`
-- **nginx**: Reverse proxy, port 80 → `localhost:3000`. WebSocket upgrade headers included.
+- **nginx**: Reverse proxy, port 80 → `localhost:3000`. Passes the browser's `Host` (plus `X-Forwarded-Host`/`-Proto`), so origin-checking frameworks such as TanStack Start server functions accept requests at the project's address (fixed 2026-10-23; before that they answered 403). WebSocket upgrade headers included.
 - **App startup**: Supervisor runs `/usr/local/bin/start-node-app.sh`. If `NODE_APP_COMMAND` is set, it `cd`s to `/usr/share/nginx/html`, sources `.env`, and execs the command. If unset, the process sleeps.
 - **Web root**: `/usr/share/nginx/html`
 - **Node version**: 22 LTS
