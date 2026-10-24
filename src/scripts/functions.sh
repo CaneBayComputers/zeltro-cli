@@ -789,6 +789,30 @@ zeltro_pull_image() {
     return 0
 }
 
+# Fetch a newer copy of the Zeltro base images (canebaycomputers/cbc:*) compose
+# file $1 uses, before a stopped project starts. `compose up` never re-pulls an
+# image it already has, so a fix pushed to a base image (2026-10-23: nginx-node
+# passing the Host header, without which TanStack server functions answered
+# 403) never reached a machine that had pulled it before. At most once a day
+# per image; an image that isn't here yet is left to compose, and a failed pull
+# (offline) is retried next time. ZELTRO_NO_IMAGE_REFRESH=1 skips it.
+zeltro_refresh_base_images() {
+    local f="${1:-docker-compose.yaml}" dir img stamp before
+    [ "${ZELTRO_NO_IMAGE_REFRESH:-0}" = "1" ] && return 0
+    [ -f "$f" ] || return 0
+    dir="${XDG_CACHE_HOME:-$HOME/.cache}/zeltro/image-checks"
+    for img in $(sed -n "s/^[[:space:]]*image:[[:space:]]*[\"']\{0,1\}\(canebaycomputers\/cbc:[A-Za-z0-9._-]*\).*/\1/p" "$f" | sort -u); do
+        stamp="$dir/$(echo "$img" | tr '/:' '__')"
+        [ -f "$stamp" ] && [ -z "$(find "$stamp" -mmin +1440 2>/dev/null)" ] && continue
+        before=$(docker image inspect -f '{{.Id}}' "$img" 2>/dev/null) || continue
+        echo-white "  Checking for a newer $img (downloads only if it changed) ..."
+        docker pull -q "$img" >/dev/null 2>&1 || continue
+        mkdir -p "$dir" 2>/dev/null && touch "$stamp" 2>/dev/null
+        [ "$(docker image inspect -f '{{.Id}}' "$img" 2>/dev/null)" != "$before" ] && echo-green "  Updated $img."
+    done
+    return 0
+}
+
 zeltro_network_name() {
     echo "${VPC_NETWORK_NAME:-${COMPOSE_PROJECT_NAME:-zeltro-cli}_vpc}"
 }

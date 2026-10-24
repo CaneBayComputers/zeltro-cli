@@ -152,6 +152,11 @@ start_project() {
       return 0
   fi
 
+  # Not running, so a newer base image can be picked up here without
+  # recreating anything mid-session: compose up replaces the container when
+  # its image changed.
+  zeltro_refresh_base_images docker-compose.yaml
+
   dockerup
 
   cd ..
