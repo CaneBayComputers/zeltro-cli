@@ -51,6 +51,28 @@ trust "$DEMO" | grep -q __REACHED__ && [ "$(cat "$T/home/.claude.json")" = '{"pr
   get_projects_dir() { echo "$T/projects"; }; mkdir -p "$T/projects/optout"; zeltro_trust_project_for_agents "$T/projects/optout" )
 ! grep -qF optout "$T/home/.codex/config.toml" && ok "ZELTRO_NO_AGENT_TRUST=1 skips it" || bad "opt-out ignored"
 
+echo "on session start (zeltro ai / resume)"
+# A fake agy, installed after the projects were made.
+printf '#!/bin/sh\nexit 0\n' > "$T/bin/agy"; chmod +x "$T/bin/agy"
+AGY="$T/home/.gemini/antigravity-cli/settings.json"
+start() { # <dir>
+    ( export HOME="$T/home" PATH="$T/bin:$PATH"; unset CODEX_HOME CLAUDE_CONFIG_DIR
+      set +u; source "$REPO/src/scripts/functions.sh" >/dev/null 2>&1
+      get_projects_dir() { echo "$T/projects"; }
+      set -e; zeltro_trust_project_on_start "$1"; echo "__REACHED__" )
+}
+agy_trusts() { python3 -c 'import json,sys; print(sys.argv[2] in json.load(open(sys.argv[1])).get("trustedWorkspaces",[]))' "$AGY" "$1" 2>/dev/null || echo False; }
+check_agy() { [ "$(agy_trusts "$2")" = "$3" ] && ok "$1" || bad "$1: got $(agy_trusts "$2")"; }
+grep -qxF "$DEMO" "$T/home/.zeltro/trusted-projects" && ok "a trusted project is remembered" || bad "not remembered"
+start "$DEMO" | grep -q __REACHED__ && ok "returns normally" || bad "aborted"
+check_agy "remembered project: trusted for the agent installed since" "$DEMO" True
+mkdir -p "$T/projects/legacy"; printf '\n[projects."%s"]\ntrust_level = "trusted"\n' "$T/projects/legacy" >> "$T/home/.codex/config.toml"
+start "$T/projects/legacy" >/dev/null
+check_agy "older project Codex already trusts: trusted for agy" "$T/projects/legacy" True
+mkdir -p "$T/projects/cloned"; start "$T/projects/cloned" >/dev/null
+check_agy "a clone nobody trusted: still asked" "$T/projects/cloned" False
+! grep -qF cloned "$T/home/.codex/config.toml" && ok "and nothing else trusts it" || bad "clone got trusted"
+
 grep -q zeltro_trust_project_for_agents "$REPO/src/scripts/new_project.sh" && grep -q zeltro_trust_project_for_agents "$REPO/src/scripts/install.sh" \
     && ok "new and install call it" || bad "new/install don't call it"
 ! grep -q zeltro_trust_project_for_agents "$REPO/src/scripts/clone_project.sh" && ok "clone never pre-trusts (a cloned repo keeps the agent's question)" \

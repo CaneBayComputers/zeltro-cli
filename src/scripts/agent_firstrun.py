@@ -20,10 +20,13 @@ on a pseudo-terminal (2026-10-23):
   hermes          "Help improve Hermes?" -> telemetry.shared_metrics.offer_version (via
                   `hermes config set`; sharing stays off, its default)
   qwen, opencode  nothing blocks when Zeltro passes the key.
-  agy 1.4.6       nothing seeded. Its first interactive start asks for a color scheme,
-                  then "Terms of Service & Data Use" with data sharing ticked by default:
-                  a consent the user gives, so it's left to them. Headless runs (-p)
-                  skip it. Folder trust: trustedWorkspaces (zeltro_trust_project_for_agents).
+  agy 1.4.7       nothing seeded. Its first interactive start (2026-10-24, on WSL): login
+                  method (Google OAuth or a Google Cloud project), the OAuth link and a
+                  code to paste back, a color scheme, then "Terms of Service & Data Use"
+                  with data sharing ticked by default: a consent the user gives, so it's
+                  left to them. Headless runs (-p) skip it. Folder trust: trustedWorkspaces
+                  (zeltro_trust_project_for_agents); "Run this command?" prompts:
+                  toolPermission (ai-unattended).
 
 Folder trust is per project and lives in zeltro_trust_project_for_agents.
 Best effort: exits 0 whatever happens.

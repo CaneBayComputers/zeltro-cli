@@ -160,7 +160,9 @@ has "listed" "$OUT" "network zeltro-cli_vpc (still used by: intruder)"
 check "intruder still there" "$(names containers)" "intruder linked other "
 
 echo "--purge: everything Zeltro put here except the projects folder"
-setup c; sed -i 's|^\(other\t.*\t\)nginx:1\t|\1redis:7\t|' "$S/containers"; run --purge
+setup c; sed -i 's|^\(other\t.*\t\)nginx:1\t|\1redis:7\t|' "$S/containers"
+mkdir -p "$H/.local/bin"; printf '#!/bin/sh\n# Zeltro WSL browser opener: test\n' > "$H/.local/bin/xdg-open"; echo x > "$H/.local/bin/other-tool"
+run --purge
 check "exit 0 (a shared image is kept, not a failure)" "$RC" "0"
 check "Zeltro volumes gone" "$(names volumes)" "other_data "
 check "the shared and unrelated images left" "$(names images)" "nginx:1 redis:7 "
@@ -169,7 +171,8 @@ check "GUI package purged, Docker's kept" "$(cat "$S/pkgs")" "docker-ce"
 check "apt lists: only Zeltro's gone" "$(ls "$ROOT/var/lib/apt/lists")" "archive.ubuntu.com_dists_noble_InRelease"
 check "completions, update downloads, app bundle gone" \
     "$(ls -A "$ROOT/etc/bash_completion.d" "$ROOT/usr/share/bash-completion/completions" "$ROOT/Applications" "$ROOT/tmp" | grep -v '^/\|^$' | tr '\n' ' ')" "other-file "
-check "~/.zeltro and ~/.cache/zeltro gone" "$(ls -A "$H" "$H/.cache" | grep -v '^/\|^$' | tr '\n' ' ')" ".cache .config "
+check "~/.zeltro and ~/.cache/zeltro gone" "$(ls -A "$H" "$H/.cache" | grep -v '^/\|^$' | tr '\n' ' ')" ".cache .config .local "
+check "Zeltro's WSL xdg-open gone, other tools kept" "$(ls -A "$H/.local/bin")" "other-tool"
 hasnt "unrelated image not touched" "$(cat "$S/calls")" "rmi nginx:1"
 has "compose-only image removed" "$OUT" "removed image mailhog/mailhog"
 check "config gone" "$(find "$ROOT/etc" -type f | wc -l | tr -d ' ')" "0"
