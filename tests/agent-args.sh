@@ -70,10 +70,10 @@ check "endpoint without a key: placeholder key" "$(echo "$out" | grep '^OPENAI_A
 
 echo "Language"
 out="$( cd "$REPO/src" && set +u && NO_COLOR=1 source scripts/functions.sh >/dev/null 2>&1; set -e
-        AI_LANGUAGE=Spanish; zeltro_ai_language_args hermes; printf '%s' "${HERMES_EPHEMERAL_SYSTEM_PROMPT:-}" )"
+        AI_LANGUAGE=Spanish; zeltro_ai_system_args hermes; printf '%s' "${HERMES_EPHEMERAL_SYSTEM_PROMPT:-}" )"
 echo "$out" | grep -q "Spanish" && ok "hermes: language in HERMES_EPHEMERAL_SYSTEM_PROMPT" || bad "hermes: no language instruction"
 out="$( cd "$REPO/src" && set +u && NO_COLOR=1 source scripts/functions.sh >/dev/null 2>&1
-        zeltro_ai_language_in_prompt opencode && echo yes || echo no )"
+        zeltro_ai_system_in_prompt opencode && echo yes || echo no )"
 check "opencode: language rides on the prompt" "$out" "yes"
 
 echo

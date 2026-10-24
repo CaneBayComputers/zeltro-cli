@@ -106,10 +106,13 @@ notify_resume_fallback() {
     echo-return
 }
 
-# ZELTRO_AI_LANGUAGE rides on each agent's system-level flag, which applies to
-# the resumed session too. Gemini, OpenCode and agy have none and a resume has no
-# prompt to carry it, so a resumed session of theirs gets no language instruction.
-zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
+# Refresh the project's Zeltro context (AGENTS.md or ZELTRO.md). The pointer to
+# it and ZELTRO_AI_LANGUAGE ride on each agent's system-level flag, which applies
+# to the resumed session too. Gemini, OpenCode and agy have none and a resume has
+# no prompt to carry it, so a resumed session of theirs gets neither (OpenCode
+# reads AGENTS.md itself).
+zeltro_prepare_project_context "$PROJECT_NAME" "$PROJECT_DIR"
+zeltro_ai_system_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
 
@@ -129,7 +132,7 @@ case "$AI_AGENT_CLI_NAME" in
         zeltro_agent_env codex || exit 1
         common_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
         [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-bypass-approvals-and-sandbox)
-        common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        common_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         common_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if ! codex resume --last "${common_args[@]}"; then
             notify_resume_fallback
@@ -143,7 +146,7 @@ case "$AI_AGENT_CLI_NAME" in
             common_args+=("--model" "$AI_MODEL")
         fi
         zeltro_agent_env claude
-        common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        common_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         common_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if ! claude --continue "${common_args[@]}"; then
             notify_resume_fallback
@@ -156,7 +159,7 @@ case "$AI_AGENT_CLI_NAME" in
         # --auth-type is required for headless runs; --yolo is the approval bypass.
         common_args=(--auth-type openai)
         [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo)
-        common_args+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        common_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
@@ -215,7 +218,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     aider)
         build_aider_args
-        AIDER_ARGS+=(${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"})
+        AIDER_ARGS+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         AIDER_ARGS+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         # --restore-chat-history replays this directory's .aider.chat.history.md.
         # There's nothing to fall back to: with no history aider just opens a

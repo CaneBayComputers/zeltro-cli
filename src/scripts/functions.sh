@@ -78,35 +78,99 @@ zeltro_ai_language_instruction() {
     printf 'Reply to the user in %s. Keep code, commands, file names and identifiers as they are.' "$AI_LANGUAGE"
 }
 
-# Sets ZELTRO_LANG_ARGS to the flags that carry ZELTRO_AI_LANGUAGE to agent $1
-# as a system-level instruction, so it also holds on a resumed session:
+# The Zeltro project a directory belongs to: the folder directly under the
+# projects directory that contains $1. Prints its name, or nothing.
+zeltro_project_of_dir() {
+    local d root
+    d="$(cd "$1" 2>/dev/null && pwd -P)" || return 0
+    root="$(cd "${PROJECTS_DIR_PATH:-}" 2>/dev/null && pwd -P)" || return 0
+    while [ -n "$d" ] && [ "$d" != "/" ]; do
+        [ "$(dirname "$d")" = "$root" ] && { basename "$d"; return 0; }
+        d="$(dirname "$d")"
+    done
+}
+
+# Before an agent starts in a project (`zeltro ai`, `zeltro resume`): refresh the
+# project's Zeltro context and set ZELTRO_CONTEXT_FILE to its full path, or
+# empty when Zeltro keeps none there (an added folder, not a project). The GUI
+# starts every session through these two commands, so this is what gives a
+# project made before the block existed, or with --one-off, its context.
+#   $1 project name, $2 project dir (default $PROJECTS_DIR_PATH/$1)
+zeltro_prepare_project_context() {
+    ZELTRO_CONTEXT_FILE=""
+    local name="$1" dir="${2:-${PROJECTS_DIR_PATH:-}/$1}"
+    [ -n "$name" ] && [ -d "$dir" ] || return 0
+    if zeltro_project_is_folder "$name"; then
+        [ "$(zeltro_folder_py info "$name" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("origin",""))' 2>/dev/null)" = "created" ] || return 0
+        zeltro_write_folder_agents_md "$dir" "$name" >/dev/null 2>&1 || true
+        ZELTRO_CONTEXT_FILE="$dir/AGENTS.md"
+    else
+        [ -f "$dir/docker-compose.yaml" ] || [ -f "$dir/docker-compose.yml" ] || return 0
+        write_project_agents_md "$name" "$dir" >/dev/null 2>&1 || true
+        ZELTRO_CONTEXT_FILE="$dir/${ZELTRO_AGENTS_FILE:-AGENTS.md}"
+    fi
+    [ -f "$ZELTRO_CONTEXT_FILE" ] || ZELTRO_CONTEXT_FILE=""
+    return 0
+}
+
+# The sentence that points agent $1 at the project's Zeltro context, or nothing.
+# Codex, OpenCode and Hermes read AGENTS.md on their own; Claude Code reads only
+# CLAUDE.md, and the others their own files. Every agent needs it for ZELTRO.md.
+zeltro_ai_context_instruction() {
+    local f="${ZELTRO_CONTEXT_FILE:-}"
+    [ -n "$f" ] || return 0
+    case "$1:$(basename "$f")" in codex:AGENTS.md|opencode:AGENTS.md|hermes:AGENTS.md) return 0 ;; esac
+    if [ "$(basename "$f")" = "ZELTRO.md" ]; then
+        printf 'This is a Zeltro project. Before anything else, read %s (how to work in this project with Zeltro), then the repo'"'"'s own AGENTS.md. Where they disagree about installing or running tools on this computer, follow ZELTRO.md.' "$f"
+    else
+        printf 'This is a Zeltro project. Before anything else, read %s: its Zeltro block says how to work in this project. Where anything else in the project says to install or run tools on this computer, follow that block.' "$f"
+    fi
+}
+
+# Everything Zeltro adds to agent $1's system instructions: the context pointer,
+# then the reply language.
+zeltro_ai_system_instruction() {
+    local ctx lang
+    ctx="$(zeltro_ai_context_instruction "$1")"
+    lang="$(zeltro_ai_language_instruction)"
+    printf '%s' "$ctx${ctx:+${lang:+ }}$lang"
+}
+
+# Sets ZELTRO_SYSTEM_ARGS to the flags that carry Zeltro's system instruction
+# (the context pointer and ZELTRO_AI_LANGUAGE) to agent $1, so it also holds on
+# a resumed session. Run zeltro_prepare_project_context first.
 #   claude, qwen  --append-system-prompt
 #   codex         -c developer_instructions=... (per-run config override)
-#   aider         --chat-language, aider's own reply-language setting
+#   aider         --read <context file>, and --chat-language, aider's own
+#                 reply-language setting
 #   hermes        HERMES_EPHEMERAL_SYSTEM_PROMPT (exported here), which Hermes
 #                 adds to its system prompt without saving it into the session
 #   gemini,       nothing: gemini can only REPLACE its whole system prompt
 #   opencode,     (GEMINI_SYSTEM_MD), and opencode and agy have no flag or
 #   agy           variable for it at all. `zeltro ai` prepends the instruction
 #                 to the prompt instead; a resumed session gets none.
-# Expand with ${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"} (bash 3.2 + set -u).
-zeltro_ai_language_args() {
-    ZELTRO_LANG_ARGS=()
-    local instr; instr="$(zeltro_ai_language_instruction)"
+# Expand with ${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"} (bash 3.2 + set -u).
+zeltro_ai_system_args() {
+    ZELTRO_SYSTEM_ARGS=()
+    if [ "$1" = "aider" ]; then
+        [ -n "${ZELTRO_CONTEXT_FILE:-}" ] && ZELTRO_SYSTEM_ARGS+=(--read "$ZELTRO_CONTEXT_FILE")
+        [ -n "${AI_LANGUAGE:-}" ] && ZELTRO_SYSTEM_ARGS+=(--chat-language "$AI_LANGUAGE")
+        return 0
+    fi
+    local instr; instr="$(zeltro_ai_system_instruction "$1")"
     [ -n "$instr" ] || return 0
     case "$1" in
-        claude|qwen) ZELTRO_LANG_ARGS=(--append-system-prompt "$instr") ;;
+        claude|qwen) ZELTRO_SYSTEM_ARGS=(--append-system-prompt "$instr") ;;
         # -c values are parsed as TOML; a JSON string literal is a valid TOML
         # basic string, so quotes and non-ASCII names survive intact.
-        codex)  ZELTRO_LANG_ARGS=(-c "developer_instructions=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False))' "$instr")") ;;
-        aider)  ZELTRO_LANG_ARGS=(--chat-language "$AI_LANGUAGE") ;;
+        codex)  ZELTRO_SYSTEM_ARGS=(-c "developer_instructions=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False))' "$instr")") ;;
         hermes) export HERMES_EPHEMERAL_SYSTEM_PROMPT="$instr" ;;
     esac
     return 0
 }
 
-# Agents whose reply language rides on the prompt (see zeltro_ai_language_args).
-zeltro_ai_language_in_prompt() {
+# Agents whose system instruction rides on the prompt (see zeltro_ai_system_args).
+zeltro_ai_system_in_prompt() {
     case "$1" in gemini|opencode|agy) return 0 ;; *) return 1 ;; esac
 }
 
@@ -2371,7 +2435,9 @@ if os.path.exists(path):
 else:
     out = block + "\n"
 
-open(path, "w", encoding="utf-8").write(out)
+# Runs before every session too: leave the file (and its mtime) alone when nothing changed.
+if not os.path.exists(path) or open(path, encoding="utf-8").read() != out:
+    open(path, "w", encoding="utf-8").write(out)
 PYAGENTS
 }
 
@@ -4057,7 +4123,8 @@ elif s:
     s = body + "\n\n" + s
 else:
     s = body + "\n"
-open(f, "w", encoding="utf-8").write(s)
+if not os.path.exists(f) or open(f, encoding="utf-8").read() != s:
+    open(f, "w", encoding="utf-8").write(s)
 PYEOF
 }
 
