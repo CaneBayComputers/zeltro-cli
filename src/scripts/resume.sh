@@ -107,7 +107,7 @@ notify_resume_fallback() {
 }
 
 # ZELTRO_AI_LANGUAGE rides on each agent's system-level flag, which applies to
-# the resumed session too. Gemini and OpenCode have none and a resume has no
+# the resumed session too. Gemini, OpenCode and agy have none and a resume has no
 # prompt to carry it, so a resumed session of theirs gets no language instruction.
 zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
@@ -183,6 +183,18 @@ case "$AI_AGENT_CLI_NAME" in
             exec gemini "${common_args[@]}"
         fi
         ;;
+    agy)
+        zeltro_agent_env agy
+        common_args=()
+        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-skip-permissions)
+        [[ -n "$AI_MODEL" ]] && common_args+=(--model "$AI_MODEL")
+        [[ -n "$PROJECTS_DIR_PATH" ]] && common_args+=(--add-dir "$PROJECTS_DIR_PATH")
+        # --continue reopens the most recent conversation; with none it opens a new one.
+        if ! agy ${common_args[@]+"${common_args[@]}"} --continue; then
+            notify_resume_fallback
+            exec agy ${common_args[@]+"${common_args[@]}"}
+        fi
+        ;;
     opencode)
         zeltro_opencode_prepare
         common_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"})
@@ -212,7 +224,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, qwen, aider, opencode, hermes"
+        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, gemini (deprecated)"
         exit 1
         ;;
 esac

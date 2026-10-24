@@ -35,9 +35,13 @@ INSTALL_ONLY=0
 #   - claude
 #       * AI_MODEL: OPTIONAL (when set, passed as `--model "$AI_MODEL"` to `claude`)
 #       * AI_API_KEY: OPTIONAL (when set, passed as `--api-key "$AI_API_KEY"` to `claude`)
-#   - gemini
+#   - agy (Antigravity CLI, Google's replacement for Gemini CLI)
+#       * AI_MODEL: OPTIONAL (`--model`; `agy models` lists them, e.g. gemini-3.1-pro-low)
+#       * AI_API_KEY: OPTIONAL — a Gemini API key (GEMINI_API_KEY); without one agy
+#         uses its own Google sign-in. No custom endpoint.
+#   - gemini (deprecated: Google sign-in for individuals ended 2026-06-18)
 #       * AI_MODEL: OPTIONAL (when set, passed as `--model "$AI_MODEL"` to `gemini`)
-#       * AI_API_KEY: not used (gemini uses Google account auth or GEMINI_API_KEY env var)
+#       * AI_API_KEY: a paid Gemini API key (GEMINI_API_KEY)
 #   - aider
 #       * AI_MODEL: REQUIRED in practice — aider has no login of its own, so the
 #         model name is what picks the provider (openai/gpt-4o, anthropic/…, ollama/…)
@@ -50,6 +54,7 @@ INSTALL_ONLY=0
 # Initial-prompt behavior (driven by `zeltro ai "<prompt>"`):
 #   - codex  : `codex [--model "$AI_MODEL"] [--api-key "$AI_API_KEY"] "<prompt>"`
 #   - claude : `claude [--model "$AI_MODEL"] [--api-key "$AI_API_KEY"] "<prompt>"`
+#   - agy    : `agy [--model "$AI_MODEL"] --add-dir <projects> -i "<prompt>"`
 #   - gemini : `gemini [--model "$AI_MODEL"] -i "<prompt>"`
 #   - aider  : `aider --no-auto-commits --no-check-update [--model …] [--api-key …] [--openai-api-base …] --message "<prompt>"`
 #              (interactive seeds the session with `--load` + `/code <prompt>`, since
@@ -64,11 +69,12 @@ usage() {
     echo-white "Configure or inspect the global AI agent settings used by Zeltro."
     echo-white ""
     echo-white "Options:"
-    echo-white "  --agent NAME       Set the AI agent CLI (codex, claude, gemini, qwen, aider, opencode or hermes)."
-    echo-white "  --model NAME       Set the AI model name (optional for codex, claude, gemini, opencode, hermes;"
+    echo-white "  --agent NAME       Set the AI agent CLI (claude, codex, agy, qwen, aider, opencode or hermes;"
+    echo-white "                     gemini still works but is deprecated: use agy, the Antigravity CLI)."
+    echo-white "  --model NAME       Set the AI model name (optional for codex, claude, agy, gemini, opencode, hermes;"
     echo-white "                     required for qwen and aider, and for opencode/hermes with --api-base)."
     echo-white "                     opencode and hermes take provider/model, e.g. openai/gpt-5.4-mini."
-    echo-white "  --api-key KEY      Set the AI API key (optional for codex, claude, opencode, hermes; required for aider)."
+    echo-white "  --api-key KEY      Set the AI API key (optional for codex, claude, agy, opencode, hermes; required for aider)."
     echo-white "                     Pass an empty value (--api-key \"\") to clear a stored key."
     echo-white "  --api-base URL     Set a custom API endpoint. Works with codex, qwen, aider, opencode and hermes"
     echo-white "                     (OpenAI-compatible: OpenRouter, Ollama, vLLM, LM Studio),"
@@ -204,13 +210,14 @@ select_ai_agent() {
         echo-white 'Choose the AI agent CLI you prefer to use:'
         echo-white '  1) codex'
         echo-white '  2) claude'
-        echo-white '  3) gemini'
+        echo-white '  3) agy     (Antigravity CLI by Google — Google sign-in or a Gemini API key)'
         echo-white '  4) aider   (bring your own API key — any model/provider)'
         echo-white '  5) qwen    (Qwen Code — cheap/local models via an OpenAI-compatible endpoint)'
         echo-white '  6) opencode (OpenCode — any provider, your own login or key)'
         echo-white '  7) hermes  (Hermes Agent by Nous Research — any provider, your own login or key)'
+        echo-white '  8) gemini  (deprecated — paid Gemini API keys only; use agy instead)'
         echo-return
-        echo-yellow -ne 'Enter your choice (1-7): '
+        echo-yellow -ne 'Enter your choice (1-8): '
         echo-white -ne
         read AI_AGENT_CHOICE
         echo-return
@@ -227,7 +234,7 @@ select_ai_agent() {
                 break
                 ;;
             3)
-                AI_AGENT="gemini"
+                AI_AGENT="agy"
                 sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
                 break
                 ;;
@@ -251,8 +258,13 @@ select_ai_agent() {
                 sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
                 break
                 ;;
+            8)
+                AI_AGENT="gemini"
+                sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
+                break
+                ;;
             *)
-                echo-yellow "Invalid selection. Please enter a number from 1 to 7."
+                echo-yellow "Invalid selection. Please enter a number from 1 to 8."
                 ;;
         esac
     done
@@ -500,7 +512,7 @@ configure_gemini_auth() {
 # folders itself (zeltro_add_agent_bin_dirs), so in the app that advice is only
 # confusing. Drops just those lines; everything else passes through unbuffered.
 _quiet_path_advice() {
-    awk '/not (in|on) your PATH|export PATH=|to your PATH|open a new terminal or run: source|^[^A-Za-z]*Setup notes:[[:space:]]*$/ { next } { print; fflush() }'
+    awk '/not (in|on) your PATH|in your active PATH|export PATH=|to your PATH|to your shell profile|open a new terminal or run: source|^[^A-Za-z]*Setup notes:[[:space:]]*$|logging before google\.Init/ { next } { print; fflush() }'
 }
 
 ensure_ai_agent_installed() {
@@ -510,6 +522,10 @@ ensure_ai_agent_installed() {
     if [[ -z "$cli_command" ]]; then
         return 0
     fi
+
+    local deprecated
+    deprecated="$(zeltro_agent_deprecated "$cli_command")"
+    [[ -n "$deprecated" ]] && { echo-yellow "Note: $deprecated"; echo-white; }
 
     # If the CLI is already available, nothing to do beyond checking that it can
     # actually run unattended — Zeltro's AI commands stall otherwise.
@@ -537,6 +553,10 @@ ensure_ai_agent_installed() {
             ;;
         opencode)
             _npm_install_global opencode-ai
+            ;;
+        agy)
+            # A single native binary in ~/.local/bin; it updates itself.
+            { curl -fsSL https://antigravity.google/cli/install.sh | bash; } 2>&1 | _quiet_path_advice
             ;;
         hermes)
             # --non-interactive skips Hermes's setup wizard (Zeltro passes the model and
@@ -731,6 +751,10 @@ if [[ "$AI_AGENT" == "aider" ]]; then
     echo-white "(A local server such as Ollama usually accepts any placeholder key.)"
     configure_ai_api_key
     prompt_ai_api_base
+elif [[ "$AI_AGENT" == "agy" ]]; then
+    echo-cyan "agy signs in with your Google account the first time you run it, or uses a Gemini API key set here."
+    echo-white "  Gemini API keys: https://aistudio.google.com/app/api-keys"
+    configure_ai_api_key
 elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" ]]; then
     # Both have their own login (opencode auth login / hermes auth), so a key and an
     # endpoint are optional: set them to use a provider API key or a local server.

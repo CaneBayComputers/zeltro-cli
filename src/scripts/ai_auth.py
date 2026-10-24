@@ -48,25 +48,32 @@ import time
 # Which sign-ins each agent supports (2026-10-23). Subscription sign-in: Claude
 # Code with Claude Pro/Max; Codex with ChatGPT; OpenCode with ChatGPT only
 # (Anthropic forbids Claude Pro/Max sign-ins in third-party tools); Hermes with
-# Nous Portal or ChatGPT. Gemini CLI lost Google sign-in for individuals on
-# 2026-06-18 and Qwen Code's free sign-in closed 2026-04-15; aider never had one.
+# Nous Portal or ChatGPT; the Antigravity CLI (agy) with a Google account. Gemini
+# CLI lost Google sign-in for individuals on 2026-06-18 (only paid Gemini API keys
+# and Code Assist licences still work), so it's "deprecated" in favour of agy.
+# Qwen Code's free sign-in closed 2026-04-15; aider never had one.
 # "endpoint" is the API format a custom endpoint (base URL + key + model) must
 # speak for that agent, or None. Most servers (OpenRouter, Ollama, LM Studio,
 # vLLM, DeepSeek) speak "openai" (chat completions). Codex 0.128 only speaks
 # OpenAI's Responses API ("openai-responses"): OpenRouter, Ollama and LM Studio
 # offer it, others need a gateway such as LiteLLM. Claude Code takes Anthropic's
 # Messages format (DeepSeek, Kimi, GLM and LiteLLM offer one), Gemini CLI only
-# Google's.
+# Google's. agy takes no endpoint, only a Gemini API key.
 CAPABILITIES = {
     "claude":   {"subscription": True,  "api_key": True, "endpoint": "anthropic"},
     "codex":    {"subscription": True,  "api_key": True, "endpoint": "openai-responses"},
-    "gemini":   {"subscription": False, "api_key": True, "endpoint": "gemini"},
+    "gemini":   {"subscription": False, "api_key": True, "endpoint": "gemini",
+                 "deprecated": "Gemini CLI no longer serves personal Google accounts (since 2026-06-18); "
+                               "only paid Gemini API keys work. Use agy (Antigravity CLI) instead.",
+                 "replaced_by": "agy"},
     "qwen":     {"subscription": False, "api_key": True, "endpoint": "openai"},
     "aider":    {"subscription": False, "api_key": True, "endpoint": "openai"},
     "opencode": {"subscription": True,  "api_key": True, "endpoint": "openai",
                  "subscription_note": "ChatGPT only"},
     "hermes":   {"subscription": True,  "api_key": True, "endpoint": "openai",
                  "subscription_note": "Nous Portal or ChatGPT"},
+    "agy":      {"subscription": True,  "api_key": True, "endpoint": None,
+                 "subscription_note": "Google account, signed in inside agy"},
 }
 # Agents whose sign-in `ai-login` can run.
 LOGIN_SUPPORTED = ["claude", "codex"]
@@ -196,8 +203,28 @@ def status_hermes():
     return {"auth": "unknown", "signed_in": False, "account": ""}
 
 
+def status_agy():
+    # agy keeps its sign-in in the system keyring; `agy models` lists models only
+    # when signed in (1.4.6), else "Please sign in to view available models".
+    rc, out = run(["agy", "models"], timeout=30)
+    if rc is None:
+        return {"auth": "unknown", "signed_in": False, "account": ""}
+    if "sign in" in out.lower() or not re.search(r"^\S+\t", out, re.M):
+        return {"auth": "none", "signed_in": False, "account": ""}
+    account = "Google account"
+    try:
+        settings = json.load(open(os.path.expanduser("~/.gemini/antigravity-cli/settings.json")))
+        if settings.get("modelProvider") == "gemini":
+            return {"auth": "api_key", "signed_in": True, "account": ""}
+        if (settings.get("gcp") or {}).get("project"):
+            account = "Google Cloud project " + settings["gcp"]["project"]
+    except Exception:
+        pass
+    return {"auth": "subscription", "signed_in": True, "account": account}
+
+
 STATUS = {"claude": status_claude, "codex": status_codex,
-          "opencode": status_opencode, "hermes": status_hermes}
+          "opencode": status_opencode, "hermes": status_hermes, "agy": status_agy}
 
 
 def status(agent):
