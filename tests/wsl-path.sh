@@ -78,6 +78,10 @@ check "NVM_DIR honoured" \
 echo "Windows binaries never count"
 check "zeltro_host_cmd skips a /mnt/c npm (path with a space)" \
     "$(mv "$T/home/.nvm" "$T/nvm-off"; fn "$BASE_PATH" 'zeltro_host_cmd npm; echo "rc=$?"'; mv "$T/nvm-off" "$T/home/.nvm")" "rc=1"
+# 2026-10-24: a command on no path at all read as found (the heredoc's empty line),
+# so the WSL xdg-open was never written.
+check "zeltro_host_cmd: a command that isn't installed is not found" \
+    "$(fn "$BASE_PATH" 'zeltro_host_cmd zeltro-no-such-cmd; echo "rc=$?"')" "rc=1"
 check "a Windows codex isn't an installed agent" "$(fn "$BASE_PATH" 'zeltro_agent_installed codex && echo yes || echo no')" "no"
 check "ai_auth.py agrees" \
     "$(HOME="$T/home" PATH="$BASE_PATH" python3 -c "import sys; sys.path.insert(0, '$REPO/src/scripts'); import ai_auth; print(ai_auth.installed('codex'))")" "False"

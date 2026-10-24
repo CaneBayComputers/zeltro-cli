@@ -103,21 +103,26 @@ check "block written on resume" "$(grep -c 'BEGIN ZELTRO CONTEXT' "$P/old/AGENTS
 check "resumed with the pointer" "$(args | grep -c -- "--continue|--append-system-prompt|This is a Zeltro project. Before anything else, read $P/old/AGENTS.md")" "1"
 
 echo "WSL browser opener"
+# The real zeltro_host_cmd, on a PATH of just the tools the helper needs (this
+# machine may have its own xdg-open in /usr/bin).
+mkdir -p "$T/whome" "$T/wbin" "$T/tools"
+for c in grep mkdir cat chmod; do ln -s "$(command -v $c)" "$T/tools/$c"; done
 shim() { # <env assignments...>: run zeltro_wsl_browser_shim in a sandboxed HOME
-    ( export HOME="$T/whome" PATH="$T/wbin:/usr/bin:/bin"; set +u
+    ( export HOME="$T/whome"; set +u
       source "$REPO/src/scripts/functions.sh" >/dev/null 2>&1
+      export PATH="$T/wbin:$T/tools"
       for a in "$@"; do export "$a"; done
-      zeltro_host_cmd() { [ "$1" = xdg-open ] && [ -n "${FAKE_XDG:-}" ] && echo /usr/bin/xdg-open; }
       zeltro_wsl_browser_shim )
 }
 added() { [ -x "$T/whome/.local/bin/xdg-open" ] && echo added || echo none; }
-mkdir -p "$T/whome" "$T/wbin"
 if ! grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
     shim WSL_DISTRO_NAME=
     check "not WSL: nothing added" "$(added)" "none"
 fi
-shim WSL_DISTRO_NAME=Ubuntu FAKE_XDG=1
+printf '#!/bin/sh\n' > "$T/wbin/xdg-open"; chmod +x "$T/wbin/xdg-open"
+shim WSL_DISTRO_NAME=Ubuntu
 check "WSL with an xdg-open already: nothing added" "$(added)" "none"
+rm -f "$T/wbin/xdg-open"
 shim WSL_DISTRO_NAME=Ubuntu
 check "WSL without one: opener added" "$(added)" "added"
 # A fake powershell.exe records what it was asked to run.
