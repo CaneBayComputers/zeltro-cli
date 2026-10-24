@@ -16,7 +16,7 @@ Zeltro doesn't sell AI. It drives an agent CLI you install and sign in to, and y
 ```bash
 zeltro ai-set --agent claude --model claude-opus-5-5
 zeltro ai-set --agent codex  --model gpt-6-sol
-zeltro ai-set --agent gemini
+zeltro ai-set --agent agy
 zeltro ai-set --agent aider  --model anthropic/claude-sonnet-5 --api-key sk-ant-...
 zeltro ai-set --agent qwen   --model qwen/qwen3-coder-30b-a3b-instruct --api-base https://openrouter.ai/api/v1 --api-key sk-or-...
 zeltro ai-set --agent opencode --model openai/gpt-5.4-mini --api-key sk-...
@@ -28,9 +28,9 @@ A fresh install has no agent set, and the AI commands tell you to run `zeltro ai
 
 | Flag | Description |
 |---|---|
-| `--agent <name>` | `codex`, `claude`, `gemini`, `qwen`, `aider`, `opencode` or `hermes`. Switching agents clears the stored model and endpoint. |
-| `--model <name>` | Model name. Optional for Codex, Claude, Gemini, OpenCode and Hermes; needed for Qwen Code and Aider, and for OpenCode and Hermes with `--api-base`. OpenCode and Hermes take `provider/model`, e.g. `openai/gpt-5.4-mini` |
-| `--api-key <key>` | API key. Optional for Codex, Claude, OpenCode and Hermes, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
+| `--agent <name>` | `codex`, `claude`, `agy`, `qwen`, `aider`, `opencode` or `hermes`. `gemini` still works but is deprecated (see [Antigravity CLI](#antigravity-cli-agy)). Switching agents clears the stored model and endpoint. |
+| `--model <name>` | Model name. Optional for Codex, Claude, agy, Gemini, OpenCode and Hermes; needed for Qwen Code and Aider, and for OpenCode and Hermes with `--api-base`. OpenCode and Hermes take `provider/model`, e.g. `openai/gpt-5.4-mini` |
+| `--api-key <key>` | API key. Optional for Codex, Claude, agy, OpenCode and Hermes, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
 | `--api-base <url>` | Custom endpoint. OpenAI-compatible for `qwen`, `aider`, `opencode` and `hermes`; Anthropic-compatible for `claude`. `none` clears it. See [Cheap and local models](../cheap-models/) for Codex |
 | `--install-only` | With `--agent`: install that agent's CLI if it's missing, without making it the default |
 | `--allow-unattended` / `--no-allow-unattended` | Turn the agent's approval prompts off or back on (see [Unattended mode](#unattended-mode)) |
@@ -40,7 +40,7 @@ When you pick an agent that isn't installed, `zeltro ai-set` installs it with:
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash     # Claude Code
 npm install -g @openai/codex                       # Codex
-npm install -g @google/gemini-cli                  # Gemini CLI
+curl -fsSL https://antigravity.google/cli/install.sh | bash   # Antigravity CLI (agy)
 npm install -g @qwen-code/qwen-code                # Qwen Code
 curl -LsSf https://aider.chat/install.sh | sh      # Aider
 npm install -g opencode-ai                         # OpenCode
@@ -48,7 +48,7 @@ curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- \
   --non-interactive --skip-browser --skip-computer-use   # Hermes Agent
 ```
 
-Zeltro passes a stored key only where it fits. Codex gets a key only if it starts with `sk-` (any key with a custom endpoint), and Claude gets it as `ANTHROPIC_API_KEY` only if it starts with `sk-ant-`. Codex ignores `OPENAI_API_KEY`, so Zeltro signs it in with the key (`codex login --with-api-key`) in a Codex home of its own, `~/.zeltro/codex/<hash of the key>`, with your `config.toml` linked in. Your own `~/.codex`, and any ChatGPT sign-in in it, is never touched, and each key keeps its own session history for `zeltro resume`. Anything else is ignored with a warning, and the CLI uses its own sign-in. Gemini never gets the key or the endpoint: it uses its own Google sign-in, or a `GEMINI_API_KEY` you export yourself.
+Zeltro passes a stored key only where it fits. Codex gets a key only if it starts with `sk-` (any key with a custom endpoint), and Claude gets it as `ANTHROPIC_API_KEY` only if it starts with `sk-ant-`. Codex ignores `OPENAI_API_KEY`, so Zeltro signs it in with the key (`codex login --with-api-key`) in a Codex home of its own, `~/.zeltro/codex/<hash of the key>`, with your `config.toml` linked in. Your own `~/.codex`, and any ChatGPT sign-in in it, is never touched, and each key keeps its own session history for `zeltro resume`. Anything else is ignored with a warning, and the CLI uses its own sign-in. agy and Gemini get a stored key as `GEMINI_API_KEY` (a Gemini API key from aistudio.google.com); agy takes no custom endpoint.
 
 `zeltro ai-set --json-output` on its own is read-only. It installs nothing and writes nothing, and reports the agent, model, endpoint, whether a key is stored, the unattended setting, and which agents are installed.
 
@@ -59,9 +59,29 @@ nothing to run.
 
 Settings live in `/etc/zeltro-cli/.env`. Always change them with `zeltro ai-set` rather than editing the file.
 
+### Antigravity CLI (agy)
+
+`agy` is Google's coding agent CLI, and it replaces Gemini CLI. Google stopped serving
+Gemini CLI to personal Google accounts (free, AI Pro and Ultra) on 2026-06-18. Gemini CLI
+still works with a paid Gemini API key, so `zeltro ai-set --agent gemini` keeps working,
+but it's deprecated in Zeltro.
+
+```bash
+zeltro ai-set --agent agy                        # sign in with Google the first time you run agy
+zeltro ai-set --agent agy --api-key AIza...      # or a Gemini API key (aistudio.google.com)
+```
+
+It installs as one program in `~/.local/bin` (no Node needed) and updates itself. To sign in
+with Google, open a terminal and run `agy` once. Its first interactive start also asks for a color
+scheme and shows Google's terms, where you choose whether Google may use your conversations;
+Zeltro leaves that choice to you. With a key, Zeltro sets `"modelProvider": "gemini"` in
+`~/.gemini/antigravity-cli/settings.json` (agy ignores the key without it), and removes
+it again when you clear the key, so Google sign-in works again. agy takes no custom
+endpoint, so it can't run cheap or local models through `--api-base`.
+
 ### Aider
 
-Codex, Claude and Gemini each sign in with their own account. Aider doesn't. It
+Codex, Claude and agy each sign in with their own account. Aider doesn't. It
 talks straight to a provider API, so it needs a model and a key before it will run:
 
 ```bash
@@ -163,7 +183,8 @@ writes the setting into **the agent's own config file**, where you can see and u
 |---|---|---|
 | Claude Code | `~/.claude/settings.json` | `"permissions": {"defaultMode": "bypassPermissions"}` |
 | Codex | `~/.codex/config.toml` | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"` |
-| Gemini CLI | `~/.gemini/settings.json` | `"autoAccept": true` |
+| Antigravity CLI (agy) | `~/.gemini/antigravity-cli/settings.json` | `"toolPermission": "always-proceed"`, `"artifactReviewPolicy": "always-proceed"` |
+| Gemini CLI (deprecated) | `~/.gemini/settings.json` | `"autoAccept": true` |
 | Qwen Code | `~/.qwen/settings.json` | `"autoAccept": true` |
 | Aider | `~/.aider.conf.yml` | `yes-always: true` |
 | OpenCode | `~/.config/opencode/opencode.json` | `"permission": "allow"` |
@@ -191,7 +212,7 @@ changing it, set these in the environment. They are never written to the `.env`:
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `gemini`, `aider`, `qwen`, `opencode` or `hermes` |
+| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `agy`, `aider`, `qwen`, `opencode`, `hermes` or `gemini` (deprecated) |
 | `ZELTRO_AI_MODEL` | The model |
 | `ZELTRO_AI_API_BASE` | The endpoint |
 | `ZELTRO_AI_API_KEY` | The key |
@@ -214,9 +235,9 @@ command before anything runs. Nothing is installed for you; use
 The language instruction reaches Claude Code and Qwen Code through
 `--append-system-prompt`, Codex through `-c developer_instructions=...`, and Aider
 through `--chat-language`, and Hermes through `HERMES_EPHEMERAL_SYSTEM_PROMPT`, so it
-also holds on `zeltro resume`. Gemini CLI and OpenCode have no way to add to their system
-prompt, so `zeltro ai` puts the instruction at the top of the prompt and a resumed
-Gemini or OpenCode session gets none.
+also holds on `zeltro resume`. agy, Gemini CLI and OpenCode have no way to add to their
+system prompt, so `zeltro ai` puts the instruction at the top of the prompt and a resumed
+agy, Gemini or OpenCode session gets none.
 
 In the Zeltro app, **AI profiles** (Settings → AI Profiles) are named agent, model,
 endpoint and key setups you pick per session. Keys are stored encrypted, and a
