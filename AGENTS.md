@@ -61,16 +61,16 @@ Never pass `--json-output` to `zeltro new` from an automation context — it sup
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `gemini`, `aider`, `qwen`, `opencode` or `hermes` |
+| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `agy`, `aider`, `qwen`, `opencode`, `hermes` or `gemini` (deprecated) |
 | `ZELTRO_AI_MODEL` | `AI_MODEL` |
 | `ZELTRO_AI_API_BASE` | `AI_API_BASE` |
 | `ZELTRO_AI_API_KEY` | `AI_API_KEY` |
 | `ZELTRO_AI_API_KEY_FILE` | `AI_API_KEY`, read from the file's first line. Wins over `ZELTRO_AI_API_KEY` when non-empty. Keep the file until the session ends: nested `zeltro` calls re-read it. |
-| `ZELTRO_AI_LANGUAGE` | *(no .env setting)* A plain-English language name, e.g. `Spanish` or `Simplified Chinese`. The agent is told to reply to the user in it and keep code, commands and identifiers as they are, and `create --classify-only` writes its `reason` text in it. Zeltro's own output stays English. How it reaches each agent: claude and qwen `--append-system-prompt`; codex `-c developer_instructions=…`; aider `--chat-language`. All of these also apply to `zeltro resume`. gemini has no way to add to its system prompt, so `zeltro ai` puts the instruction at the top of the prompt, and a resumed gemini session gets none. |
+| `ZELTRO_AI_LANGUAGE` | *(no .env setting)* A plain-English language name, e.g. `Spanish` or `Simplified Chinese`. The agent is told to reply to the user in it and keep code, commands and identifiers as they are, and `create --classify-only` writes its `reason` text in it. Zeltro's own output stays English. How it reaches each agent: claude and qwen `--append-system-prompt`; codex `-c developer_instructions=…`; aider `--chat-language`. All of these also apply to `zeltro resume`. gemini, opencode and agy have no way to add to their system prompt, so `zeltro ai` puts the instruction at the top of the prompt, and a resumed session of theirs gets none. |
 
 Unset means "use the `ai-set` value"; set but empty means "clear it for this run". An unknown agent name, an unreadable key file, or an override agent that isn't installed fails with a non-zero exit before anything runs, and nothing is installed. `zeltro ai-set --install-only --agent <name>` installs an agent without making it the default. `zeltro ai-set --json-output` never prompts or installs, and reports `"session_overrides": true`, `"ai_language": true` and `"installed_agents": [...]`.
 
-**Default agent when none is set.** A fresh install leaves `AI_AGENT` blank. Then every command uses the first installed agent in the order claude, codex, gemini, qwen, aider, opencode, hermes. `zeltro configure` and `zeltro ai-set` save that choice. `ai-set --json-output` saves it only if it can without a password prompt, and reports `"agent_auto": true` when it picked the agent this way. An agent counts as installed when its binary is on `PATH`. Zeltro adds the usual per-user bin directories (`~/.local/bin`, the npm global prefix's `bin`, `~/.npm-global/bin`, `~/.bun/bin`, `~/.opencode/bin`, the nvm default Node's `bin`, from `$NVM_DIR` or `~/.nvm`) when they aren't already on `PATH`, so a non-login ssh shell finds the same agents a login shell does. Inside WSL, Windows' `PATH` entries (`/mnt/c/...`) are moved after all of these, and a binary under `/mnt/<drive>/` never counts as an installed agent, or as the npm to install with.
+**Default agent when none is set.** A fresh install leaves `AI_AGENT` blank. Then every command uses the first installed agent in the order claude, codex, agy, qwen, aider, opencode, hermes, gemini. `zeltro configure` and `zeltro ai-set` save that choice. `ai-set --json-output` saves it only if it can without a password prompt, and reports `"agent_auto": true` when it picked the agent this way. An agent counts as installed when its binary is on `PATH`. Zeltro adds the usual per-user bin directories (`~/.local/bin`, the npm global prefix's `bin`, `~/.npm-global/bin`, `~/.bun/bin`, `~/.opencode/bin`, the nvm default Node's `bin`, from `$NVM_DIR` or `~/.nvm`) when they aren't already on `PATH`, so a non-login ssh shell finds the same agents a login shell does. Inside WSL, Windows' `PATH` entries (`/mnt/c/...`) are moved after all of these, and a binary under `/mnt/<drive>/` never counts as an installed agent, or as the npm to install with.
 
 ### Agent sign-in, install and profiles
 
@@ -80,13 +80,18 @@ An AI profile runs its agent one of three ways: its **subscription** sign-in, th
 - `anthropic`: the Messages API (claude). OpenRouter's `https://openrouter.ai/api`, DeepSeek, Kimi, GLM and LiteLLM offer it;
 - `gemini` (gemini).
 
-Subscription sign-in: claude, codex, opencode (ChatGPT only; a Claude Pro/Max sign-in must never be used outside Claude Code itself) and hermes. Gemini CLI, Qwen Code and aider take keys only.
+agy has no endpoint (`null`): it takes a Gemini API key or its own Google sign-in.
+
+Subscription sign-in: claude, codex, opencode (ChatGPT only; a Claude Pro/Max sign-in must never be used outside Claude Code itself), hermes and agy (a Google account, signed in inside `agy` itself; `ai-login` doesn't run it). Gemini CLI, Qwen Code and aider take keys only.
+
+**Gemini CLI is deprecated.** Google stopped serving it to personal accounts (free, AI Pro, AI Ultra) on 2026-06-18; only paid Gemini API keys and Code Assist licences still work. Its replacement is the **Antigravity CLI (`agy`)**. A configured `gemini` keeps working, but it comes last in the default order, `ai-set` prints a note when it's chosen, and `agent_auth.agents.gemini` carries `"deprecated"` (the reason) and `"replaced_by": "agy"`. The app should offer `agy` instead.
 
 How a profile reaches each agent:
 - **claude.** With an endpoint: `ANTHROPIC_BASE_URL`, with the key as `ANTHROPIC_AUTH_TOKEN` and the model also as `ANTHROPIC_MODEL` and the background (Haiku) model. Without one: `ANTHROPIC_API_KEY` (`sk-ant-` keys only).
 - **codex.** With an endpoint: a model provider of its own, passed with `-c` (`model_providers.zeltro`, `wire_api = "responses"`, key in `ZELTRO_CODEX_ENDPOINT_KEY`), so `~/.codex/config.toml` is never written. With only a key: the managed `CODEX_HOME` below.
 - **qwen.** `OPENAI_API_KEY` / `OPENAI_BASE_URL`.
 - **gemini.** `GEMINI_API_KEY` / `GOOGLE_GEMINI_BASE_URL`.
+- **agy.** `GEMINI_API_KEY`, which agy 1.4.6 only uses with `"modelProvider": "gemini"` in `~/.gemini/antigravity-cli/settings.json`. Zeltro sets that while a run has a key and removes it again (only if Zeltro set it) once runs have none, so a Google sign-in works. A custom endpoint is refused. Installed with Google's script into `~/.local/bin/agy`; it updates itself.
 - **aider.** `--openai-api-base`, with the model as `openai/<model>` (except `ollama/` and `ollama_chat/` routes) and the key as `openai=<key>`.
 - **opencode, hermes.** See their notes in `functions.sh`.
 
@@ -97,7 +102,8 @@ How a profile reaches each agent:
 - **aider:** `gitignore`, `show-release-notes`, `show-model-warnings`, `check-update` off and `analytics-disable` in `~/.aider.conf.yml`; `.aider*` goes in the project's `.git/info/exclude` instead.
 - **hermes:** `telemetry.shared_metrics.offer_version: 2` through `hermes config set` ("Help improve Hermes?"; sharing stays off, its default). Hermes is only started when its `config.yaml` exists and lacks the marker.
 - **qwen, opencode:** nothing blocks when Zeltro passes the key.
-- **Folder trust** ("Is this a project you created or one you trust?", "Do you trust the files in this folder?", Codex's "Trust this folder?") is answered for projects Zeltro itself creates (`new`, `install`, `create`): Claude's `projects[DIR].hasTrustDialogAccepted`, Gemini's `trustedFolders.json` and Codex's `trust_level = "trusted"`. A clone keeps the question, since a cloned repo can carry hooks and MCP servers.
+- **agy:** nothing is pre-answered. Its first interactive start asks for a color scheme, then shows "Terms of Service & Data Use" with Google's data-sharing box ticked by default. That's the user's consent to give, so the screen is left to them. Headless runs (`-p`, used by `create`) skip it.
+- **Folder trust** ("Is this a project you created or one you trust?", "Do you trust the files in this folder?", Codex's "Trust this folder?") is answered for projects Zeltro itself creates (`new`, `install`, `create`): Claude's `projects[DIR].hasTrustDialogAccepted`, Gemini's `trustedFolders.json`, agy's `trustedWorkspaces` and Codex's `trust_level = "trusted"`. A clone keeps the question, since a cloned repo can carry hooks and MCP servers.
 - `ZELTRO_NO_AGENT_FIRSTRUN=1` skips all of it.
 
 The commands:

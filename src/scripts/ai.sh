@@ -103,7 +103,7 @@ fi
 AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
 
 # ZELTRO_AI_LANGUAGE: a system-level instruction where the agent has one (see
-# zeltro_ai_language_args). Gemini and OpenCode have none, so it rides on the prompt.
+# zeltro_ai_language_args). Gemini, OpenCode and agy have none, so it rides on the prompt.
 zeltro_ai_language_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
@@ -196,6 +196,19 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         gemini "${gemini_args[@]}"
         ;;
+    agy)
+        # Antigravity CLI. Go-style flags: every flag before the prompt.
+        zeltro_agent_env agy
+        agy_args=()
+        [[ "$AUTO_APPROVE" == "1" ]] && agy_args+=(--dangerously-skip-permissions)
+        [[ -n "$AI_MODEL" ]] && agy_args+=(--model "$AI_MODEL")
+        [[ -n "$PROJECTS_DIR_PATH" ]] && agy_args+=(--add-dir "$PROJECTS_DIR_PATH")
+        if [[ "$ONE_OFF" == "1" ]]; then
+            agy ${agy_args[@]+"${agy_args[@]}"} -p "$INIT_PROMPT" </dev/null
+        else
+            agy ${agy_args[@]+"${agy_args[@]}"} -i "$INIT_PROMPT"
+        fi
+        ;;
     opencode)
         zeltro_opencode_prepare
         oc_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"})
@@ -233,7 +246,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, qwen, aider, opencode, hermes"
+        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, gemini (deprecated)"
         echo-white "Run 'zeltro ai-set' to choose a supported agent."
         exit 1
         ;;

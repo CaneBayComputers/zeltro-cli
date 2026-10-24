@@ -216,6 +216,16 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         gemini "${gemini_args[@]}"
         ;;
+    agy)
+        zeltro_agent_env agy
+        agy_args=(--dangerously-skip-permissions --add-dir "$DEV_DIR")
+        [[ -n "$AI_MODEL" ]] && agy_args+=(--model "$AI_MODEL")
+        if [[ "$ONE_OFF" == "1" ]]; then
+            agy "${agy_args[@]}" -p "$PROMPT" </dev/null
+        else
+            agy "${agy_args[@]}" -i "$PROMPT"
+        fi
+        ;;
     opencode)
         zeltro_opencode_prepare
         oc_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"} --auto)
@@ -246,7 +256,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, gemini, qwen, aider, opencode, hermes"
+        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, gemini (deprecated)"
         exit 1
         ;;
 esac

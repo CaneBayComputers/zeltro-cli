@@ -14,7 +14,7 @@ _zeltro_src_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)
 unset _zeltro_src_dir
 
 # Agents Zeltro knows how to drive. The agent name is also its binary name.
-ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen opencode hermes"
+ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen opencode hermes agy"
 
 # Per-session AI overrides. A caller (the GUI running a chosen profile, a script)
 # can pick the agent for ONE run without rewriting /etc/zeltro-cli/.env:
@@ -86,9 +86,9 @@ zeltro_ai_language_instruction() {
 #   hermes        HERMES_EPHEMERAL_SYSTEM_PROMPT (exported here), which Hermes
 #                 adds to its system prompt without saving it into the session
 #   gemini,       nothing: gemini can only REPLACE its whole system prompt
-#   opencode      and opencode has no flag or variable for it at all
-#                 (GEMINI_SYSTEM_MD). `zeltro ai` prepends the instruction to
-#                 the prompt instead; a resumed session gets none.
+#   opencode,     (GEMINI_SYSTEM_MD), and opencode and agy have no flag or
+#   agy           variable for it at all. `zeltro ai` prepends the instruction
+#                 to the prompt instead; a resumed session gets none.
 # Expand with ${ZELTRO_LANG_ARGS[@]+"${ZELTRO_LANG_ARGS[@]}"} (bash 3.2 + set -u).
 zeltro_ai_language_args() {
     ZELTRO_LANG_ARGS=()
@@ -107,7 +107,7 @@ zeltro_ai_language_args() {
 
 # Agents whose reply language rides on the prompt (see zeltro_ai_language_args).
 zeltro_ai_language_in_prompt() {
-    case "$1" in gemini|opencode) return 0 ;; *) return 1 ;; esac
+    case "$1" in gemini|opencode|agy) return 0 ;; *) return 1 ;; esac
 }
 
 # OpenCode (opencode.ai). Sets ZELTRO_OPENCODE_ARGS and exports what the run needs.
@@ -188,8 +188,20 @@ zeltro_agent_display_name() {
     case "$1" in
         codex) echo "Codex" ;; claude) echo "Claude Code" ;; gemini) echo "Gemini CLI" ;;
         qwen) echo "Qwen Code" ;; aider) echo "Aider" ;; opencode) echo "OpenCode" ;;
-        hermes) echo "Hermes Agent" ;; *) echo "$1" ;;
+        hermes) echo "Hermes Agent" ;; agy) echo "Antigravity CLI" ;; *) echo "$1" ;;
     esac
+}
+
+# Why agent $1 shouldn't be picked any more, or nothing. Gemini CLI stopped
+# serving Google sign-ins for individuals (free, AI Pro, AI Ultra) on
+# 2026-06-18; only paid Gemini API keys and Code Assist licences still work.
+# Google's replacement is the Antigravity CLI (agy). ai-set warns with this and
+# ai-status reports it, but a configured gemini keeps working.
+zeltro_agent_deprecated() {
+    case "$1" in
+        gemini) echo "Gemini CLI no longer serves personal Google accounts (since 2026-06-18); only paid Gemini API keys work. Google replaced it with the Antigravity CLI: zeltro ai-set --agent agy" ;;
+    esac
+    return 0
 }
 
 # Whether agent $1's CLI can run here. Plain `command -v`, except for hermes (below).
@@ -268,7 +280,8 @@ zeltro_add_agent_bin_dirs() {
 zeltro_add_agent_bin_dirs
 
 # The order Zeltro picks a default agent in when none is configured.
-ZELTRO_DEFAULT_AGENT_ORDER="claude codex gemini qwen aider opencode hermes"
+# Gemini comes last: see zeltro_agent_deprecated.
+ZELTRO_DEFAULT_AGENT_ORDER="claude codex agy qwen aider opencode hermes gemini"
 
 # When no default agent is configured (AI_AGENT is blank, as env.example ships
 # it), use the first installed one in ZELTRO_DEFAULT_AGENT_ORDER, so "Host
@@ -350,6 +363,8 @@ zeltro_codex_base_args() {
 #           model, or Claude Code asks the endpoint for a Haiku it doesn't have.
 #   qwen    OPENAI_API_KEY / OPENAI_BASE_URL.
 #   gemini  GEMINI_API_KEY; endpoint (Gemini's format) GOOGLE_GEMINI_BASE_URL.
+#   agy     GEMINI_API_KEY, which it only uses with "modelProvider": "gemini" in
+#           its settings (zeltro_agy_provider). No custom endpoint.
 # Returns 1 only when Codex can't sign in with the key.
 zeltro_agent_env() {
     case "$1" in
@@ -378,9 +393,47 @@ zeltro_agent_env() {
             _export_agent_key GEMINI_API_KEY ""
             _export_agent_base GOOGLE_GEMINI_BASE_URL
             ;;
+        agy)
+            _export_agent_key GEMINI_API_KEY ""
+            zeltro_agy_provider
+            ;;
     esac
     # With the key and endpoint in place, so Claude can tell it runs on a key.
     zeltro_agent_firstrun "$1"
+    return 0
+}
+
+# Antigravity CLI (1.4.6) ignores GEMINI_API_KEY unless its settings say
+# "modelProvider": "gemini"; without that it asks for a Google sign-in, and a
+# headless run fails "authentication failed or timed out". But with it set, a
+# Google sign-in is never used. So it's set while a run has a key, and removed
+# again once runs have none, only if Zeltro set it (~/.zeltro/agy-provider).
+zeltro_agy_provider() {
+    python3 - "$HOME/.gemini/antigravity-cli/settings.json" "$HOME/.zeltro/agy-provider" "$ZELTRO_SRC_DIR/scripts" <<'PYAGY' >/dev/null 2>&1 || true
+import os, sys
+path, marker, scripts = sys.argv[1:4]
+sys.dont_write_bytecode = True
+sys.path.insert(0, scripts)
+from agent_firstrun import update_json
+if os.environ.get("GEMINI_API_KEY"):
+    def change(d):
+        if d.get("modelProvider"):
+            return False
+        d["modelProvider"] = "gemini"
+        return True
+    if update_json(path, change):
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        open(marker, "w").close()
+elif os.path.exists(marker):
+    def change(d):
+        if d.get("modelProvider") != "gemini":
+            return False
+        del d["modelProvider"]
+        return True
+    if os.path.exists(path):
+        update_json(path, change)
+    os.unlink(marker)
+PYAGY
     return 0
 }
 
@@ -518,6 +571,10 @@ zeltro_ai_agent_problem() {
     fi
     if [ "$AI_AGENT" = "hermes" ] && ! zeltro_hermes_is_agent; then
         echo "The 'hermes' on PATH is not Nous Research's Hermes Agent (Meta's Hermes JavaScript engine uses the same name). Install the agent with: zeltro ai-set --install-only --agent hermes"
+        return 1
+    fi
+    if [ "$AI_AGENT" = "agy" ] && [ -n "${AI_API_BASE:-}" ]; then
+        echo "The Antigravity CLI (agy) can't use a custom API endpoint; it signs in with Google or uses a Gemini API key. Clear the endpoint with: zeltro ai-set --agent agy --api-base none"
         return 1
     fi
     return 0
@@ -1435,6 +1492,8 @@ handle_docker_compose_conflict() {
 #   if the file doesn't parse.
 # Gemini CLI: DIR -> "TRUST_FOLDER" in ~/.gemini/trustedFolders.json ("Do you
 #   trust the files in this folder?").
+# Antigravity CLI: DIR in trustedWorkspaces in ~/.gemini/antigravity-cli/
+#   settings.json ("Do you trust the contents of this project?").
 # Codex: [projects."DIR"] trust_level = "trusted" in config.toml, the entry
 #   Codex writes itself; appended only if the project has no entry.
 # Best effort: never fails the caller. Set ZELTRO_NO_AGENT_TRUST=1 to skip.
@@ -1454,9 +1513,11 @@ zeltro_trust_project_for_agents() {
     claude_json="${claude_json:-$HOME/.claude.json}"
     [ -f "$claude_json" ] || zeltro_agent_installed claude || claude_json=""
     [ -f "$gemini_json" ] || zeltro_agent_installed gemini || gemini_json=""
-    python3 - "$claude_json" "$dir" "$gemini_json" "$ZELTRO_SRC_DIR/scripts" <<'PYTRUST' >/dev/null 2>&1 || true
+    local agy_json="$HOME/.gemini/antigravity-cli/settings.json"
+    [ -f "$agy_json" ] || zeltro_agent_installed agy || agy_json=""
+    python3 - "$claude_json" "$dir" "$gemini_json" "$ZELTRO_SRC_DIR/scripts" "$agy_json" <<'PYTRUST' >/dev/null 2>&1 || true
 import sys
-claude_path, proj, gemini_path, scripts = sys.argv[1:5]
+claude_path, proj, gemini_path, scripts, agy_path = sys.argv[1:6]
 sys.dont_write_bytecode = True   # no __pycache__ in the install
 sys.path.insert(0, scripts)
 from agent_firstrun import update_json
@@ -1476,8 +1537,21 @@ def gemini(data):
 
 if claude_path:
     update_json(claude_path, claude)
+def agy(data):
+    trusted = data.get("trustedWorkspaces")
+    if not isinstance(trusted, list):
+        if trusted is not None:
+            return False
+        trusted = data["trustedWorkspaces"] = []
+    if proj in trusted:
+        return False
+    trusted.append(proj)
+    return True
+
 if gemini_path:
     update_json(gemini_path, gemini)
+if agy_path:
+    update_json(agy_path, agy)
 PYTRUST
 
     local codex_cfg="${CODEX_HOME:-$HOME/.codex}/config.toml"
@@ -2992,6 +3066,7 @@ zeltro_offer_agent_autonomy() {
         aider)  cfg="$HOME/.aider.conf.yml";       desc='yes-always: true' ;;
         opencode) cfg="$HOME/.config/opencode/opencode.json"; desc='"permission": "allow"' ;;
         hermes) cfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"; desc='approvals.mode: off' ;;
+        agy)    cfg="$HOME/.gemini/antigravity-cli/settings.json"; desc='"toolPermission": "always-proceed", "artifactReviewPolicy": "always-proceed"' ;;
         *) return 0 ;;
     esac
 
@@ -3154,6 +3229,35 @@ PYEOF
                 return 1
             fi
             ;;
+        agy)
+            # toolPermission approves commands and edits; artifactReviewPolicy
+            # stops it waiting for a review of its plan. Written like agy writes
+            # the file itself (mode 600), and never over a file that won't parse.
+            local agy_rc=0
+            python3 - "$cfg" "$ZELTRO_SRC_DIR/scripts" <<'PYAGY' || agy_rc=$?
+import json, os, sys
+path, scripts = sys.argv[1:3]
+sys.dont_write_bytecode = True
+sys.path.insert(0, scripts)
+from agent_firstrun import update_json
+if os.path.exists(path):
+    try:
+        json.load(open(path))
+    except Exception:
+        sys.exit(2)
+def change(d):
+    want = {"toolPermission": "always-proceed", "artifactReviewPolicy": "always-proceed"}
+    if all(d.get(k) == v for k, v in want.items()):
+        return False
+    d.update(want)
+    return True
+update_json(path, change)
+PYAGY
+            if [ $agy_rc -eq 2 ]; then
+                echo-yellow "$cfg is not valid JSON — leaving it untouched."
+                return 1
+            fi
+            ;;
         hermes)
             # Hermes's config is commented YAML, so its own CLI edits it.
             if ! hermes config set approvals.mode off >/dev/null 2>&1; then
@@ -3181,6 +3285,7 @@ zeltro_read_agent_autonomy() {
         gemini) cfg="$HOME/.gemini/settings.json" ;;
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
         aider)  cfg="$HOME/.aider.conf.yml" ;;
+        agy)    cfg="$HOME/.gemini/antigravity-cli/settings.json" ;;
         opencode)
             # OpenCode merges opencode.json with its own opencode.jsonc (and project
             # files), so ask it for the resolved setting rather than reading one file.
@@ -3208,6 +3313,15 @@ print("true" if allow else "false")' 2>/dev/null || echo "unknown"
     [ -f "$cfg" ] || { echo "false"; return 0; }
 
     case "$agent" in
+        agy)
+            python3 -c '
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print("unknown"); sys.exit(0)
+print("true" if d.get("toolPermission") == "always-proceed" else "false")' "$cfg" 2>/dev/null || echo "unknown"
+            ;;
         claude|gemini|qwen)
             command -v python3 >/dev/null 2>&1 || { echo "unknown"; return 0; }
             python3 - "$cfg" "$agent" << 'PYEOF' 2>/dev/null || echo "unknown"
@@ -3272,6 +3386,7 @@ zeltro_revoke_agent_autonomy() {
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
         aider)  cfg="$HOME/.aider.conf.yml" ;;
         opencode) cfg="$HOME/.config/opencode/opencode.json" ;;
+        agy)    cfg="$HOME/.gemini/antigravity-cli/settings.json" ;;
         hermes)
             cfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"
             # "smart" is Hermes's own default: a helper model judges risky commands.
@@ -3344,6 +3459,30 @@ print("OK")
 PYEOF
             [ $oc_rc -eq 2 ] && { echo-yellow "$cfg has comments or is not plain JSON — left untouched."; return 1; }
             ;;
+        agy)
+            # Back to agy's own defaults, only where Zeltro's values are set.
+            local agy_rc=0
+            python3 - "$cfg" "$ZELTRO_SRC_DIR/scripts" <<'PYAGY' || agy_rc=$?
+import json, sys
+path, scripts = sys.argv[1:3]
+sys.dont_write_bytecode = True
+sys.path.insert(0, scripts)
+from agent_firstrun import update_json
+try:
+    json.load(open(path))
+except Exception:
+    sys.exit(2)
+def change(d):
+    changed = False
+    for k, v in (("toolPermission", "request-review"), ("artifactReviewPolicy", "asks-for-review")):
+        if d.get(k) == "always-proceed":
+            d[k] = v
+            changed = True
+    return changed
+update_json(path, change)
+PYAGY
+            [ $agy_rc -eq 2 ] && { echo-yellow "$cfg is not valid JSON — left untouched."; return 1; }
+            ;;
     esac
 
     echo-green "$agent will prompt for approval again (updated $cfg)."
@@ -3361,6 +3500,7 @@ zeltro_agent_config_path() {
         aider)  echo "$HOME/.aider.conf.yml" ;;
         opencode) echo "$HOME/.config/opencode/opencode.json" ;;
         hermes) echo "${HERMES_HOME:-$HOME/.hermes}/config.yaml" ;;
+        agy)    echo "$HOME/.gemini/antigravity-cli/settings.json" ;;
         *) return 1 ;;
     esac
 }
