@@ -48,7 +48,8 @@ setting that CLI reads:
 | `hermes` | `OPENAI_BASE_URL`, with `--provider openai` | `OPENAI_API_KEY` | OpenAI-compatible |
 | `claude` | `ANTHROPIC_BASE_URL` | `ANTHROPIC_API_KEY`, only if it starts with `sk-ant-` | **Anthropic-compatible** |
 | `codex` | `-c openai_base_url=…` (Zeltro passes it for you) | `OPENAI_API_KEY`, only if it starts with `sk-` | OpenAI Responses API |
-| `gemini` | nothing | nothing | Its own Google sign-in, or a `GEMINI_API_KEY` you export |
+| `agy` | nothing (refused) | `GEMINI_API_KEY` | Its own Google sign-in, or a Gemini API key |
+| `gemini` (deprecated) | `GOOGLE_GEMINI_BASE_URL` | `GEMINI_API_KEY` | A paid Gemini API key |
 
 "OpenAI-compatible" covers OpenRouter, DeepInfra, Together, Fireworks, Ollama,
 LM Studio and vLLM, so `qwen`, `aider`, `opencode` and `hermes` are the agents to use
