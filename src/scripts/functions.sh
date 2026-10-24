@@ -281,7 +281,8 @@ zeltro_agent_installed() {
 zeltro_host_cmd() {
     local p
     while IFS= read -r p; do
-        case "$p" in /mnt/[a-zA-Z]/*) continue ;; esac
+        # Not found leaves one empty line in the heredoc, which isn't a path.
+        case "$p" in ""|/mnt/[a-zA-Z]/*) continue ;; esac
         echo "$p"; return 0
     done <<EOF_ZHC
 $(type -aP "$1" 2>/dev/null)
