@@ -102,6 +102,35 @@ ZENV="ZELTRO_AI_AGENT=claude" z "$T" resume old
 check "block written on resume" "$(grep -c 'BEGIN ZELTRO CONTEXT' "$P/old/AGENTS.md")" "1"
 check "resumed with the pointer" "$(args | grep -c -- "--continue|--append-system-prompt|This is a Zeltro project. Before anything else, read $P/old/AGENTS.md")" "1"
 
+echo "WSL browser opener"
+shim() { # <env assignments...>: run zeltro_wsl_browser_shim in a sandboxed HOME
+    ( export HOME="$T/whome" PATH="$T/wbin:/usr/bin:/bin"; set +u
+      source "$REPO/src/scripts/functions.sh" >/dev/null 2>&1
+      for a in "$@"; do export "$a"; done
+      zeltro_host_cmd() { [ "$1" = xdg-open ] && [ -n "${FAKE_XDG:-}" ] && echo /usr/bin/xdg-open; }
+      zeltro_wsl_browser_shim )
+}
+added() { [ -x "$T/whome/.local/bin/xdg-open" ] && echo added || echo none; }
+mkdir -p "$T/whome" "$T/wbin"
+if ! grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+    shim WSL_DISTRO_NAME=
+    check "not WSL: nothing added" "$(added)" "none"
+fi
+shim WSL_DISTRO_NAME=Ubuntu FAKE_XDG=1
+check "WSL with an xdg-open already: nothing added" "$(added)" "none"
+shim WSL_DISTRO_NAME=Ubuntu
+check "WSL without one: opener added" "$(added)" "added"
+# A fake powershell.exe records what it was asked to run.
+cat > "$T/wbin/powershell.exe" <<FAKE
+#!/bin/sh
+printf '%s\n' "\$@" > "$T/ps.log"
+FAKE
+chmod +x "$T/wbin/powershell.exe"
+PATH="$T/wbin:/usr/bin:/bin" "$T/whome/.local/bin/xdg-open" "https://antigravity.google/auth?a=1&b='x'"
+check "link handed to Windows, quote escaped" "$(tail -n 1 "$T/ps.log" 2>/dev/null)" "Start-Process 'https://antigravity.google/auth?a=1&b=''x'''"
+PATH="$T/wbin:/usr/bin:/bin" "$T/whome/.local/bin/xdg-open" "/etc/passwd" 2>/dev/null
+check "anything but a link refused" "$?" "1"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

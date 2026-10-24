@@ -522,6 +522,8 @@ ensure_ai_agent_installed() {
     if [[ -z "$cli_command" ]]; then
         return 0
     fi
+    # Signing in opens a browser, which WSL can't do by itself.
+    zeltro_wsl_browser_shim
 
     local deprecated
     deprecated="$(zeltro_agent_deprecated "$cli_command")"

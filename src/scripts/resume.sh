@@ -112,6 +112,7 @@ notify_resume_fallback() {
 # no prompt to carry it, so a resumed session of theirs gets neither (OpenCode
 # reads AGENTS.md itself).
 zeltro_prepare_project_context "$PROJECT_NAME" "$PROJECT_DIR"
+zeltro_trust_project_on_start "$PROJECT_DIR"
 zeltro_ai_system_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"

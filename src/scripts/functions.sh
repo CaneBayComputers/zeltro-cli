@@ -431,6 +431,7 @@ zeltro_codex_base_args() {
 #           its settings (zeltro_agy_provider). No custom endpoint.
 # Returns 1 only when Codex can't sign in with the key.
 zeltro_agent_env() {
+    zeltro_wsl_browser_shim
     case "$1" in
         codex)
             [ -n "${AI_API_BASE:-}" ] || _export_agent_key OPENAI_API_KEY "sk-"
@@ -1568,6 +1569,12 @@ zeltro_trust_project_for_agents() {
     projects="$(get_projects_dir 2>/dev/null)"
     projects="$(cd "$projects" 2>/dev/null && pwd -P)" || return 0
     case "$dir" in "$projects"/*) ;; *) return 0 ;; esac
+    # Remembered, so an agent installed later can be told too when a session
+    # starts (zeltro_trust_project_on_start).
+    local list="$HOME/.zeltro/trusted-projects"
+    if ! grep -qxF "$dir" "$list" 2>/dev/null; then
+        mkdir -p "$HOME/.zeltro" 2>/dev/null && printf '%s\n' "$dir" >> "$list" 2>/dev/null || true
+    fi
 
     # Claude's file is created when missing: on a fresh account the first
     # project can come before Claude's first start.
@@ -1626,6 +1633,77 @@ PYTRUST
             printf '\n%s\ntrust_level = "trusted"\n' "$header" >> "$codex_cfg" 2>/dev/null || true
         fi
     fi
+    return 0
+}
+
+# Before `zeltro ai` / `zeltro resume` start an agent in DIR: when Zeltro trusted
+# the project at creation, trust it for every agent installed since. A project
+# switched from Codex to agy otherwise got agy's "Do you trust the contents of
+# this project?" on its first session (2026-10-24).
+#
+# Zeltro's list (~/.zeltro/trusted-projects) decides. Projects made before the
+# list existed count when an agent's own config already trusts them (Zeltro
+# wrote that at creation, or the user answered yes there), so the answer isn't
+# asked again for each new agent. A clone nobody trusted is still asked.
+zeltro_trust_project_on_start() {
+    [ "${ZELTRO_NO_AGENT_TRUST:-0}" = "1" ] && return 0
+    local dir; dir="$(cd "${1:-.}" 2>/dev/null && pwd -P)" || return 0
+    if ! grep -qxF "$dir" "$HOME/.zeltro/trusted-projects" 2>/dev/null; then
+        local claude_json="${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/.claude.json}"
+        python3 - "$dir" "${claude_json:-$HOME/.claude.json}" "$HOME/.gemini/trustedFolders.json" \
+            "$HOME/.gemini/antigravity-cli/settings.json" "${CODEX_HOME:-$HOME/.codex}/config.toml" <<'PYTRUSTED' 2>/dev/null || return 0
+import json, sys
+proj, claude, gemini, agy, codex = sys.argv[1:6]
+def load(p):
+    try:
+        return json.load(open(p, encoding="utf-8"))
+    except Exception:
+        return {}
+c, g, a = load(claude), load(gemini), load(agy)
+ok = (isinstance(c, dict) and ((c.get("projects") or {}).get(proj) or {}).get("hasTrustDialogAccepted") is True) \
+    or (isinstance(g, dict) and g.get(proj) == "TRUST_FOLDER") \
+    or (isinstance(a, dict) and proj in (a.get("trustedWorkspaces") or []))
+if not ok:
+    try:
+        ok = "[projects.%s]" % json.dumps(proj) in open(codex, encoding="utf-8").read()
+    except OSError:
+        pass
+sys.exit(0 if ok else 1)
+PYTRUSTED
+    fi
+    zeltro_trust_project_for_agents "$dir" >/dev/null 2>&1 || true
+    return 0
+}
+
+# Inside WSL (Windows Subsystem for Linux)?
+zeltro_is_wsl() {
+    [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null
+}
+
+# WSL has no xdg-open (or wslview), so an agent that signs in through the
+# browser says "your browser should open" and nothing opens: agy 1.4.7 left the
+# user to Ctrl+click the link (2026-10-24). This puts a small xdg-open in
+# ~/.local/bin that hands http(s) links to Windows' default browser, so it also
+# works when the user runs the agent themselves. Only when none exists; marked
+# so `zeltro uninstall --purge` removes it. ~/.local/bin is where agy, Claude Code and
+# aider install, so it is on the user's PATH.
+zeltro_wsl_browser_shim() {
+    zeltro_is_wsl || return 0
+    [ -n "${HOME:-}" ] || return 0
+    zeltro_host_cmd xdg-open >/dev/null || zeltro_host_cmd wslview >/dev/null && return 0
+    local f="$HOME/.local/bin/xdg-open"
+    mkdir -p "$HOME/.local/bin" 2>/dev/null || return 0
+    cat > "$f" 2>/dev/null <<'SHIM' || return 0
+#!/bin/sh
+# Zeltro WSL browser opener: hands http(s) links to Windows' default browser,
+# because WSL has no xdg-open. `zeltro uninstall --purge` removes it; delete it any time.
+case "$1" in http://*|https://*) ;; *) echo "xdg-open (Zeltro): only http(s) links are supported" >&2; exit 1 ;; esac
+ps=$(command -v powershell.exe 2>/dev/null)
+[ -n "$ps" ] || ps=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+url=$(printf '%s' "$1" | sed "s/'/''/g")
+exec "$ps" -NoProfile -NonInteractive -Command "Start-Process '$url'" </dev/null >/dev/null 2>&1
+SHIM
+    chmod 755 "$f" 2>/dev/null || true
     return 0
 }
 

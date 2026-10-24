@@ -266,6 +266,8 @@ if [ "$PURGE" = "1" ]; then
                  "$HOME/.zeltro" "$HOME/.cache/zeltro"; do
             remove_path "$d"
         done
+        # The browser opener Zeltro adds inside WSL (zeltro_wsl_browser_shim).
+        grep -q "Zeltro WSL browser opener" "$HOME/.local/bin/xdg-open" 2>/dev/null && remove_path "$HOME/.local/bin/xdg-open"
     fi
     echo-return
 fi

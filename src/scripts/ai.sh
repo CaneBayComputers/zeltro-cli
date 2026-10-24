@@ -107,6 +107,7 @@ AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
 # the agent has one (see zeltro_ai_system_args). Gemini, OpenCode and agy have
 # none, so it rides on the prompt.
 zeltro_prepare_project_context "$(zeltro_project_of_dir "$PWD")"
+[[ -n "${ZELTRO_CONTEXT_FILE:-}" ]] && zeltro_trust_project_on_start "$(dirname "$ZELTRO_CONTEXT_FILE")"
 zeltro_ai_system_args "$AI_AGENT_CLI_NAME"
 # In a session the Zeltro app started, report turn ends to it (no-op otherwise).
 zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
