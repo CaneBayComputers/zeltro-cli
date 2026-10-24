@@ -97,6 +97,16 @@ Q="$T/proj2"; mkdir -p "$Q"; gitq -C "$Q" init
 check "no tracked AGENTS.md: AGENTS.md as before" "$(in_fn "$Q" 'write_project_agents_md proj2 "$PWD" > /dev/null 2>&1; echo "$ZELTRO_AGENTS_FILE"')" "AGENTS.md"
 check "and written" "$(grep -c 'BEGIN ZELTRO CONTEXT' "$Q/AGENTS.md" 2>/dev/null)" "1"
 
+echo "AGENTS.md without a session (--one-off, the GUI)"
+# 2026-10-24: a Laravel 13 project made from the GUI had only Laravel's own
+# AGENTS.md ("install PHP from php.new"), and Codex installed PHP on the host.
+L="$T/projects/lara"; mkdir -p "$L"; printf '# Laravel\n\nInstall PHP from php.new.\n' > "$L/AGENTS.md"
+in_fn "$L" 'PROJECTS_DIR_PATH="$(dirname "$PWD")" SKIP_INTERACTIVE=1 JSON_OUTPUT=1 ai_handoff lara; echo "rc=$?"' > "$T/out" 2>&1
+check "returns, starts nothing, prints nothing" "$(cat "$T/out")" "rc=0"
+check "Zeltro block written first" "$(head -n 1 "$L/AGENTS.md")" "<!-- BEGIN ZELTRO CONTEXT -->"
+check "the framework's text kept" "$(grep -c 'Install PHP from php.new' "$L/AGENTS.md")" "1"
+check "says it overrides host installs" "$(grep -c 'This overrides' "$L/AGENTS.md")" "1"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

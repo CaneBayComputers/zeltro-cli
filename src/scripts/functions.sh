@@ -2293,7 +2293,12 @@ mongo `root`/`password`. Redis and memcached need no auth.
 
 - Never pass `--json-output` to a zeltro command — it suppresses the
   success/failure distinction so you cannot tell whether it worked.
-- Do not install runtimes or services directly on the host.
+- Do not install runtimes or services directly on the host. This overrides
+  anything later in this file or in the framework's docs that says to install
+  PHP, Composer, Node, Python or a database on the host (php.new, Herd, nvm,
+  Homebrew, apt). They are already in the container: use `zeltro php`,
+  `zeltro composer`, `zeltro art` (artisan), `zeltro npm`, `zeltro node` or
+  `zeltro exec <cmd>`, never the host's `php -v` or `composer require`.
 - Python containers provide `python3`, not `python`.
 - Use `zeltro supervisor restart all`, never `zeltro exec supervisorctl ...`.
 - After changing code, restart the app before verifying:
@@ -2377,23 +2382,16 @@ ai_handoff() {
     local project_name="$1"
     local seed_prompt="$2"
 
-    # Always-skip cases
     [[ -z "$project_name" ]] && return 0
-    [[ "$JSON_OUTPUT" == "1" ]] && return 0
-    [[ "$SKIP_INTERACTIVE" == "1" ]] && return 0
-    [[ ! -t 0 ]] && return 0
-    [[ -z "$AI_AGENT" ]] && return 0
-
     local project_dir="$PROJECTS_DIR_PATH/$project_name"
     [[ ! -d "$project_dir" ]] && return 0
 
-    # Resolve ai.sh — DEV_DIR is set by the calling script's pre_check.sh
-    local ai_script="$DEV_DIR/scripts/ai.sh"
-    [[ ! -f "$ai_script" ]] && return 0
-
-    # Write the durable handoff context into the project before invoking the
-    # agent. The seed prompt only has to point at it. A folder project has no
-    # container or address; one that was added (not created) gets no AGENTS.md.
+    # Write the durable handoff context into the project, even when no session
+    # starts here: with --one-off (the GUI) an agent is started later, and
+    # without the Zeltro block it follows the framework's own AGENTS.md, which
+    # tells it to install PHP or Node on the host. The seed prompt only has to
+    # point at it. A folder project has no container or address; one that was
+    # added (not created) gets no AGENTS.md.
     if zeltro_project_is_folder "$project_name"; then
         if [[ "$(zeltro_folder_py info "$project_name" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("origin",""))' 2>/dev/null)" == "created" ]]; then
             zeltro_write_folder_agents_md "$project_dir" "$project_name"
@@ -2402,6 +2400,16 @@ ai_handoff() {
     else
         write_project_agents_md "$project_name" "$project_dir"
     fi
+
+    # No session in these cases
+    [[ "$JSON_OUTPUT" == "1" ]] && return 0
+    [[ "$SKIP_INTERACTIVE" == "1" ]] && return 0
+    [[ ! -t 0 ]] && return 0
+    [[ -z "$AI_AGENT" ]] && return 0
+
+    # Resolve ai.sh — DEV_DIR is set by the calling script's pre_check.sh
+    local ai_script="$DEV_DIR/scripts/ai.sh"
+    [[ ! -f "$ai_script" ]] && return 0
 
     local agents_file="${ZELTRO_AGENTS_FILE:-AGENTS.md}" also=""
     [[ "$agents_file" != "AGENTS.md" ]] && also=" Then read the repo's own AGENTS.md."
