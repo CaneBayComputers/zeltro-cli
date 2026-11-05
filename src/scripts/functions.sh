@@ -870,11 +870,18 @@ PYPROJ
     return 0
 }
 
-# Detect terminal color support once. When stdout isn't a terminal or $TERM
-# is unset/invalid (e.g. plain `ssh host cmd` without -t), `tput` exits
-# non-zero — combined with `set -e` in the calling script, that would abort
-# the script silently. Force NO_COLOR=1 in that case so we skip tput entirely.
-if [[ -z "${NO_COLOR:-}" ]] && ! tput setaf 1 >/dev/null 2>&1; then
+# Color only on a terminal. NO_COLOR=1 (what every check below tests) when:
+# - NO_COLOR is set to anything (no-color.org), or
+# - stdout isn't a terminal: piped, captured with $(...), redirected to a file,
+#   run by the GUI or by `ssh host cmd` without -t. Escape codes there are just
+#   noise in logs, files and parsed output; or
+# - tput can't color $TERM (unset or unknown). tput exiting non-zero under
+#   `set -e` would also abort the calling script silently.
+# FORCE_COLOR (anything but 0) keeps color in a pipe, e.g. `zeltro status | less -R`.
+if [[ -n "${NO_COLOR:-}" ]]; then
+    NO_COLOR=1
+elif { [[ ! -t 1 ]] && [[ -z "${FORCE_COLOR:-}" || "${FORCE_COLOR}" == 0 ]]; } \
+        || ! tput setaf 1 >/dev/null 2>&1; then
     NO_COLOR=1
 fi
 
