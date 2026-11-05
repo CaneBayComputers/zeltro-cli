@@ -366,7 +366,7 @@ zeltro ai --interactive "Add a health-check endpoint at /ping"
 | Option | Description |
 |--------|-------------|
 | `--json-output` | Clean JSON output (suppresses all text/colors). Stripped by the dispatcher, so every command sees it |
-| `--no-colors` | Disable colored output (accepted by most commands) |
+| `--no-colors` | Disable colored output (accepted by most commands). Color is already off when the output isn't a terminal |
 | `--debug` | Enable debug logging to `/tmp/zeltro-cli-debug.log` (accepted by `new`, `clone`, `setup`, `remove`, `status`, `up`, `down`, `start-services`, `stop-services`, `configure`, `uninstall`) |
 
 ### New Project Options
@@ -800,7 +800,8 @@ zeltro clone <TAB>         → work-directly  fork  new-repo
 ### Environment Variables
 
 - `JSON_OUTPUT=1` - Same as `--json-output`
-- `NO_COLOR=1` - Same as `--no-colors`
+- `NO_COLOR` - Any value: same as `--no-colors`
+- `FORCE_COLOR=1` - Keep color when the output is piped or redirected (it's off there by default), e.g. `zeltro status | less -R`
 - `DEBUG_LOG_PATH` - Where `--debug` writes (default `/tmp/zeltro-cli-debug.log`)
 - `ZELTRO_AI_AGENT`, `ZELTRO_AI_MODEL`, `ZELTRO_AI_API_BASE`, `ZELTRO_AI_API_KEY`, `ZELTRO_AI_API_KEY_FILE`, `ZELTRO_AI_LANGUAGE` - per-session AI overrides (see "Per-session AI overrides" under [System Management](#system-management))
 - `ZELTRO_AI_AUTO_APPROVE=1` - Pass each agent's approval-bypass flags for this run

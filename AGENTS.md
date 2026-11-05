@@ -432,7 +432,7 @@ The structured installer format (`INSTALL_DISPLAY`, `INSTALL_CREDENTIALS`, `INST
 
 Installers are shell scripts sourced by `install.sh`, which runs under `set -e`. A few non-obvious traps:
 
-- **`tput` exits non-zero when `$TERM` is unset** (plain `ssh host cmd` without `-t`). `functions.sh` auto-detects this and forces `NO_COLOR=1`. Don't call `tput` directly without a guard.
+- **Color only on a terminal.** `functions.sh` sets `NO_COLOR=1` when `NO_COLOR` is set to anything, when stdout isn't a terminal (piped, `$(...)`, a file, the GUI, `ssh host cmd` without `-t`) unless `FORCE_COLOR` is set, or when `tput` can't color `$TERM` (it exits non-zero with `$TERM` unset, which kills a `set -e` script). Don't call `tput` or print raw `\033[` codes without checking `NO_COLOR`. Anything a caller captures with `$(...)` must print its display text to stderr (see `_menu_choose` in classify.sh).
 - **`trash-put` refuses to overwrite an existing trash entry.** `remove_project.sh` renames with a timestamp suffix to avoid collisions. If you trash files in a script, do the same.
 
 Never disable `set -e` to work around these. Wrap fragile commands in `if !` / `|| true` or detect the failure mode upfront.

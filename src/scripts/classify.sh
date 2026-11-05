@@ -365,25 +365,28 @@ _classify_last_error() {
 _menu_choose() {
     local title="$1" default="$2"; shift 2
     local -a entries=("$@")
-    local i=1 choice
+    local i=1 choice num="\033[1;33m" dim="\033[2m" off="\033[0m"
+    [[ "${NO_COLOR:-}" == "1" ]] && num="" dim="" off=""
 
-    echo-return
-    echo-cyan "$title"
-    echo-return
+    # Everything shown goes to stderr: the caller captures stdout, which must
+    # be the chosen number and nothing else.
+    echo-return >&2
+    echo-cyan "$title" >&2
+    echo-return >&2
     for e in "${entries[@]}"; do
         local label="${e%%|*}" hint="${e#*|}"
-        printf "  \033[1;33m%d)\033[0m %s" "$i" "$label" >&2
-        [[ -n "$hint" && "$hint" != "$label" ]] && printf "  \033[2m— %s\033[0m" "$hint" >&2
+        printf "  ${num}%d)${off} %s" "$i" "$label" >&2
+        [[ -n "$hint" && "$hint" != "$label" ]] && printf "  ${dim}— %s${off}" "$hint" >&2
         printf "\n" >&2
         i=$((i + 1))
     done
-    echo-return
-    echo-yellow -ne "Enter choice [$default] > "
+    echo-return >&2
+    echo-yellow -ne "Enter choice [$default] > " >&2
     read choice || choice=""
-    echo-return
+    echo-return >&2
     [[ -z "$choice" ]] && choice="$default"
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#entries[@]} )); then
-        echo-yellow "Invalid choice — using $default."
+        echo-yellow "Invalid choice — using $default." >&2
         choice="$default"
     fi
     printf '%s' "$choice"
@@ -393,6 +396,8 @@ _menu_choose() {
 classify_project() {
     local idea="$1"
     local non_interactive="$2"   # 1 = pick the top recommendation silently
+    local dim="\033[2m" rec="\033[1;32m" off="\033[0m"   # menu label colors
+    [[ "${NO_COLOR:-}" == "1" ]] && dim="" rec="" off=""
 
     echo-return
     echo-cyan "Working out which stack fits ..."
@@ -443,9 +448,9 @@ classify_project() {
                 tag="custom build — exactly what you asked for, more time and tokens"
             fi
             if [[ $n -eq $rec_n ]]; then
-                labels+=("$(printf '%s  \033[2m(%s)\033[0m  \033[1;32m(Recommended)\033[0m' "${displays[$n]}" "$tag")|${whys[$n]}")
+                labels+=("$(printf "%s  ${dim}(%s)${off}  ${rec}(Recommended)${off}" "${displays[$n]}" "$tag")|${whys[$n]}")
             else
-                labels+=("$(printf '%s  \033[2m(%s)\033[0m' "${displays[$n]}" "$tag")|${whys[$n]}")
+                labels+=("$(printf "%s  ${dim}(%s)${off}" "${displays[$n]}" "$tag")|${whys[$n]}")
             fi
         done
         # No "just choose for me" entry: pressing Enter already takes the
@@ -496,7 +501,7 @@ classify_project() {
             local first=1 o
             for o in "${ordered[@]}"; do
                 if [[ $first -eq 1 ]]; then
-                    dblabels+=("$(printf '%s  \033[1;32m(Recommended)\033[0m' "$o")|${suggested_db_why:-best fit for this workload}")
+                    dblabels+=("$(printf "%s  ${rec}(Recommended)${off}" "$o")|${suggested_db_why:-best fit for this workload}")
                     first=0
                 else
                     dblabels+=("$o|")
