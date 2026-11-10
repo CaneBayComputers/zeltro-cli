@@ -2454,6 +2454,10 @@ mongo `root`/`password`. Redis and memcached need no auth.
 - After changing code, restart the app before verifying:
   `zeltro supervisor restart all`. A running server keeps serving the code it
   started with, so a 200 from the old process can hide a broken app.
+- Don't put the app behind a login unless the user asked for accounts. If
+  you add one, create the first account yourself (a Django superuser, a
+  seeded user) and give the user the username and password in your summary;
+  never leave them at a login page they can't get past.
 - Before reporting done, verify: {verify}
   must return 2xx or 3xx **after that restart**. `http://{name}/` does not
   resolve on the host, so do not use it.

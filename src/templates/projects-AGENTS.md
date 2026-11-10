@@ -131,6 +131,10 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
   themselves.)
 - **After changing what the user sees, refresh their preview:** `zeltro gui preview`, or
   `zeltro gui preview --path /that/page` to show a particular page.
+- **Don't put the app behind a login unless the user asked for accounts.** If you do add one,
+  create the first account yourself (a Django superuser, a seeded user) and give the user the
+  username and password in your summary. A redirect to a login page counts as "working" to
+  `curl`, but the user is stuck there.
 - **Check visible changes yourself:** `zeltro gui screenshot` (or `--path /page`) saves a PNG of
   the preview in `.zeltro-uploads/` and prints its path; open it to look. It can't capture a page
   behind a login you don't have.
