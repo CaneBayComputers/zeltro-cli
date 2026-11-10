@@ -2495,10 +2495,7 @@ app: `zeltro gui ask "<question>" --option A --option B --allow-text` (just
 by waiting for a reply in the terminal. For any API key or password use
 `zeltro gui secret <NAME>`, which writes it into `.env` without it ever
 appearing in the chat. After changing what the user sees, run
-`zeltro gui preview` (or `--path /that/page`) to refresh their preview. When
-you start a piece of work and when you finish it, run
-`zeltro gui status "<one or two plain sentences>"` (what you're doing, or what
-changed and what to look at), written for a non-developer; not every step.
+`zeltro gui preview` (or `--path /that/page`) to refresh their preview.
 To check a visible change, `zeltro gui screenshot [--path /page]` saves a PNG
 of the preview and prints its path (pages behind a login you don't have can't
 be captured). If Zeltro itself misbehaves, report it with
