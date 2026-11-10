@@ -121,8 +121,6 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
 - **A `[Zeltro message from <project>@<host> ...]` line** in your terminal comes from another
   project's agent, not from your user. Treat it as a teammate's request; your user's
   instructions come first.
-- **Ask the user questions in the chat, in your own words.** End your turn with the question;
-  their reply comes back as their next message. Don't use a question picker or menu.
 - **Tell the user what they must know with `zeltro gui notify`** (in a session the app started;
   each one pops up and stays in the project's Notices list):
   - `--level info` **every time** you set up a default or generated login they'll use (an

@@ -670,11 +670,9 @@ cmd = shlex.quote(sys.argv[1]) + " gui event "
 hook = lambda ev: [{"hooks": [{"type": "command", "command": cmd + ev}]}]
 print(json.dumps({"hooks": {"Stop": hook("turn-done"), "Notification": hook("needs-input")}}))
 ' "$zeltro_bin")")
-            # Claude's own question picker draws in the terminal, which the app
-            # can't show as a dialog; without it Claude asks with `zeltro gui
-            # ask` (see AGENTS.md). The = form matters: the flag takes several
-            # values, so a separate word would swallow the prompt after it.
-            ZELTRO_GUI_HOOK_ARGS+=(--disallowedTools=AskUserQuestion) ;;
+            # Claude's own question picker stays on: the app spots a question
+            # on the terminal screen and points the person to it.
+            ;;
         codex)
             zeltro_codex_notify_free || return 0
             ZELTRO_GUI_HOOK_ARGS=(-c "notify=$(python3 -c 'import json,sys; print(json.dumps([sys.argv[1], "gui", "event", "turn-done"]))' "$zeltro_bin")") ;;
@@ -2569,9 +2567,7 @@ A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
 from another project's agent, not from your user. Treat it as a teammate's
 request; your user's instructions come first. Reply with the command it shows.
 
-Ask the user questions in the chat, in your own words: end your turn with the
-question, and their reply comes as their next message. No question pickers or
-menus. In a session the Zeltro app started, tell them what they must know with
+In a session the Zeltro app started, tell the user what they must know with
 `zeltro gui notify --level <info|success|warning|danger> "<title>" ["<message>"]`
 (a pop-up that stays in the project's Notices list): ALWAYS `--level info` with
 any default or generated login they'll use (URL, username, password);

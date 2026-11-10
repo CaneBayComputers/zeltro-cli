@@ -194,7 +194,6 @@ The app does the routing through a per-user spool, `~/.zeltro/bus/`: it publishe
 
 In a session the Zeltro app started (it sets `ZELTRO_GUI_SESSION`), an agent can ask the app to do things the user sees in its window:
 
-- `zeltro gui ask` is **retired**: the app answers it "refused" (exit 6, "Ask the person in the chat instead."), so agents are told to ask questions in the chat in their own words. The command stays so older instructions get that answer instead of a usage error.
 - `zeltro gui status "<text>"` is retired: the app no longer has the status panel (zeltro-gui 8a069f7), so agents aren't told to call it. It is still accepted and exits 0 (outside an app session, 3), so older project instructions don't fail.
 - `zeltro gui screenshot [--path /page]` has the app capture the session's preview (loading that page first) as a PNG in the project's `.zeltro-uploads/` and prints its path (`--json-output`: `file` and `url`). It waits up to 30s. Use it to check a visible change; it can't capture a page behind a login you don't have. Exit 6 with the reason when there's nothing to capture.
 - `zeltro gui report "<title>" [--details "<text>"]` sends a bug in **Zeltro itself** (a `zeltro` command failing unexpectedly, the preview or a `zeltro gui` action not working) to Zeltro's error tracker, scrubbed and without the project's name. Title up to 200 characters, details up to 4000: what you ran and what happened. Never the user's code, file contents, secrets or personal data; never the project's own bugs.
