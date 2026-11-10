@@ -319,16 +319,37 @@ fi
 ###############################
 # Install GitHub CLI (optional but recommended)
 ###############################
-if ! command -v gh &> /dev/null; then
-    echo -e "${BLUE}Installing GitHub CLI...${NC}"
-    
+# Always from GitHub's own apt repo. Ubuntu's and Debian's own gh lags years
+# behind (24.04 ships 2.45, which has no `gh auth status --json`), so a distro
+# gh that came with the system is swapped for the current one. A gh installed
+# some other way (snap, Homebrew, a manual binary) is left alone.
+add_gh_apt_repo() {
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-    
+}
+gh_from_github_repo() {
+    grep -rqs "cli.github.com/packages" /etc/apt/sources.list /etc/apt/sources.list.d/
+}
+if ! command -v gh &> /dev/null; then
+    echo -e "${BLUE}Installing GitHub CLI...${NC}"
+    add_gh_apt_repo
     sudo apt-get update -y -q
-    sudo apt-get install -y gh
-    
-    echo -e "${GREEN}✓ GitHub CLI installed${NC}"
+    if sudo apt-get install -y gh; then
+        echo -e "${GREEN}✓ GitHub CLI installed${NC}"
+    else
+        echo -e "${YELLOW}⚠️ GitHub CLI install failed. You can install it later from https://cli.github.com${NC}"
+    fi
+elif dpkg-query -W -f='${Status}' gh 2>/dev/null | grep -q "install ok installed" \
+        && [[ "$(command -v gh)" == /usr/bin/gh ]] && ! gh_from_github_repo; then
+    old_gh="$(gh --version 2>/dev/null | head -1)"
+    echo -e "${BLUE}Updating GitHub CLI to GitHub's current release (${old_gh:-unknown version} came with the system)...${NC}"
+    add_gh_apt_repo
+    sudo apt-get update -y -q
+    if sudo apt-get install -y gh; then
+        echo -e "${GREEN}✓ GitHub CLI updated: $(gh --version 2>/dev/null | head -1)${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Couldn't update GitHub CLI; keeping ${old_gh:-the installed one}${NC}"
+    fi
 else
     echo -e "${GREEN}✓ GitHub CLI already installed${NC}"
 fi
