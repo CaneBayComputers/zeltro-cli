@@ -85,9 +85,6 @@ USAGE = """Usage: zeltro gui <action> [args] [--timeout <seconds>]
 Ask the Zeltro app to do something for you. Only works in a session the app
 started; anywhere else it exits 3, so ask in the chat instead.
 
-  zeltro gui ask "<question>" --option <text> ... [--allow-text]
-        Retired: the app answers "refused" (exit 6). Ask the person in the chat
-        instead, in your own words.
   zeltro gui secret <NAME> [--file .env] [--reason "<why>"]
         Ask the user for a secret (an API key, a password) and write NAME=<value>
         into that file in the project. The value is never printed.
