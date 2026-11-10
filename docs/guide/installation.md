@@ -5,8 +5,8 @@ nav_order: 2
 
 # Installation
 
-Zeltro runs on Linux and macOS. Windows support is on its way: an installer is
-coming, and the WSL2 route is in preview (see [Windows](#windows) below).
+Zeltro runs on Linux and macOS, and on Windows through the desktop app, which
+sets Zeltro up inside WSL2 for you (see [Windows](#windows) below).
 
 Run every installer as your normal user, not as root. It asks for your sudo
 password when it needs it.
@@ -96,19 +96,25 @@ Docker CE turns off SELinux confinement by default (containers run unconfined as
 
 Download the desktop app from
 [zeltro.ai/download/windows](https://zeltro.ai/download/windows) (a beta
-Setup `.exe`; see [Downloads](../downloads/)). It installs for your account with
-no admin rights. Zeltro itself runs on Linux, so there are two ways to run your
-projects from it:
+Setup `.exe`; see [Downloads](../downloads/)). Zeltro itself runs on Linux, so
+on Windows it runs inside WSL2, and the app sets that up for you:
 
-- **Drive another machine.** The desktop app can manage Zeltro on a Linux box
-  or a Mac over SSH. This works today. See [Downloads](../downloads/).
-- **Zeltro in WSL2 (preview).** The desktop app's own "Zeltro on this PC" WSL2
-  setup is still in testing.
+1. **The installer asks for admin once.** Windows shows its usual "allow this
+   app to make changes" prompt. With it, the installer turns on the Windows
+   features WSL2 needs (WSL and Virtual Machine Platform) and updates WSL.
+   If Windows needs a restart for those features, the installer's last page
+   says so.
+2. **The app does the rest on first open, with no more admin prompts.** It
+   installs Ubuntu 24.04 in WSL2 and installs and configures Zeltro inside it.
+   You don't need to type anything in a terminal.
 
-There is also an older CLI script, `install-windows.ps1`. It has been lightly
-tested, and it will be retired once the desktop app's WSL2 setup is verified.
-It enables WSL2, installs Ubuntu 24.04, and installs and configures Zeltro
-inside it. It needs a PowerShell started with **Run as administrator**:
+Updates to the app skip the admin step. If you'd rather keep your projects on
+another computer, the app can also drive Zeltro on a Linux box or a Mac over
+SSH instead (see [Downloads](../downloads/)).
+
+There is also an older CLI script, `install-windows.ps1`, which does the same
+setup from a terminal. It will be retired now that the desktop app does it.
+It needs a PowerShell started with **Run as administrator**:
 
 ```powershell
 irm https://raw.githubusercontent.com/CaneBayComputers/zeltro-cli/master/install-windows.ps1 | iex
@@ -121,8 +127,9 @@ older builds before it changes anything. This matches the minimum that
 [Microsoft gives for `wsl --install`](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 WSL2 needs hardware virtualization: VT-x/AMD-V turned on in BIOS/UEFI, plus
-SLAT. If the hypervisor can't start, the Ubuntu download succeeds and then
-registering it fails with `HCS_E_HYPERV_NOT_INSTALLED`. This also rules out
+SLAT. If it is turned off, the app says so and shows how to turn it on in your
+computer's BIOS/UEFI settings. (From the script, the Ubuntu download succeeds
+and then registering it fails with `HCS_E_HYPERV_NOT_INSTALLED`.) This also rules out
 running it inside a VirtualBox VM, because VirtualBox doesn't pass SLAT
 through to the guest.
 
@@ -201,7 +208,7 @@ curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 
 It works on Ubuntu/Debian, Fedora/RHEL and Arch. On a Mac, use
 `curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash` instead, and
-Windows has a Setup `.exe`. On first launch the app shows a short setup form and
+Windows has a Setup `.exe` that also sets up WSL2 (see [Windows](#windows)). On first launch the app shows a short setup form and
 runs `zeltro configure` for you; if you have already configured Zeltro in a
 terminal, it skips the form.
 
