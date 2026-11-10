@@ -581,6 +581,80 @@ zeltro_gui_event_agents_json() {
 # merges these with the user's own config for this run only (Claude merges
 # --settings hooks with theirs; Codex's notify is skipped if they have one; aider's
 # flags last one run), and nothing is written to disk. Sets ZELTRO_GUI_HOOK_ARGS.
+# Per-run "run without asking" override, for the desktop app's per-project
+# switch. ZELTRO_AI_UNATTENDED:
+#   1      launch the agent in its own no-approval mode for this run only
+#   0      launch it with approvals on, even if its own config says bypass
+#   unset  the agent's own config decides (`zeltro ai-unattended`)
+# ZELTRO_AI_AUTO_APPROVE=1 (older) still means 1 when ZELTRO_AI_UNATTENDED is unset.
+# Nothing here writes an agent's config, except Claude Code's one-time
+# bypass consent (skipDangerousModePermissionPrompt), without which its
+# --dangerously-skip-permissions opens a confirmation dialog.
+# Agents with no per-run "ask" switch (agy, hermes) ignore 0.
+#
+# Fills ZELTRO_UNATTENDED_ARGS; may export OPENCODE_PERMISSION.
+#   $1 agent name
+zeltro_unattended_mode() {
+    local m="${ZELTRO_AI_UNATTENDED:-}"
+    if [[ -z "$m" && "${ZELTRO_AI_AUTO_APPROVE:-0}" == "1" ]]; then m=1; fi
+    case "$m" in
+        1|true|on|yes) echo 1 ;;
+        0|false|off|no) echo 0 ;;
+        *) echo "" ;;
+    esac
+}
+zeltro_unattended_args() {
+    local agent="$1" mode
+    mode="$(zeltro_unattended_mode)"
+    ZELTRO_UNATTENDED_ARGS=()
+    case "$agent:$mode" in
+        claude:1)   ZELTRO_UNATTENDED_ARGS=(--dangerously-skip-permissions)
+                    zeltro_claude_bypass_consent ;;
+        claude:0)   ZELTRO_UNATTENDED_ARGS=(--permission-mode manual) ;;
+        codex:1)    ZELTRO_UNATTENDED_ARGS=(--dangerously-bypass-approvals-and-sandbox) ;;
+        codex:0)    ZELTRO_UNATTENDED_ARGS=(--ask-for-approval on-request --sandbox workspace-write) ;;
+        qwen:1)     ZELTRO_UNATTENDED_ARGS=(--yolo) ;;
+        qwen:0)     ZELTRO_UNATTENDED_ARGS=(--approval-mode default) ;;
+        gemini:1)   ZELTRO_UNATTENDED_ARGS=(--yolo --skip-trust) ;;
+        gemini:0)   ZELTRO_UNATTENDED_ARGS=(--approval-mode default) ;;
+        agy:1)      ZELTRO_UNATTENDED_ARGS=(--dangerously-skip-permissions) ;;
+        opencode:1) ZELTRO_UNATTENDED_ARGS=(--auto) ;;
+        # Merged over the config's permission: "*" covers every tool.
+        opencode:0) export OPENCODE_PERMISSION='{"*":"ask"}' ;;
+        hermes:1)   ZELTRO_UNATTENDED_ARGS=(--yolo) ;;
+        aider:1)    ZELTRO_UNATTENDED_ARGS=(--yes-always) ;;
+        aider:0)    ZELTRO_UNATTENDED_ARGS=(--no-yes-always) ;;
+    esac
+    return 0
+}
+
+# Claude Code's consent for bypass mode, so --dangerously-skip-permissions
+# doesn't stop at its warning dialog. Only this one key is written.
+zeltro_claude_bypass_consent() {
+    local cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+    python3 - "$cfg" <<'PYEOF' 2>/dev/null || true
+import json, os, sys, tempfile
+path = os.path.realpath(sys.argv[1])
+data = {}
+if os.path.exists(path):
+    try:
+        data = json.load(open(path))
+    except Exception:
+        sys.exit(0)          # never replace a file we can't parse
+    if not isinstance(data, dict):
+        sys.exit(0)
+if data.get("skipDangerousModePermissionPrompt") is True:
+    sys.exit(0)
+data["skipDangerousModePermissionPrompt"] = True
+os.makedirs(os.path.dirname(path), exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+with os.fdopen(fd, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+os.chmod(tmp, os.stat(path).st_mode & 0o777 if os.path.exists(path) else 0o600)
+os.replace(tmp, path)
+PYEOF
+}
+
 zeltro_gui_hook_args() {
     ZELTRO_GUI_HOOK_ARGS=()
     [ -n "${ZELTRO_GUI_SESSION:-}" ] || return 0
@@ -2223,7 +2297,8 @@ build_aider_args() {
     # approval bypasses: consent is asked once at install time and recorded in
     # ~/.aider.conf.yml, not forced here on every run.
     AIDER_ARGS=(--no-check-update)
-    [[ "${ZELTRO_AI_AUTO_APPROVE:-0}" == "1" ]] && AIDER_ARGS+=(--yes-always)
+    zeltro_unattended_args aider
+    AIDER_ARGS+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
 
     # Aider renders through a rich console that hard-wraps at the terminal width
     # and pads with trailing spaces. That corrupts any machine-readable reply —
