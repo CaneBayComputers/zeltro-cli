@@ -119,10 +119,10 @@ zeltro_gui_hook_args "$AI_AGENT_CLI_NAME"
 
 # Approval bypass follows the same rule as `zeltro ai`: whether an agent may act
 # without asking is the user's choice, recorded in the agent's own config
-# (`zeltro ai-unattended`). ZELTRO_AI_AUTO_APPROVE=1 adds the bypass flags for one
-# run. Resume used to force them on every time, so a resumed session could skip
-# approvals the user never agreed to skip.
-AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
+# (`zeltro ai-unattended`). ZELTRO_AI_UNATTENDED=1/0 overrides it for one run
+# (see zeltro_unattended_args). Resume used to force bypass on every time, so a
+# resumed session could skip approvals the user never agreed to skip.
+zeltro_unattended_args "$AI_AGENT_CLI_NAME"
 
 case "$AI_AGENT_CLI_NAME" in
     codex)
@@ -132,7 +132,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         zeltro_agent_env codex || exit 1
         common_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-bypass-approvals-and-sandbox)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         common_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         common_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if ! codex resume --last "${common_args[@]}"; then
@@ -142,7 +142,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     claude)
         common_args=()
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-skip-permissions)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
@@ -159,7 +159,7 @@ case "$AI_AGENT_CLI_NAME" in
         export QWEN_CODE_SUPPRESS_YOLO_WARNING=1
         # --auth-type is required for headless runs; --yolo is the approval bypass.
         common_args=(--auth-type openai)
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         common_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
@@ -175,7 +175,7 @@ case "$AI_AGENT_CLI_NAME" in
     gemini)
         zeltro_agent_env gemini
         common_args=()
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo --skip-trust)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             common_args+=("--model" "$AI_MODEL")
         fi
@@ -190,7 +190,7 @@ case "$AI_AGENT_CLI_NAME" in
     agy)
         zeltro_agent_env agy
         common_args=()
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--dangerously-skip-permissions)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         [[ -n "$AI_MODEL" ]] && common_args+=(--model "$AI_MODEL")
         [[ -n "$PROJECTS_DIR_PATH" ]] && common_args+=(--add-dir "$PROJECTS_DIR_PATH")
         # --continue reopens the most recent conversation; with none it opens a new one.
@@ -202,7 +202,7 @@ case "$AI_AGENT_CLI_NAME" in
     opencode)
         zeltro_opencode_prepare
         common_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"})
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--auto)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         # --continue reopens the last session in this directory; with none it
         # just opens a new one, which is the fallback anyway.
         exec opencode ${common_args[@]+"${common_args[@]}"} --continue
@@ -210,7 +210,7 @@ case "$AI_AGENT_CLI_NAME" in
     hermes)
         zeltro_hermes_prepare
         common_args=(${ZELTRO_HERMES_ARGS[@]+"${ZELTRO_HERMES_ARGS[@]}"})
-        [[ "$AUTO_APPROVE" == "1" ]] && common_args+=(--yolo)
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         # --in keeps --continue to this project's sessions, not the newest anywhere.
         if ! hermes chat ${common_args[@]+"${common_args[@]}"} --continue --in "$PWD"; then
             notify_resume_fallback

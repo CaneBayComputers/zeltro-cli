@@ -97,10 +97,14 @@ fi
 # config file (see zeltro_offer_agent_autonomy). The user can inspect and revoke
 # it there using the agent's own documentation.
 #
-# ZELTRO_AI_AUTO_APPROVE=1 re-adds the flags per invocation. It exists for
-# throwaway containers and CI, where writing to a home-directory config is
-# pointless, and so anyone depending on the old behaviour has a way back.
-AUTO_APPROVE="${ZELTRO_AI_AUTO_APPROVE:-0}"
+# ZELTRO_AI_UNATTENDED=1/0 overrides that for one run (the desktop app's
+# per-project switch; also throwaway containers and CI). See
+# zeltro_unattended_args. ZELTRO_AI_AUTO_APPROVE=1 is the older spelling of 1.
+zeltro_unattended_args "$AI_AGENT_CLI_NAME"
+# A one-shot (-p) run can't answer an approval prompt, so 0 doesn't apply to it.
+if [[ "$ONE_OFF" == "1" && "$(zeltro_unattended_mode)" == "0" ]]; then
+    ZELTRO_UNATTENDED_ARGS=(); unset OPENCODE_PERMISSION
+fi
 
 # Refresh the project's Zeltro context (AGENTS.md or ZELTRO.md), then point the
 # agent at it and carry ZELTRO_AI_LANGUAGE as a system-level instruction where
@@ -128,7 +132,7 @@ case "$AI_AGENT_CLI_NAME" in
         fi
         zeltro_agent_env codex || exit 1
         codex_args+=(${ZELTRO_CODEX_BASE_ARGS[@]+"${ZELTRO_CODEX_BASE_ARGS[@]}"})
-        [[ "$AUTO_APPROVE" == "1" ]] && codex_args+=(--dangerously-bypass-approvals-and-sandbox)
+        codex_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         codex_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         codex_args+=(${ZELTRO_GUI_HOOK_ARGS[@]+"${ZELTRO_GUI_HOOK_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
@@ -142,7 +146,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     claude)
         claude_args=()
-        [[ "$AUTO_APPROVE" == "1" ]] && claude_args+=(--dangerously-skip-permissions)
+        claude_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             claude_args+=(-p)
         fi
@@ -170,7 +174,7 @@ case "$AI_AGENT_CLI_NAME" in
         # --auth-type is required for headless runs and is not a safety setting,
         # so it stays unconditional; --yolo is the approval bypass and is gated.
         qwen_args=(--auth-type openai)
-        [[ "$AUTO_APPROVE" == "1" ]] && qwen_args+=(--yolo)
+        qwen_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         qwen_args+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             qwen_args+=("--model" "$AI_MODEL")
@@ -187,7 +191,7 @@ case "$AI_AGENT_CLI_NAME" in
         # Both --yolo (action approval) and --skip-trust (directory trust) are
         # safety prompts, so both are gated rather than only the obvious one.
         gemini_args=()
-        [[ "$AUTO_APPROVE" == "1" ]] && gemini_args+=(--yolo --skip-trust)
+        gemini_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         if [[ -n "$AI_MODEL" ]]; then
             gemini_args+=("--model" "$AI_MODEL")
         fi
@@ -207,7 +211,7 @@ case "$AI_AGENT_CLI_NAME" in
         # Antigravity CLI. Go-style flags: every flag before the prompt.
         zeltro_agent_env agy
         agy_args=()
-        [[ "$AUTO_APPROVE" == "1" ]] && agy_args+=(--dangerously-skip-permissions)
+        agy_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         [[ -n "$AI_MODEL" ]] && agy_args+=(--model "$AI_MODEL")
         [[ -n "$PROJECTS_DIR_PATH" ]] && agy_args+=(--add-dir "$PROJECTS_DIR_PATH")
         if [[ "$ONE_OFF" == "1" ]]; then
@@ -219,7 +223,7 @@ case "$AI_AGENT_CLI_NAME" in
     opencode)
         zeltro_opencode_prepare
         oc_args=(${ZELTRO_OPENCODE_ARGS[@]+"${ZELTRO_OPENCODE_ARGS[@]}"})
-        [[ "$AUTO_APPROVE" == "1" ]] && oc_args+=(--auto)
+        oc_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             # `run` answers and exits; without a closed stdin it waits for more input.
             opencode run ${oc_args[@]+"${oc_args[@]}"} "$INIT_PROMPT" </dev/null
@@ -231,7 +235,7 @@ case "$AI_AGENT_CLI_NAME" in
     hermes)
         zeltro_hermes_prepare
         he_args=(${ZELTRO_HERMES_ARGS[@]+"${ZELTRO_HERMES_ARGS[@]}"})
-        [[ "$AUTO_APPROVE" == "1" ]] && he_args+=(--yolo)
+        he_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
         if [[ "$ONE_OFF" == "1" ]]; then
             hermes chat ${he_args[@]+"${he_args[@]}"} --oneshot -Q -q "$INIT_PROMPT" </dev/null
         else
