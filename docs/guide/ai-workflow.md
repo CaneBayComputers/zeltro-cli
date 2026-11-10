@@ -35,7 +35,7 @@ A fresh install has no agent set, and the AI commands tell you to run `zeltro ai
 | `--api-key <key>` | API key. Optional for Codex, Claude, agy, OpenCode and Hermes, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
 | `--api-base <url>` | Custom endpoint. OpenAI-compatible for `qwen`, `aider`, `opencode` and `hermes`; Anthropic-compatible for `claude`. `none` clears it. See [Cheap and local models](../cheap-models/) for Codex |
 | `--install-only` | With `--agent`: install that agent's CLI if it's missing, without making it the default |
-| `--allow-unattended` / `--no-allow-unattended` | Turn the agent's approval prompts off or back on (see [Unattended mode](#unattended-mode)) |
+| `--allow-unattended` / `--no-allow-unattended` | Turn the agent's approval prompts off or back on in its own config, for terminal use. In the app, each project's "Works without asking" switch (on by default) decides instead (see [Unattended mode](#unattended-mode)) |
 
 When you pick an agent that isn't installed, `zeltro ai-set` installs it with:
 
@@ -174,10 +174,39 @@ it runs one.
 
 ## Unattended mode
 
-By default an agent asks before each file edit or command. That stalls
+On its own, an AI agent asks before each file edit or command. That stalls
 `zeltro create`, which hands the agent a task and expects it to finish on its own.
 
-Zeltro does not turn those prompts off behind your back. The first time
+### In the desktop app: on by default, per project
+
+Each project has a **Works without asking** switch in its panel, and it is **on by
+default**. With it on, the project's AI works without stopping to ask. Turn it off for
+a project to approve each step yourself in the agent's terminal.
+
+The app does this one session at a time. When it starts a project's agent it sets
+`ZELTRO_AI_UNATTENDED=1` (switch on) or `0` (switch off), and Zeltro turns that into
+the agent's own flag for that run:
+
+| Agent | Switch on | Switch off |
+|---|---|---|
+| Claude Code | `--dangerously-skip-permissions` | `--permission-mode manual` |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` | `--ask-for-approval on-request --sandbox workspace-write` |
+| Qwen Code | `--yolo` | `--approval-mode default` |
+| Gemini CLI (deprecated) | `--yolo --skip-trust` | `--approval-mode default` |
+| OpenCode | `--auto` | `OPENCODE_PERMISSION={"*":"ask"}` |
+| Aider | `--yes-always` | `--no-yes-always` |
+| Antigravity CLI (agy) | `--dangerously-skip-permissions` | *(no way to force it for one run: its own config decides)* |
+| Hermes Agent | `--yolo` | *(no way to force it for one run: its own config decides)* |
+
+It doesn't change the agents' approval settings. The one thing it writes is Claude
+Code's one-time consent, `"skipDangerousModePermissionPrompt": true` in
+`~/.claude/settings.json`, so Claude doesn't stop at its "bypass permissions" warning
+screen. The app has no machine-wide switch.
+
+### In a terminal: the agent's own setting
+
+`zeltro ai`, `zeltro create` and `zeltro resume` follow the agent's own config unless
+`ZELTRO_AI_UNATTENDED` is set (`1` or `0`, for that run, as above). The first time
 `zeltro ai-set` sets up an agent in a terminal, it asks once, and if you say yes it
 writes the setting into **the agent's own config file**, where you can see and undo it:
 
@@ -199,12 +228,12 @@ zeltro ai-unattended codex --revoke  # turn the prompts back on
 ```
 
 `zeltro ai-set --allow-unattended` and `--no-allow-unattended` do the same thing as
-part of a settings change. For a single run, `ZELTRO_AI_UNATTENDED=1` adds each agent's
-bypass flag and `ZELTRO_AI_UNATTENDED=0` turns approvals on, whatever the config says. The
-desktop app uses this for its per-project "Run without asking" switch.
+part of a settings change. In the app, a project's switch wins over this setting, except
+for agy and Hermes with the switch off.
 
 {: .warning }
-With unattended mode on, the agent can change anything your user account can. Only use `zeltro ai`, `zeltro create` and `zeltro resume` in directories you're comfortable letting an AI modify freely. All three follow this setting; `ZELTRO_AI_UNATTENDED=1` or `0` overrides it for one run.
+Working without asking, the agent can change anything your user account can. Only let it
+do that in projects you're comfortable letting an AI modify freely.
 
 ---
 

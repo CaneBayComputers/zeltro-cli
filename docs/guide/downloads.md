@@ -76,7 +76,7 @@ settings are kept. From beta.5 on, **Updates** in the app's footer does it.
 
 ### What's in it
 
-Create with AI, the full app library, new project and clone, start/stop of the
+Create with AI, the full app library, new project and Import from GitHub, start/stop of the
 shared services, embedded tabbed terminals for AI sessions, and a Settings panel
 with AI agent configuration and a theme picker. Five themes ship: Retro (the
 default), Dark, Light, Matrix and Zeltro. Each has its own 16-colour terminal
