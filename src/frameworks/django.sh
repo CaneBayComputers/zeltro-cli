@@ -58,6 +58,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves /static/ (the admin's CSS too) from gunicorn: the container's
+    # nginx proxies everything to it, and gunicorn serves no static files.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -125,6 +128,10 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Find files in each app's static/ folder directly, so new and changed files
+# show up without re-running collectstatic. Turn off for production builds.
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 PYEOF
@@ -160,6 +167,7 @@ PYEOF
     cat > requirements.txt << 'EOF'
 django
 gunicorn
+whitenoise
 python-dotenv
 pymysql
 psycopg2-binary

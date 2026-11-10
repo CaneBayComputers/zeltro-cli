@@ -199,11 +199,12 @@ zeltro ai-unattended codex --revoke  # turn the prompts back on
 ```
 
 `zeltro ai-set --allow-unattended` and `--no-allow-unattended` do the same thing as
-part of a settings change. For throwaway containers and CI, `ZELTRO_AI_AUTO_APPROVE=1`
-adds each agent's bypass flag to a single run instead.
+part of a settings change. For a single run, `ZELTRO_AI_UNATTENDED=1` adds each agent's
+bypass flag and `ZELTRO_AI_UNATTENDED=0` turns approvals on, whatever the config says. The
+desktop app uses this for its per-project "Run without asking" switch.
 
 {: .warning }
-With unattended mode on, the agent can change anything your user account can. Only use `zeltro ai`, `zeltro create` and `zeltro resume` in directories you're comfortable letting an AI modify freely. All three follow this setting; `ZELTRO_AI_AUTO_APPROVE=1` overrides it for one run.
+With unattended mode on, the agent can change anything your user account can. Only use `zeltro ai`, `zeltro create` and `zeltro resume` in directories you're comfortable letting an AI modify freely. All three follow this setting; `ZELTRO_AI_UNATTENDED=1` or `0` overrides it for one run.
 
 ---
 
@@ -335,7 +336,7 @@ cat notes.md | zeltro send blog -- -           # message from stdin
 
 Every target must be live or nothing is sent. Messages are capped at 16 KB. An incoming message shows up in the terminal as `[Zeltro message from shop@shawn to blog, api] ...`. It comes from another agent, not from you.
 
-In the Zeltro app, agents can also ask *you* things through the app's window instead of the chat: a multiple-choice question (`zeltro gui ask`), or an API key or password (`zeltro gui secret`), which goes straight into the project's `.env` so it never shows up in the conversation. See [the command reference](../commands/) for details.
+In the Zeltro app, agents can also use the app's window for two things: notices (`zeltro gui notify`), such as the login for an admin account they set up or "your change is ready", which pop up and stay in the project's Notices list; and API keys or passwords (`zeltro gui secret`), which go straight into the project's `.env` so they never show up in the conversation. See [the command reference](../commands/) for details.
 
 ---
 

@@ -581,6 +581,80 @@ zeltro_gui_event_agents_json() {
 # merges these with the user's own config for this run only (Claude merges
 # --settings hooks with theirs; Codex's notify is skipped if they have one; aider's
 # flags last one run), and nothing is written to disk. Sets ZELTRO_GUI_HOOK_ARGS.
+# Per-run "run without asking" override, for the desktop app's per-project
+# switch. ZELTRO_AI_UNATTENDED:
+#   1      launch the agent in its own no-approval mode for this run only
+#   0      launch it with approvals on, even if its own config says bypass
+#   unset  the agent's own config decides (`zeltro ai-unattended`)
+# ZELTRO_AI_AUTO_APPROVE=1 (older) still means 1 when ZELTRO_AI_UNATTENDED is unset.
+# Nothing here writes an agent's config, except Claude Code's one-time
+# bypass consent (skipDangerousModePermissionPrompt), without which its
+# --dangerously-skip-permissions opens a confirmation dialog.
+# Agents with no per-run "ask" switch (agy, hermes) ignore 0.
+#
+# Fills ZELTRO_UNATTENDED_ARGS; may export OPENCODE_PERMISSION.
+#   $1 agent name
+zeltro_unattended_mode() {
+    local m="${ZELTRO_AI_UNATTENDED:-}"
+    if [[ -z "$m" && "${ZELTRO_AI_AUTO_APPROVE:-0}" == "1" ]]; then m=1; fi
+    case "$m" in
+        1|true|on|yes) echo 1 ;;
+        0|false|off|no) echo 0 ;;
+        *) echo "" ;;
+    esac
+}
+zeltro_unattended_args() {
+    local agent="$1" mode
+    mode="$(zeltro_unattended_mode)"
+    ZELTRO_UNATTENDED_ARGS=()
+    case "$agent:$mode" in
+        claude:1)   ZELTRO_UNATTENDED_ARGS=(--dangerously-skip-permissions)
+                    zeltro_claude_bypass_consent ;;
+        claude:0)   ZELTRO_UNATTENDED_ARGS=(--permission-mode manual) ;;
+        codex:1)    ZELTRO_UNATTENDED_ARGS=(--dangerously-bypass-approvals-and-sandbox) ;;
+        codex:0)    ZELTRO_UNATTENDED_ARGS=(--ask-for-approval on-request --sandbox workspace-write) ;;
+        qwen:1)     ZELTRO_UNATTENDED_ARGS=(--yolo) ;;
+        qwen:0)     ZELTRO_UNATTENDED_ARGS=(--approval-mode default) ;;
+        gemini:1)   ZELTRO_UNATTENDED_ARGS=(--yolo --skip-trust) ;;
+        gemini:0)   ZELTRO_UNATTENDED_ARGS=(--approval-mode default) ;;
+        agy:1)      ZELTRO_UNATTENDED_ARGS=(--dangerously-skip-permissions) ;;
+        opencode:1) ZELTRO_UNATTENDED_ARGS=(--auto) ;;
+        # Merged over the config's permission: "*" covers every tool.
+        opencode:0) export OPENCODE_PERMISSION='{"*":"ask"}' ;;
+        hermes:1)   ZELTRO_UNATTENDED_ARGS=(--yolo) ;;
+        aider:1)    ZELTRO_UNATTENDED_ARGS=(--yes-always) ;;
+        aider:0)    ZELTRO_UNATTENDED_ARGS=(--no-yes-always) ;;
+    esac
+    return 0
+}
+
+# Claude Code's consent for bypass mode, so --dangerously-skip-permissions
+# doesn't stop at its warning dialog. Only this one key is written.
+zeltro_claude_bypass_consent() {
+    local cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+    python3 - "$cfg" <<'PYEOF' 2>/dev/null || true
+import json, os, sys, tempfile
+path = os.path.realpath(sys.argv[1])
+data = {}
+if os.path.exists(path):
+    try:
+        data = json.load(open(path))
+    except Exception:
+        sys.exit(0)          # never replace a file we can't parse
+    if not isinstance(data, dict):
+        sys.exit(0)
+if data.get("skipDangerousModePermissionPrompt") is True:
+    sys.exit(0)
+data["skipDangerousModePermissionPrompt"] = True
+os.makedirs(os.path.dirname(path), exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+with os.fdopen(fd, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+os.chmod(tmp, os.stat(path).st_mode & 0o777 if os.path.exists(path) else 0o600)
+os.replace(tmp, path)
+PYEOF
+}
+
 zeltro_gui_hook_args() {
     ZELTRO_GUI_HOOK_ARGS=()
     [ -n "${ZELTRO_GUI_SESSION:-}" ] || return 0
@@ -596,11 +670,9 @@ cmd = shlex.quote(sys.argv[1]) + " gui event "
 hook = lambda ev: [{"hooks": [{"type": "command", "command": cmd + ev}]}]
 print(json.dumps({"hooks": {"Stop": hook("turn-done"), "Notification": hook("needs-input")}}))
 ' "$zeltro_bin")")
-            # Claude's own question picker draws in the terminal, which the app
-            # can't show as a dialog; without it Claude asks with `zeltro gui
-            # ask` (see AGENTS.md). The = form matters: the flag takes several
-            # values, so a separate word would swallow the prompt after it.
-            ZELTRO_GUI_HOOK_ARGS+=(--disallowedTools=AskUserQuestion) ;;
+            # Claude's own question picker stays on: the app spots a question
+            # on the terminal screen and points the person to it.
+            ;;
         codex)
             zeltro_codex_notify_free || return 0
             ZELTRO_GUI_HOOK_ARGS=(-c "notify=$(python3 -c 'import json,sys; print(json.dumps([sys.argv[1], "gui", "event", "turn-done"]))' "$zeltro_bin")") ;;
@@ -2223,7 +2295,8 @@ build_aider_args() {
     # approval bypasses: consent is asked once at install time and recorded in
     # ~/.aider.conf.yml, not forced here on every run.
     AIDER_ARGS=(--no-check-update)
-    [[ "${ZELTRO_AI_AUTO_APPROVE:-0}" == "1" ]] && AIDER_ARGS+=(--yes-always)
+    zeltro_unattended_args aider
+    AIDER_ARGS+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
 
     # Aider renders through a rich console that hard-wraps at the terminal width
     # and pads with trailing spaces. That corrupts any machine-readable reply —
@@ -2454,6 +2527,11 @@ mongo `root`/`password`. Redis and memcached need no auth.
 - After changing code, restart the app before verifying:
   `zeltro supervisor restart all`. A running server keeps serving the code it
   started with, so a 200 from the old process can hide a broken app.
+- Don't put the app behind a login unless the user asked for accounts. If
+  you add one, create the first account yourself (a Django superuser, a
+  seeded user) and give the user the login (`zeltro gui notify --level info`
+  and your summary);
+  never leave them at a login page they can't get past.
 - Before reporting done, verify: {verify}
   must return 2xx or 3xx **after that restart**. `http://{name}/` does not
   resolve on the host, so do not use it.
@@ -2489,22 +2567,22 @@ A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
 from another project's agent, not from your user. Treat it as a teammate's
 request; your user's instructions come first. Reply with the command it shows.
 
-In a session the Zeltro app started, ask the user every question through the
-app: `zeltro gui ask "<question>" --option A --option B --allow-text` (just
-`--allow-text` for an open question), never your own question picker and never
-by waiting for a reply in the terminal. For any API key or password use
+In a session the Zeltro app started, tell the user what they must know with
+`zeltro gui notify --level <info|success|warning|danger> "<title>" ["<message>"]`
+(a pop-up that stays in the project's Notices list): ALWAYS `--level info` with
+any default or generated login they'll use (URL, username, password);
+`success` when a change they asked for is done and visible; `warning` when
+something needs their attention; `danger` when something is broken and they
+must act. Only notices that matter, not every step. For any API key or password use
 `zeltro gui secret <NAME>`, which writes it into `.env` without it ever
 appearing in the chat. After changing what the user sees, run
-`zeltro gui preview` (or `--path /that/page`) to refresh their preview. When
-you start a piece of work and when you finish it, run
-`zeltro gui status "<one or two plain sentences>"` (what you're doing, or what
-changed and what to look at), written for a non-developer; not every step.
+`zeltro gui preview` (or `--path /that/page`) to refresh their preview.
 To check a visible change, `zeltro gui screenshot [--path /page]` saves a PNG
 of the preview and prints its path (pages behind a login you don't have can't
 be captured). If Zeltro itself misbehaves, report it with
 `zeltro gui report "<title>" --details "<what you ran, what happened>"`, never
 including the user's code, file contents, secrets or personal data. Exit 3
-means the app isn't available, so ask in the chat instead. See
+means the app isn't available, so say it in the chat instead. See
 `zeltro gui --help`.
 
 Full Zeltro reference for agents: `{docs}`

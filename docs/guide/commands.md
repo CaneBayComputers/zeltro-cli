@@ -182,7 +182,8 @@ git diff | zeltro send api -- -                # read the message from stdin
 An agent in a session the Zeltro app started can use the app's window to reach the user:
 
 ```bash
-zeltro gui ask "Which database?" --option Postgres --option MariaDB   # prints the answer
+zeltro gui notify --level info "Admin login" "http://shop/admin  user: admin  password: ..."
+zeltro gui notify --level success "Pricing page added" "Open /pricing to see it"
 zeltro gui secret STRIPE_KEY --reason "for checkout"   # writes it into .env; never printed
 zeltro gui notify --level warning "Tests failing" "3 failures in api/"
 zeltro gui open --project                               # or: zeltro gui open https://...
@@ -357,7 +358,7 @@ zeltro ai --interactive "Add a health-check endpoint at /ping"
   - Aider: `aider --no-check-update --no-pretty --no-auto-commits --subtree-only [--no-git] [--model "$AI_MODEL"] [--api-key <provider>="$AI_API_KEY"] [--openai-api-base "$AI_API_BASE"] --message "<prompt>"` (one-off). Aider's `--message` exits after the reply, so interactive runs seed the session with `--load` instead and hand it back to you. `--no-git` is added when the directory isn't already a git repository.
   - OpenCode: `opencode run [-m "$AI_MODEL"] "<prompt>"` (one-off) / `opencode [-m ...] --prompt "<prompt>"` (interactive). The key goes to the variable the model's provider reads; an endpoint becomes an OpenAI-compatible provider named `zeltro` in `OPENCODE_CONFIG_CONTENT`, with the model as `zeltro/<model>`. Auto-update is off for the run.
   - Hermes: `hermes chat [--provider <p>] [-m <model>] --oneshot -Q -q "<prompt>"` (one-off) / `hermes chat [...] -q "<prompt>"` (interactive). A model prefix (`openai/`, `openrouter/`, `anthropic/`, `gemini/`) becomes `--provider`; an endpoint uses `--provider openai` with `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
-- **Does not pass approval-bypass flags.** Whether an agent runs without asking is recorded in the agent's own config (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/antigravity-cli/settings.json`, `~/.gemini/settings.json`, `~/.qwen/settings.json`, `~/.aider.conf.yml`, `~/.config/opencode/opencode.json`, `~/.hermes/config.yaml`), set with `zeltro ai-set --allow-unattended` or `zeltro ai-unattended`. For throwaway containers and CI, `ZELTRO_AI_AUTO_APPROVE=1` adds the flags for that run (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`, `--yolo`, `--dangerously-skip-permissions` for agy, `--yolo --skip-trust` for Gemini, `--yes-always` for Aider, `--auto` for OpenCode, `--yolo` for Hermes).
+- **Does not pass approval-bypass flags.** Whether an agent runs without asking is recorded in the agent's own config (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/antigravity-cli/settings.json`, `~/.gemini/settings.json`, `~/.qwen/settings.json`, `~/.aider.conf.yml`, `~/.config/opencode/opencode.json`, `~/.hermes/config.yaml`), set with `zeltro ai-set --allow-unattended` or `zeltro ai-unattended`. For one run, `ZELTRO_AI_UNATTENDED=1` adds the flags (the desktop app uses it for its per-project switch; `ZELTRO_AI_AUTO_APPROVE=1` still works) and `ZELTRO_AI_UNATTENDED=0` turns approvals on instead. With `1` it passes (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`, `--yolo`, `--dangerously-skip-permissions` for agy, `--yolo --skip-trust` for Gemini, `--yes-always` for Aider, `--auto` for OpenCode, `--yolo` for Hermes).
 
 ## 🎯 Command Options
 
@@ -804,7 +805,7 @@ zeltro clone <TAB>         → work-directly  fork  new-repo
 - `FORCE_COLOR=1` - Keep color when the output is piped or redirected (it's off there by default), e.g. `zeltro status | less -R`
 - `DEBUG_LOG_PATH` - Where `--debug` writes (default `/tmp/zeltro-cli-debug.log`)
 - `ZELTRO_AI_AGENT`, `ZELTRO_AI_MODEL`, `ZELTRO_AI_API_BASE`, `ZELTRO_AI_API_KEY`, `ZELTRO_AI_API_KEY_FILE`, `ZELTRO_AI_LANGUAGE` - per-session AI overrides (see "Per-session AI overrides" under [System Management](#system-management))
-- `ZELTRO_AI_AUTO_APPROVE=1` - Pass each agent's approval-bypass flags for this run
+- `ZELTRO_AI_UNATTENDED=1` / `0` - For this run only: `1` runs the agent without approval prompts, `0` turns them on even if its config says otherwise (unset: its config decides). `ZELTRO_AI_AUTO_APPROVE=1` is the older spelling of `1`
 - `ZELTRO_BUS_DIR` - Agent message spool (default `~/.zeltro/bus`)
 
 The projects directory is not an environment variable: it is `PROJECTS_DIR` in `/etc/zeltro-cli/.env`, set with `zeltro configure --projects-dir`.
