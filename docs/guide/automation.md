@@ -168,7 +168,7 @@ tail -f /tmp/zeltro-cli-debug.log
 | Can't reach a project in the browser | Use the address `zeltro status <project>` prints (`http://<project>/` doesn't resolve on the host); then `docker logs <project-name>` |
 | Database connection refused | `zeltro status` — is the shared service running? If it shows `stopped`, `zeltro enable-service mysql` (or `postgres`, `mongo`) |
 | Project 502s after a restart | A dependency isn't in the base image. See [Architecture → Base images](../architecture/#base-images) |
-| Fedora: permission denied on project files | SELinux — re-run `zeltro configure` to relabel. See [Installation](../installation/#fedora--rhel--selinux) |
+| Fedora: permission denied on project files | SELinux — re-run `zeltro configure` to relabel. See [Installation](../installation/#fedora-selinux) |
 | Arch: Docker won't start after install | The system upgrade replaced the running kernel — reboot |
 
 Useful probes:

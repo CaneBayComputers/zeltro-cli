@@ -225,7 +225,7 @@ Examples:
   - `zeltro ai-set --agent codex --model gpt-6-sol`
 - Configure Claude with a model:
   - `zeltro ai-set --agent claude --model opus`
-- Configure Aider against OpenAI:
+- Configure Aider against Anthropic:
   - `zeltro ai-set --agent aider --model anthropic/claude-sonnet-5 --api-key sk-ant-...`
 - Configure Aider against a local Ollama server:
   - `zeltro ai-set --agent aider --model openai/llama3.1 --api-key ollama --api-base http://localhost:11434/v1`
