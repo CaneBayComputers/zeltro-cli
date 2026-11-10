@@ -9,7 +9,7 @@ Zeltro's command surface is shaped around AI-driven development. The point is to
 
 Zeltro doesn't sell AI. It drives an agent CLI you install and sign in to, and you pay that provider directly (or nothing, with a local model).
 
-The first time you open the Zeltro app, it offers your first app on us: build a new one, or bring in one you already have, with no account, no card and no key, one per computer while it lasts. It sets up Claude Code on Claude Haiku through Zeltro's server (see [privacy](https://zeltro.ai/privacy#starter-credit)). After that, connect your own AI the same way as above; nothing goes through Zeltro then.
+Don't have one yet? The first time you open the Zeltro app, you can use our key to try it out: Claude Code on Claude Haiku, with no account, no card and no key of your own, enough to try it on a first project (one per computer, while it lasts). It runs through Zeltro's server (see [privacy](https://zeltro.ai/privacy#starter-credit)). After that, connect your own AI the same way as above; nothing goes through Zeltro then.
 
 ---
 
