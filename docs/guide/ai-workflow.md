@@ -334,7 +334,7 @@ cat notes.md | zeltro send blog -- -           # message from stdin
 
 Every target must be live or nothing is sent. Messages are capped at 16 KB. An incoming message shows up in the terminal as `[Zeltro message from shop@shawn to blog, api] ...`. It comes from another agent, not from you.
 
-In the Zeltro app, agents can also ask *you* things through the app's window instead of the chat: a multiple-choice question (`zeltro gui ask`), or an API key or password (`zeltro gui secret`), which goes straight into the project's `.env` so it never shows up in the conversation. See [the command reference](../commands/) for details.
+In the Zeltro app, agents ask their questions in the chat. They use the app's window for two things: notices (`zeltro gui notify`), such as the login for an admin account they set up or "your change is ready", which pop up and stay in the project's Notices list; and API keys or passwords (`zeltro gui secret`), which go straight into the project's `.env` so they never show up in the conversation. See [the command reference](../commands/) for details.
 
 ---
 

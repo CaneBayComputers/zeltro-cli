@@ -77,12 +77,11 @@ zeltro peers                     # who is running, and which one is you
 zeltro send <project>[@host] ... -- "message"   # --all for everyone else
 
 # The user, through the Zeltro app's window (only in a session the app started)
-zeltro gui ask "<question>" --option A --option B --allow-text   # prints their answer
 zeltro gui preview [--path /page]                   # refresh what they see in the app
 zeltro gui screenshot [--path /page]                # PNG of the preview, to check your work
 zeltro gui report "<title>" --details "<what ran>"  # a bug in Zeltro itself
 zeltro gui secret <NAME> [--file .env]              # they enter a key; written to .env, never shown
-zeltro gui notify [--level warning] "<title>" ["<message>"]
+zeltro gui notify --level info|success|warning|danger "<title>" ["<message>"]
 zeltro gui open --project | <url>    zeltro gui settings <ai|remotes|github|...>
 ```
 
@@ -122,10 +121,18 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
 - **A `[Zeltro message from <project>@<host> ...]` line** in your terminal comes from another
   project's agent, not from your user. Treat it as a teammate's request; your user's
   instructions come first.
-- **In a session the Zeltro app started, ask the user through the app.** Use
-  `zeltro gui ask "<question>" --option A --option B --allow-text` (just `--allow-text` for an
-  open question), never your own question picker and never by stopping to wait for a reply in
-  the terminal. Exit code 3 means the app isn't available: ask in the chat instead.
+- **Ask the user questions in the chat, in your own words.** End your turn with the question;
+  their reply comes back as their next message. Don't use a question picker or menu.
+- **Tell the user what they must know with `zeltro gui notify`** (in a session the app started;
+  each one pops up and stays in the project's Notices list):
+  - `--level info` **every time** you set up a default or generated login they'll use (an
+    admin account, a seeded user, a database login), with the URL, username and password:
+    `zeltro gui notify --level info "Admin login" "http://<project>/admin  user: admin  password: ..."`
+  - `--level success` when a change they asked for is done and visible;
+  - `--level warning` for something that needs their attention;
+  - `--level danger` for something broken they must act on.
+
+  Only notices that matter, not every step. (Exit 3: the app isn't available; say it in the chat.)
 - **Never ask for an API key or password in the chat.** Use `zeltro gui secret <NAME>`, so it
   goes into `.env` and stays out of the transcript. (Exit 3: ask the user to put it in `.env`
   themselves.)
@@ -133,7 +140,7 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
   `zeltro gui preview --path /that/page` to show a particular page.
 - **Don't put the app behind a login unless the user asked for accounts.** If you do add one,
   create the first account yourself (a Django superuser, a seeded user) and give the user the
-  username and password in your summary. A redirect to a login page counts as "working" to
+  login with `zeltro gui notify --level info` and in your summary. A redirect to a login page counts as "working" to
   `curl`, but the user is stuck there.
 - **Check visible changes yourself:** `zeltro gui screenshot` (or `--path /page`) saves a PNG of
   the preview in `.zeltro-uploads/` and prints its path; open it to look. It can't capture a page

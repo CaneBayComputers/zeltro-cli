@@ -159,6 +159,10 @@ expect_code 0 "open project" python3 "$GUI" open --project
 expect_code 6 "open refused by app" python3 "$GUI" open https://evil.example
 expect_code 6 "open non-http" python3 "$GUI" open file:///etc/passwd
 expect_code 0 "notify" python3 "$GUI" notify --level warning "Build broke" "see the log"
+expect_code 0 "notify success" python3 "$GUI" notify --level success "Pricing page added" "open /pricing"
+expect_code 2 "notify bad level" python3 "$GUI" notify --level shout "x"
+sleep 0.3
+grep -q '"level": *"success"' "$T/seen" && ok "success level reaches the app" || bad "no success notify in: $(cat "$T/seen")"
 
 : > "$T/seen"
 expect_code 0 "event" env ZELTRO_GUI_SESSION=s1 "$ZELTRO" gui event turn-done '{"type":"agent-turn-complete"}'
