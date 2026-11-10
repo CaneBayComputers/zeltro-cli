@@ -75,7 +75,7 @@ EXIT_OK, EXIT_ERROR, EXIT_USAGE, EXIT_NO_APP, EXIT_TIMEOUT, EXIT_DECLINED, EXIT_
 STATUS_EXIT = {"ok": EXIT_OK, "declined": EXIT_DECLINED, "refused": EXIT_REFUSED, "error": EXIT_ERROR}
 
 TABS = ("general", "appearance", "services", "remotes", "ai", "github")
-LEVELS = ("info", "warning", "danger")
+LEVELS = ("info", "success", "warning", "danger")
 EVENTS = ("turn-done", "needs-input", "build-done")
 DEFAULT_TIMEOUT = {"ask": 300, "secret": 300, "open": 120, "settings": 15, "screenshot": 30, "report": 15}
 REPORT_TITLE_MAX, REPORT_DETAILS_MAX = 200, 4000
@@ -85,14 +85,18 @@ USAGE = """Usage: zeltro gui <action> [args] [--timeout <seconds>]
 Ask the Zeltro app to do something for you. Only works in a session the app
 started; anywhere else it exits 3, so ask in the chat instead.
 
-  zeltro gui ask "<question>" --option <text> [--option <text> ...] [--default <text>] [--allow-text]
-        Show a question with 1-6 answers. Prints the chosen answer. --allow-text
-        also lets the user type their own answer (then --option is optional).
+  zeltro gui ask "<question>" --option <text> ... [--allow-text]
+        Retired: the app answers "refused" (exit 6). Ask the person in the chat
+        instead, in your own words.
   zeltro gui secret <NAME> [--file .env] [--reason "<why>"]
         Ask the user for a secret (an API key, a password) and write NAME=<value>
         into that file in the project. The value is never printed.
-  zeltro gui notify [--level info|warning|danger] "<title>" ["<message>"]
-        Show a notification. Does not wait.
+  zeltro gui notify [--level info|success|warning|danger] "<title>" ["<message>"]
+        Show a notice (a pop-up, kept in the project's Notices list). Does not
+        wait. info: anything the person must keep, ALWAYS including a default
+        or generated login (URL, username, password); success: a requested
+        change is done and visible; warning: needs their attention; danger:
+        broken, they must act. Only notices that matter, not every step.
   zeltro gui open <http(s) url> | --project
         Open a URL, or the project's own address, in the user's browser.
   zeltro gui settings <general|appearance|services|remotes|ai|github> [--reason "<why>"]

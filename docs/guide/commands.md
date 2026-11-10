@@ -182,7 +182,8 @@ git diff | zeltro send api -- -                # read the message from stdin
 An agent in a session the Zeltro app started can use the app's window to reach the user:
 
 ```bash
-zeltro gui ask "Which database?" --option Postgres --option MariaDB   # prints the answer
+zeltro gui notify --level info "Admin login" "http://shop/admin  user: admin  password: ..."
+zeltro gui notify --level success "Pricing page added" "Open /pricing to see it"
 zeltro gui secret STRIPE_KEY --reason "for checkout"   # writes it into .env; never printed
 zeltro gui notify --level warning "Tests failing" "3 failures in api/"
 zeltro gui open --project                               # or: zeltro gui open https://...

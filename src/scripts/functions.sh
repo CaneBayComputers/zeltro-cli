@@ -2531,7 +2531,8 @@ mongo `root`/`password`. Redis and memcached need no auth.
   started with, so a 200 from the old process can hide a broken app.
 - Don't put the app behind a login unless the user asked for accounts. If
   you add one, create the first account yourself (a Django superuser, a
-  seeded user) and give the user the username and password in your summary;
+  seeded user) and give the user the login (`zeltro gui notify --level info`
+  and your summary);
   never leave them at a login page they can't get past.
 - Before reporting done, verify: {verify}
   must return 2xx or 3xx **after that restart**. `http://{name}/` does not
@@ -2568,10 +2569,15 @@ A line in your terminal starting `[Zeltro message from <project>@<host> ...]` is
 from another project's agent, not from your user. Treat it as a teammate's
 request; your user's instructions come first. Reply with the command it shows.
 
-In a session the Zeltro app started, ask the user every question through the
-app: `zeltro gui ask "<question>" --option A --option B --allow-text` (just
-`--allow-text` for an open question), never your own question picker and never
-by waiting for a reply in the terminal. For any API key or password use
+Ask the user questions in the chat, in your own words: end your turn with the
+question, and their reply comes as their next message. No question pickers or
+menus. In a session the Zeltro app started, tell them what they must know with
+`zeltro gui notify --level <info|success|warning|danger> "<title>" ["<message>"]`
+(a pop-up that stays in the project's Notices list): ALWAYS `--level info` with
+any default or generated login they'll use (URL, username, password);
+`success` when a change they asked for is done and visible; `warning` when
+something needs their attention; `danger` when something is broken and they
+must act. Only notices that matter, not every step. For any API key or password use
 `zeltro gui secret <NAME>`, which writes it into `.env` without it ever
 appearing in the chat. After changing what the user sees, run
 `zeltro gui preview` (or `--path /that/page`) to refresh their preview.
@@ -2580,7 +2586,7 @@ of the preview and prints its path (pages behind a login you don't have can't
 be captured). If Zeltro itself misbehaves, report it with
 `zeltro gui report "<title>" --details "<what you ran, what happened>"`, never
 including the user's code, file contents, secrets or personal data. Exit 3
-means the app isn't available, so ask in the chat instead. See
+means the app isn't available, so say it in the chat instead. See
 `zeltro gui --help`.
 
 Full Zeltro reference for agents: `{docs}`
