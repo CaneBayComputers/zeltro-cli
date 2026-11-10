@@ -106,8 +106,8 @@ started; anywhere else it exits 3, so ask in the chat instead.
   zeltro gui report "<what went wrong>" [--details "<what you ran, what happened>"]
         Report a bug in Zeltro itself (not the project) to its developers.
   zeltro gui status "<text>"
-        Show the user, in the app's panel, what you're doing or what changed.
-        One or two plain sentences. Does not wait.
+        Retired: the app no longer shows status text. Still accepted (exits 0)
+        so older instructions don't fail; don't call it.
   zeltro gui event <turn-done|needs-input|build-done>
         Tell the app a turn ended or needs the user. Always exits 0.
 

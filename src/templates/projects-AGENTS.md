@@ -79,7 +79,6 @@ zeltro send <project>[@host] ... -- "message"   # --all for everyone else
 # The user, through the Zeltro app's window (only in a session the app started)
 zeltro gui ask "<question>" --option A --option B --allow-text   # prints their answer
 zeltro gui preview [--path /page]                   # refresh what they see in the app
-zeltro gui status "<one or two plain sentences>"    # what you're doing / what changed
 zeltro gui screenshot [--path /page]                # PNG of the preview, to check your work
 zeltro gui report "<title>" --details "<what ran>"  # a bug in Zeltro itself
 zeltro gui secret <NAME> [--file .env]              # they enter a key; written to .env, never shown
@@ -132,9 +131,6 @@ section it's in (`Inside: section#pricing`). That only works if the sections hav
   themselves.)
 - **After changing what the user sees, refresh their preview:** `zeltro gui preview`, or
   `zeltro gui preview --path /that/page` to show a particular page.
-- **Keep the app's status panel current.** When you start a piece of work and when you finish
-  it, run `zeltro gui status "<one or two sentences>"`: what you're doing, or what changed and
-  what to look at. Write it for someone who isn't a developer, and don't post every step.
 - **Check visible changes yourself:** `zeltro gui screenshot` (or `--path /page`) saves a PNG of
   the preview in `.zeltro-uploads/` and prints its path; open it to look. It can't capture a page
   behind a login you don't have.
