@@ -53,11 +53,11 @@ reach a project by the port `zeltro status` prints rather than by container IP.
 **Windows**
 
 Zeltro is a Linux tool. On Windows, install the desktop app
-([download](https://zeltro.ai/download/windows)) and point it at a Linux or
-Mac machine over SSH, or let it set up Zeltro inside WSL2 on the same PC (in
-preview). The older `install-windows.ps1` script, run from an administrator
-PowerShell, also sets up WSL2 with Zeltro inside it; it is lightly tested and will
-be retired once the desktop app's WSL2 setup is verified.
+([download](https://zeltro.ai/download/windows)): its installer asks for admin
+once to turn on WSL2, and on first open the app sets up Ubuntu and Zeltro
+inside it. It can also drive a Linux or Mac machine over SSH instead. The older
+`install-windows.ps1` script, run from an administrator PowerShell, does the
+same WSL2 setup from a terminal; it will be retired.
 
 Then, once:
 
@@ -120,7 +120,7 @@ curl -fsSL https://dist.canebaycomputers.com/zeltro/ubuntu | bash
 It works on Ubuntu/Debian, Fedora/RHEL and Arch. On **Windows**,
 [download the installer](https://zeltro.ai/download/windows) (beta). The app
 drives Zeltro on machines you add under **Settings → Remotes → Hosts** (a Linux
-box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same PC (in preview).
+box, a Mac, a Pi, an EC2 instance), or inside WSL2 on the same PC, which it sets up for you.
 On a **Mac** (Apple Silicon or Intel), `curl -fsSL https://dist.canebaycomputers.com/zeltro/mac | bash`
 installs it through Homebrew. Packages are on the
 [releases page](https://github.com/CaneBayComputers/zeltro-releases/releases).

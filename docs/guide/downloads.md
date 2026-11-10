@@ -41,8 +41,9 @@ system, because Arch doesn't support partial upgrades.
 
 Download the installer from
 [zeltro.ai/download/windows](https://zeltro.ai/download/windows). It is a
-normal Setup `.exe` (beta) that installs for your account only, so it needs no
-admin rights. It is not code-signed yet, so Windows may say it "protected your
+normal Setup `.exe` (beta). It asks for admin once, to turn on the Windows
+features Zeltro's WSL2 setup needs (see
+[Installation → Windows](../installation/#windows)). It is not code-signed yet, so Windows may say it "protected your
 PC": choose **More info → Run anyway**. See [Windows](#windows) below for how to
 run your projects once it is installed.
 
@@ -86,13 +87,14 @@ palette, so output stays readable, including on Light.
 On Linux the app drives a Zeltro on the same machine. On Windows, Zeltro itself
 has to run in Linux, and there are two ways to do that:
 
-- **Another machine over SSH. This works today.** The app drives Zeltro on a
-  Linux box, a Mac, a Raspberry Pi or an EC2 instance. Add them under
+- **This PC, through WSL2.** The installer turns on WSL2 (admin once, maybe a
+  restart), and on first open the app installs Ubuntu and Zeltro inside it
+  for you. See [Installation → Windows](../installation/#windows).
+- **Another machine over SSH.** The app drives Zeltro on a Linux box, a Mac,
+  a Raspberry Pi or an EC2 instance. Add them under
   **Settings → Remotes → Hosts**. Each host needs Zeltro already installed
   and configured. Projects, containers and files live on the host that runs
   them.
-- **This PC, through WSL2. In preview.** The app's own setup for running
-  Zeltro in WSL2 on the same PC is still in testing.
 
 Remote hosts work from Linux too.
 
