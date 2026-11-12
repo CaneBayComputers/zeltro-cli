@@ -46,14 +46,15 @@ setting that CLI reads:
 | `aider` | `--openai-api-base` | `--api-key <provider>=<key>` | OpenAI-compatible |
 | `opencode` | an inline OpenAI-compatible provider in `OPENCODE_CONFIG_CONTENT` | that provider's `apiKey` | OpenAI-compatible |
 | `hermes` | `OPENAI_BASE_URL`, with `--provider openai` | `OPENAI_API_KEY` | OpenAI-compatible |
+| `cline` | Cline's own provider settings (OpenRouter, OpenAI-compatible, or Anthropic for a URL ending in `/anthropic`) | that provider's `apiKey` | OpenAI- or Anthropic-compatible |
 | `claude` | `ANTHROPIC_BASE_URL` | `ANTHROPIC_API_KEY`, only if it starts with `sk-ant-` | **Anthropic-compatible** |
 | `codex` | `-c openai_base_url=…` (Zeltro passes it for you) | `OPENAI_API_KEY`, only if it starts with `sk-` | OpenAI Responses API |
 | `agy` | nothing (refused) | `GEMINI_API_KEY` | Its own Google sign-in, or a Gemini API key |
 | `gemini` (deprecated) | `GOOGLE_GEMINI_BASE_URL` | `GEMINI_API_KEY` | A paid Gemini API key |
 
 "OpenAI-compatible" covers OpenRouter, DeepInfra, Together, Fireworks, Ollama,
-LM Studio and vLLM, so `qwen`, `aider`, `opencode` and `hermes` are the agents to use
-with cheap or local models. In our tests, OpenCode and Hermes both worked through
+LM Studio and vLLM, so `qwen`, `aider`, `opencode`, `hermes` and `cline` are the agents to
+use with cheap or local models. In our tests, OpenCode, Hermes and Cline all worked through
 OpenRouter with DeepSeek V4.1 Flash; OpenCode with Qwen3 Coder sometimes described a
 file edit instead of making it, so try a second model if one misbehaves.
 

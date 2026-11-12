@@ -217,6 +217,22 @@ case "$AI_AGENT_CLI_NAME" in
             exec hermes chat ${common_args[@]+"${common_args[@]}"}
         fi
         ;;
+    cline)
+        zeltro_agent_env cline
+        zeltro_cline_prepare
+        common_args=(${ZELTRO_CLINE_ARGS[@]+"${ZELTRO_CLINE_ARGS[@]}"})
+        common_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
+        # Cline resumes by session id; take the newest one started in this folder.
+        cline_session="$(zeltro_cline_last_session "$PWD")"
+        if [[ -n "$cline_session" ]]; then
+            if ! cline -i ${common_args[@]+"${common_args[@]}"} --id "$cline_session"; then
+                notify_resume_fallback
+                exec cline -i ${common_args[@]+"${common_args[@]}"}
+            fi
+        else
+            exec cline -i ${common_args[@]+"${common_args[@]}"}
+        fi
+        ;;
     aider)
         build_aider_args
         AIDER_ARGS+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
@@ -228,7 +244,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, gemini (deprecated)"
+        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, cline, gemini (deprecated)"
         exit 1
         ;;
 esac

@@ -105,6 +105,8 @@ zeltro_unattended_args "$AI_AGENT_CLI_NAME"
 if [[ "$ONE_OFF" == "1" && "$(zeltro_unattended_mode)" == "0" ]]; then
     ZELTRO_UNATTENDED_ARGS=(); unset OPENCODE_PERMISSION
 fi
+# Cline approves by default, and a one-shot run can't answer a prompt either.
+[[ "$ONE_OFF" == "1" && "$AI_AGENT_CLI_NAME" == "cline" ]] && ZELTRO_UNATTENDED_ARGS=()
 
 # Refresh the project's Zeltro context (AGENTS.md or ZELTRO.md), then point the
 # agent at it and carry ZELTRO_AI_LANGUAGE as a system-level instruction where
@@ -243,6 +245,19 @@ case "$AI_AGENT_CLI_NAME" in
             hermes chat ${he_args[@]+"${he_args[@]}"} -q "$INIT_PROMPT"
         fi
         ;;
+    cline)
+        zeltro_agent_env cline
+        zeltro_cline_prepare
+        cl_args=(${ZELTRO_CLINE_ARGS[@]+"${ZELTRO_CLINE_ARGS[@]}"})
+        cl_args+=(${ZELTRO_UNATTENDED_ARGS[@]+"${ZELTRO_UNATTENDED_ARGS[@]}"})
+        if [[ "$ONE_OFF" == "1" ]]; then
+            # Without -i Cline answers and exits; a closed stdin keeps it from waiting.
+            cline ${cl_args[@]+"${cl_args[@]}"} "$INIT_PROMPT" </dev/null
+        else
+            # -i opens the interactive screen with the prompt already sent.
+            cline -i ${cl_args[@]+"${cl_args[@]}"} "$INIT_PROMPT"
+        fi
+        ;;
     aider)
         build_aider_args
         AIDER_ARGS+=(${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"})
@@ -257,7 +272,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, gemini (deprecated)"
+        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, cline, gemini (deprecated)"
         echo-white "Run 'zeltro ai-set' to choose a supported agent."
         exit 1
         ;;

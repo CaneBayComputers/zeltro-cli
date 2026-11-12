@@ -34,7 +34,7 @@ usage() {
     echo-white "agent, or anything installed."
     echo-white ""
     echo-white "Arguments:"
-    echo-white "  AGENT            claude, codex, agy, qwen, aider, opencode, hermes or gemini."
+    echo-white "  AGENT            claude, codex, agy, qwen, aider, opencode, hermes, cline or gemini."
     echo-white "                   Defaults to the currently configured agent."
     echo-white "  on | off         Turn unattended mode on (the default) or off."
     echo-white "  status           Report the current setting without changing it."
@@ -55,6 +55,8 @@ usage() {
     echo-white "  aider  → ~/.aider.conf.yml             opencode → ~/.config/opencode/opencode.json"
     echo-white "  hermes → ~/.hermes/config.yaml (approvals.mode)"
     echo-white "  agy    → ~/.gemini/antigravity-cli/settings.json (toolPermission)"
+    echo-white "  cline  → ~/.config/zeltro/cline.json (autoApprove). Cline saves no setting"
+    echo-white "           of its own, so Zeltro keeps this one and passes --auto-approve."
 }
 
 # Error out with a code the app can branch on. $1 code, $2 message.
@@ -90,8 +92,8 @@ fi
 [ -n "$AGENT" ] || fail no_agent "No agent specified and none is configured. Pass --agent, or run 'zeltro ai-set' first."
 
 case "$AGENT" in
-    claude|codex|gemini|qwen|aider|opencode|hermes|agy) ;;
-    *) fail unknown_agent "Unknown agent '$AGENT'. Expected claude, codex, agy, qwen, aider, opencode, hermes or gemini." ;;
+    claude|codex|gemini|qwen|aider|opencode|hermes|agy|cline) ;;
+    *) fail unknown_agent "Unknown agent '$AGENT'. Expected claude, codex, agy, qwen, aider, opencode, hermes, cline or gemini." ;;
 esac
 
 CFG="$(zeltro_agent_config_path "$AGENT")"

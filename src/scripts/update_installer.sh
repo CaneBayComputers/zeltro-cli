@@ -231,6 +231,15 @@ case "$AI_AGENT_CLI_NAME" in
             hermes chat "${he_args[@]}" -q "$PROMPT"
         fi
         ;;
+    cline)
+        zeltro_cline_prepare
+        cl_args=(${ZELTRO_CLINE_ARGS[@]+"${ZELTRO_CLINE_ARGS[@]}"} --auto-approve true)
+        if [[ "$ONE_OFF" == "1" ]]; then
+            cline "${cl_args[@]}" "$PROMPT" </dev/null
+        else
+            cline -i "${cl_args[@]}" "$PROMPT"
+        fi
+        ;;
     aider)
         build_aider_args
         if [[ "$ONE_OFF" == "1" ]]; then
@@ -243,7 +252,7 @@ case "$AI_AGENT_CLI_NAME" in
         ;;
     *)
         echo-red "Unsupported AI agent: '$AI_AGENT_CLI_NAME'."
-        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, gemini (deprecated)"
+        echo-white "Supported agents: codex, claude, agy, qwen, aider, opencode, hermes, cline, gemini (deprecated)"
         exit 1
         ;;
 esac

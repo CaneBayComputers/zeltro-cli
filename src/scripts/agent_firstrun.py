@@ -20,6 +20,10 @@ on a pseudo-terminal (2026-10-23):
   hermes          "Help improve Hermes?" -> telemetry.shared_metrics.offer_version (via
                   `hermes config set`; sharing stays off, its default)
   qwen, opencode  nothing blocks when Zeltro passes the key.
+  cline 3.0.74    a "Try ClinePass" ad over the first interactive screen ->
+                  shown["cline-cli-cline-pass-intro"] in ~/.cline/data/settings/cli-notices.json.
+                  Its sign-in screen shows only when no provider is set up; that's the
+                  sign-in path, so it stays.
   agy 1.4.7       nothing seeded. Its first interactive start (2026-10-24, on WSL): login
                   method (Google OAuth or a Google Cloud project), the OAuth link and a
                   code to paste back, a color scheme, then "Terms of Service & Data Use"
@@ -215,7 +219,20 @@ def hermes():
     run(["hermes", "config", "set", "telemetry.shared_metrics.offer_version", str(HERMES_OFFER_VERSION)], timeout=60)
 
 
-AGENTS = {"claude": claude, "codex": codex, "gemini": gemini, "aider": aider, "hermes": hermes}
+def cline():
+    base = os.environ.get("CLINE_DATA_DIR") or os.path.expanduser("~/.cline/data")
+
+    def change(d):
+        shown = d.setdefault("shown", {})
+        if not isinstance(shown, dict) or shown.get("cline-cli-cline-pass-intro"):
+            return False
+        shown["cline-cli-cline-pass-intro"] = True
+        return True
+    update_json(os.path.join(base, "settings", "cli-notices.json"), change)
+
+
+AGENTS = {"claude": claude, "codex": codex, "gemini": gemini, "aider": aider, "hermes": hermes,
+          "cline": cline}
 
 
 def main(argv):

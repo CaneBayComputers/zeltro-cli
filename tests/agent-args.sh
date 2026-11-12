@@ -1,8 +1,8 @@
 #!/bin/bash
-# Unit test for the OpenCode and Hermes argument builders in functions.sh:
-# zeltro_opencode_prepare and zeltro_hermes_prepare turn Zeltro's AI_MODEL,
-# AI_API_KEY and AI_API_BASE into each CLI's flags and environment. Runs no agent
-# and makes no network calls.
+# Unit test for the OpenCode, Hermes and Cline argument builders in functions.sh:
+# zeltro_opencode_prepare, zeltro_hermes_prepare and zeltro_cline_prepare turn
+# Zeltro's AI_MODEL, AI_API_KEY and AI_API_BASE into each CLI's flags, environment
+# and (Cline) provider settings. Runs no agent and makes no network calls.
 #
 #   bash tests/agent-args.sh
 set -u
@@ -68,6 +68,45 @@ check "endpoint: --provider openai and the model" "$(echo "$out" | sed -n 1p)" "
 check "endpoint: OPENAI_BASE_URL" "$(echo "$out" | grep '^OPENAI_BASE_URL=')" "OPENAI_BASE_URL=http://localhost:11434/v1"
 check "endpoint without a key: placeholder key" "$(echo "$out" | grep '^OPENAI_API_KEY=')" "OPENAI_API_KEY=zeltro-no-key"
 
+echo "Cline"
+CT="$(mktemp -d)"; trap 'rm -rf "$CT"' EXIT
+export CLINE_PROVIDER_SETTINGS_PATH="$CT/providers.json"
+# <description> <jq-ish python expr over the saved file> <expected>
+saved() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$CLINE_PROVIDER_SETTINGS_PATH" "$1" 2>/dev/null; }
+out="$(run zeltro_cline_prepare "" "" "" ZELTRO_CLINE_ARGS)"
+check "no key, no endpoint: Cline's own sign-in, no flags" "$(echo "$out" | sed -n 1p)" ""
+check "  ...and nothing saved" "$([ -e "$CLINE_PROVIDER_SETTINGS_PATH" ] && echo saved || echo none)" "none"
+out="$(run zeltro_cline_prepare some-model "" "" ZELTRO_CLINE_ARGS)"
+check "no key: the model goes to Cline as-is" "$(echo "$out" | sed -n 1p)" "-m|some-model|"
+out="$(run zeltro_cline_prepare anthropic/claude-sonnet-5-5 sk-ant-x "" ZELTRO_CLINE_ARGS)"
+check "key: anthropic/ prefix picks Anthropic" "$(echo "$out" | sed -n 1p)" "-P|anthropic|-m|claude-sonnet-5-5|"
+check "  ...key saved for that provider" "$(saved 'd["providers"]["anthropic"]["settings"]["apiKey"]')" "sk-ant-x"
+check "  ...file is mode 600" "$(stat -c %a "$CLINE_PROVIDER_SETTINGS_PATH")" "600"
+out="$(run zeltro_cline_prepare openrouter/qwen/qwen3-coder sk-or-x "" ZELTRO_CLINE_ARGS)"
+check "key: openrouter/ prefix picks OpenRouter" "$(echo "$out" | sed -n 1p)" "-P|openrouter|-m|qwen/qwen3-coder|"
+check "  ...the Anthropic entry is kept" "$(saved 'd["providers"]["anthropic"]["settings"]["apiKey"]')" "sk-ant-x"
+check "  ...lastUsedProvider follows" "$(saved 'd["lastUsedProvider"]')" "openrouter"
+out="$(run zeltro_cline_prepare gpt-5.4-mini sk-x "" ZELTRO_CLINE_ARGS)"
+check "key, no prefix: OpenAI" "$(echo "$out" | sed -n 1p)" "-P|openai-native|-m|gpt-5.4-mini|"
+out="$(run zeltro_cline_prepare openai/gpt-5.4-mini sk-x "" ZELTRO_CLINE_ARGS)"
+check "key: openai/ prefix is stripped" "$(echo "$out" | sed -n 1p)" "-P|openai-native|-m|gpt-5.4-mini|"
+out="$(run zeltro_cline_prepare qwen3-coder:30b "" http://localhost:11434/v1 ZELTRO_CLINE_ARGS)"
+check "endpoint: OpenAI-compatible" "$(echo "$out" | sed -n 1p)" "-P|openai-compatible|-m|qwen3-coder:30b|"
+check "  ...base URL saved" "$(saved 'd["providers"]["openai-compatible"]["settings"]["baseUrl"]')" "http://localhost:11434/v1"
+check "  ...placeholder key without one" "$(saved 'd["providers"]["openai-compatible"]["settings"]["apiKey"]')" "zeltro-no-key"
+out="$(run zeltro_cline_prepare deepseek/deepseek-v4.1-flash sk-or-y https://openrouter.ai/api/v1 ZELTRO_CLINE_ARGS)"
+check "endpoint openrouter.ai: Cline's OpenRouter provider" "$(echo "$out" | sed -n 1p)" "-P|openrouter|-m|deepseek/deepseek-v4.1-flash|"
+check "  ...no base URL stored for it" "$(saved 'd["providers"]["openrouter"]["settings"].get("baseUrl","")')" ""
+out="$(run zeltro_cline_prepare claude-haiku-5-5 zk-1 https://example.test/api/v1/starter/anthropic ZELTRO_CLINE_ARGS)"
+check "endpoint ending /anthropic: Anthropic provider" "$(echo "$out" | sed -n 1p)" "-P|anthropic|-m|claude-haiku-5-5|"
+check "  ...with /v1 added" "$(saved 'd["providers"]["anthropic"]["settings"]["baseUrl"]')" "https://example.test/api/v1/starter/anthropic/v1"
+out="$(run zeltro_cline_prepare anthropic/claude-sonnet-5-5 sk-ant-x "" ZELTRO_CLINE_ARGS)"
+check "  ...a later plain-key Anthropic run drops that base URL" "$(saved 'd["providers"]["anthropic"]["settings"].get("baseUrl","")')" ""
+echo 'not json {' > "$CLINE_PROVIDER_SETTINGS_PATH"
+run zeltro_cline_prepare anthropic/x sk-1 "" ZELTRO_CLINE_ARGS >/dev/null 2>&1
+check "an unparseable providers.json is left alone" "$(cat "$CLINE_PROVIDER_SETTINGS_PATH")" "not json {"
+unset CLINE_PROVIDER_SETTINGS_PATH
+
 echo "Language"
 out="$( cd "$REPO/src" && set +u && NO_COLOR=1 source scripts/functions.sh >/dev/null 2>&1; set -e
         AI_LANGUAGE=Spanish; zeltro_ai_system_args hermes; printf '%s' "${HERMES_EPHEMERAL_SYSTEM_PROMPT:-}" )"
@@ -75,6 +114,9 @@ echo "$out" | grep -q "Spanish" && ok "hermes: language in HERMES_EPHEMERAL_SYST
 out="$( cd "$REPO/src" && set +u && NO_COLOR=1 source scripts/functions.sh >/dev/null 2>&1
         zeltro_ai_system_in_prompt opencode && echo yes || echo no )"
 check "opencode: language rides on the prompt" "$out" "yes"
+out="$( cd "$REPO/src" && set +u && NO_COLOR=1 source scripts/functions.sh >/dev/null 2>&1
+        zeltro_ai_system_in_prompt cline && echo yes || echo no )"
+check "cline: language rides on the prompt (--system would replace Cline's own)" "$out" "yes"
 
 echo
 echo "$pass passed, $fail failed"

@@ -69,16 +69,17 @@ usage() {
     echo-white "Configure or inspect the global AI agent settings used by Zeltro."
     echo-white ""
     echo-white "Options:"
-    echo-white "  --agent NAME       Set the AI agent CLI (claude, codex, agy, qwen, aider, opencode or hermes;"
+    echo-white "  --agent NAME       Set the AI agent CLI (claude, codex, agy, qwen, aider, opencode, hermes or cline;"
     echo-white "                     gemini still works but is deprecated: use agy, the Antigravity CLI)."
-    echo-white "  --model NAME       Set the AI model name (optional for codex, claude, agy, gemini, opencode, hermes;"
-    echo-white "                     required for qwen and aider, and for opencode/hermes with --api-base)."
-    echo-white "                     opencode and hermes take provider/model, e.g. openai/gpt-5.4-mini."
-    echo-white "  --api-key KEY      Set the AI API key (optional for codex, claude, agy, opencode, hermes; required for aider)."
+    echo-white "  --model NAME       Set the AI model name (optional for codex, claude, agy, gemini, opencode, hermes, cline;"
+    echo-white "                     required for qwen and aider, and for opencode/hermes/cline with --api-base)."
+    echo-white "                     opencode, hermes and cline take provider/model, e.g. openai/gpt-5.4-mini."
+    echo-white "  --api-key KEY      Set the AI API key (optional for codex, claude, agy, opencode, hermes, cline; required for aider)."
     echo-white "                     Pass an empty value (--api-key \"\") to clear a stored key."
-    echo-white "  --api-base URL     Set a custom API endpoint. Works with codex, qwen, aider, opencode and hermes"
+    echo-white "  --api-base URL     Set a custom API endpoint. Works with codex, qwen, aider, opencode, hermes and cline"
     echo-white "                     (OpenAI-compatible: OpenRouter, Ollama, vLLM, LM Studio),"
-    echo-white "                     and with claude via an Anthropic-compatible proxy."
+    echo-white "                     and with claude and cline via an Anthropic-compatible proxy"
+    echo-white "                     (for cline, a URL ending in /anthropic)."
     echo-white "  --json-output      Output configuration in JSON format (non-interactive)."
     echo-white "  --allow-unattended    Let the agent run without approval prompts. Writes the setting"
     echo-white "                        to the agent's OWN config; applies non-interactively."
@@ -154,6 +155,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# The default as configured, before --agent replaces it in memory (--install-only reports it).
+CONFIGURED_AI_AGENT="${AI_AGENT:-}"
+
 # Apply non-interactive overrides
 if [[ -n "$NEW_AGENT" ]]; then
     AI_AGENT="$NEW_AGENT"
@@ -215,9 +219,10 @@ select_ai_agent() {
         echo-white '  5) qwen    (Qwen Code — cheap/local models via an OpenAI-compatible endpoint)'
         echo-white '  6) opencode (OpenCode — any provider, your own login or key)'
         echo-white '  7) hermes  (Hermes Agent by Nous Research — any provider, your own login or key)'
-        echo-white '  8) gemini  (deprecated — paid Gemini API keys only; use agy instead)'
+        echo-white '  8) cline   (Cline — any provider, a Cline or ChatGPT sign-in, or your own key)'
+        echo-white '  9) gemini  (deprecated — paid Gemini API keys only; use agy instead)'
         echo-return
-        echo-yellow -ne 'Enter your choice (1-8): '
+        echo-yellow -ne 'Enter your choice (1-9): '
         echo-white -ne
         read AI_AGENT_CHOICE
         echo-return
@@ -259,12 +264,17 @@ select_ai_agent() {
                 break
                 ;;
             8)
+                AI_AGENT="cline"
+                sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
+                break
+                ;;
+            9)
                 AI_AGENT="gemini"
                 sudo-zeltro-sed-change "/^AI_AGENT=/" "AI_AGENT=\"$AI_AGENT\"" /etc/zeltro-cli/.env
                 break
                 ;;
             *)
-                echo-yellow "Invalid selection. Please enter a number from 1 to 8."
+                echo-yellow "Invalid selection. Please enter a number from 1 to 9."
                 ;;
         esac
     done
@@ -300,7 +310,7 @@ prompt_ai_model() {
         echo-white "Full list: https://aider.chat/docs/llms.html"
         echo-return
         echo-yellow -ne 'Enter model name: '
-    elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" ]]; then
+    elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" || "$AI_AGENT" == "cline" ]]; then
         echo-return
         echo-white "$AI_AGENT takes provider/model, or nothing to use its own default and login:"
         echo-white "  openai/gpt-5.4-mini              OpenAI (with an OpenAI API key)"
@@ -556,6 +566,9 @@ ensure_ai_agent_installed() {
         opencode)
             _npm_install_global opencode-ai
             ;;
+        cline)
+            _npm_install_global cline
+            ;;
         agy)
             # A single native binary in ~/.local/bin; it updates itself.
             { curl -fsSL https://antigravity.google/cli/install.sh | bash; } 2>&1 | _quiet_path_advice
@@ -661,7 +674,7 @@ if [[ "$INSTALL_ONLY" == "1" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
         echo "{\"action\": \"ai_install\", \"status\": \"success\", \"agent\": \"$NEW_AGENT\", \"installed\": true, \"unattended\": \"$(zeltro_read_agent_autonomy "$NEW_AGENT")\", \"installed_agents\": $(installed_agents_json)}"
     else
-        echo-green "$NEW_AGENT is installed. The default agent is unchanged (${AI_AGENT:-<none>})."
+        echo-green "$NEW_AGENT is installed. The default agent is unchanged (${CONFIGURED_AI_AGENT:-<none>})."
     fi
     cd "$ORIG_DIR"
     exit 0
@@ -757,8 +770,8 @@ elif [[ "$AI_AGENT" == "agy" ]]; then
     echo-cyan "agy signs in with your Google account the first time you run it, or uses a Gemini API key set here."
     echo-white "  Gemini API keys: https://aistudio.google.com/app/api-keys"
     configure_ai_api_key
-elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" ]]; then
-    # Both have their own login (opencode auth login / hermes auth), so a key and an
+elif [[ "$AI_AGENT" == "opencode" || "$AI_AGENT" == "hermes" || "$AI_AGENT" == "cline" ]]; then
+    # All three have their own login (opencode auth login / hermes auth / cline auth), so a key and an
     # endpoint are optional: set them to use a provider API key or a local server.
     echo-cyan "$AI_AGENT can use its own login, or a provider API key and endpoint set here."
     configure_ai_api_key
