@@ -66,8 +66,7 @@ Update with **Updates** in the app, or `brew upgrade --cask zeltro`.
 
 ### After installing
 
-On first launch the app asks you to accept its [license
-terms](https://zeltro.ai/terms), shows a short setup form and runs
+On first launch the app shows a short setup form and runs
 `zeltro configure` for you. Running `zeltro configure` in a terminal works too.
 
 **Upgrading from 1.0.0-beta.4 or earlier:** those builds can't update
@@ -153,10 +152,9 @@ on its own.
 The command line tool is open source under the MIT licence:
 [CaneBayComputers/zeltro-cli](https://github.com/CaneBayComputers/zeltro-cli).
 
-The desktop app is proprietary. It's free for personal use. A business using it,
-including for paid client work, needs a
-[lifetime commercial license](https://zeltro.ai/commercial), paid once,
-covering everyone in the business and every future version. There's no account to
-create either way, and you bring and pay for your own AI agent. The app sends
-usage counts and scrubbed error reports, and our servers record the IP address
-they come from; see [what it collects](https://zeltro.ai/privacy).
+The desktop app is open source under the MIT licence too:
+[CaneBayComputers/zeltro-gui](https://github.com/CaneBayComputers/zeltro-gui).
+Both are free for everyone, businesses included. There's no account to create,
+and you bring and pay for your own AI agent. The app sends usage counts and
+scrubbed error reports, and our servers record the IP address they come from;
+see [what it collects](https://zeltro.ai/privacy).
