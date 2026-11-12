@@ -23,6 +23,7 @@ zeltro ai-set --agent aider  --model anthropic/claude-sonnet-5 --api-key sk-ant-
 zeltro ai-set --agent qwen   --model qwen/qwen3-coder-30b-a3b-instruct --api-base https://openrouter.ai/api/v1 --api-key sk-or-...
 zeltro ai-set --agent opencode --model openai/gpt-5.4-mini --api-key sk-...
 zeltro ai-set --agent hermes   --model openrouter/qwen/qwen3-coder --api-key sk-or-...
+zeltro ai-set --agent cline    --model anthropic/claude-sonnet-5-5 --api-key sk-ant-...
 zeltro ai-set --json-output          # inspect current settings (read-only)
 ```
 
@@ -30,10 +31,10 @@ A fresh install has no agent set, and the AI commands tell you to run `zeltro ai
 
 | Flag | Description |
 |---|---|
-| `--agent <name>` | `codex`, `claude`, `agy`, `qwen`, `aider`, `opencode` or `hermes`. `gemini` still works but is deprecated (see [Antigravity CLI](#antigravity-cli-agy)). Switching agents clears the stored model and endpoint. |
-| `--model <name>` | Model name. Optional for Codex, Claude, agy, Gemini, OpenCode and Hermes; needed for Qwen Code and Aider, and for OpenCode and Hermes with `--api-base`. OpenCode and Hermes take `provider/model`, e.g. `openai/gpt-5.4-mini` |
-| `--api-key <key>` | API key. Optional for Codex, Claude, agy, OpenCode and Hermes, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
-| `--api-base <url>` | Custom endpoint. OpenAI-compatible for `qwen`, `aider`, `opencode` and `hermes`; Anthropic-compatible for `claude`. `none` clears it. See [Cheap and local models](../cheap-models/) for Codex |
+| `--agent <name>` | `codex`, `claude`, `agy`, `qwen`, `aider`, `opencode`, `hermes` or `cline`. `gemini` still works but is deprecated (see [Antigravity CLI](#antigravity-cli-agy)). Switching agents clears the stored model and endpoint. |
+| `--model <name>` | Model name. Optional for Codex, Claude, agy, Gemini, OpenCode, Hermes and Cline; needed for Qwen Code and Aider, and for OpenCode, Hermes and Cline with `--api-base`. OpenCode, Hermes and Cline take `provider/model`, e.g. `openai/gpt-5.4-mini` |
+| `--api-key <key>` | API key. Optional for Codex, Claude, agy, OpenCode, Hermes and Cline, which can use their own sign-in; needed for Aider and for a hosted Qwen Code model. `--api-key ""` clears a stored key |
+| `--api-base <url>` | Custom endpoint. OpenAI-compatible for `qwen`, `aider`, `opencode`, `hermes` and `cline`; Anthropic-compatible for `claude`, and for `cline` with a URL ending in `/anthropic`. `none` clears it. See [Cheap and local models](../cheap-models/) for Codex |
 | `--install-only` | With `--agent`: install that agent's CLI if it's missing, without making it the default |
 | `--allow-unattended` / `--no-allow-unattended` | Turn the agent's approval prompts off or back on in its own config, for terminal use. In the app, each project's "Works without asking" switch (on by default) decides instead (see [Unattended mode](#unattended-mode)) |
 
@@ -46,6 +47,7 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash   # Antigravity CLI 
 npm install -g @qwen-code/qwen-code                # Qwen Code
 curl -LsSf https://aider.chat/install.sh | sh      # Aider
 npm install -g opencode-ai                         # OpenCode
+npm install -g cline                               # Cline
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- \
   --non-interactive --skip-browser --skip-computer-use   # Hermes Agent
 ```
@@ -170,6 +172,30 @@ uses Hermes's `openai` provider with `OPENAI_BASE_URL`. Hermes reads the project
 `hermes`; Zeltro checks it has the agent (`hermes --version` says "Hermes Agent") before
 it runs one.
 
+### Cline
+
+[Cline](https://cline.bot) is an open-source coding agent that works with almost any
+provider. Zeltro installs its command-line version from npm (`npm install -g cline`).
+Sign in inside Cline itself (run `cline`, then pick your Cline account, ClinePass or
+ChatGPT), or give Zeltro a key or endpoint:
+
+```bash
+# a provider prefix picks Cline's provider: anthropic/, openai/, gemini/, openrouter/ or deepseek/
+zeltro ai-set --agent cline --model anthropic/claude-sonnet-5-5 --api-key sk-ant-...
+zeltro ai-set --agent cline --model openrouter/qwen/qwen3-coder --api-key sk-or-...
+
+# any OpenAI-compatible server, or an Anthropic-style one (a URL ending in /anthropic)
+zeltro ai-set --agent cline --model qwen3-coder:30b \
+  --api-base http://localhost:11434/v1 --api-key ollama
+```
+
+Without a prefix the model goes to OpenAI with a key, or to whatever Cline is signed in
+to without one. Cline only reads keys and endpoints from its own settings file
+(`~/.cline/data/settings/providers.json`), so Zeltro saves them there the way
+`cline auth` does, changing only that provider's entry. Cline reads the project's
+`AGENTS.md` by itself, and `zeltro resume` reopens the newest Cline session started in the
+project's folder.
+
 ---
 
 ## Unattended mode
@@ -197,6 +223,7 @@ the agent's own flag for that run:
 | Aider | `--yes-always` | `--no-yes-always` |
 | Antigravity CLI (agy) | `--dangerously-skip-permissions` | *(no way to force it for one run: its own config decides)* |
 | Hermes Agent | `--yolo` | *(no way to force it for one run: its own config decides)* |
+| Cline | `--auto-approve true` | `--auto-approve false` |
 
 It doesn't change the agents' approval settings. The one thing it writes is Claude
 Code's one-time consent, `"skipDangerousModePermissionPrompt": true` in
@@ -220,6 +247,7 @@ writes the setting into **the agent's own config file**, where you can see and u
 | Aider | `~/.aider.conf.yml` | `yes-always: true` |
 | OpenCode | `~/.config/opencode/opencode.json` | `"permission": "allow"` |
 | Hermes Agent | `~/.hermes/config.yaml` | `approvals.mode: off` (set with `hermes config set`; turning it back on restores `smart`) |
+| Cline | `~/.config/zeltro/cline.json` | `"autoApprove": true`. Cline approves its own actions by default and saves no setting for it, so Zeltro keeps this one and passes `--auto-approve` |
 
 ```bash
 zeltro ai-unattended                 # allow it for the current agent
@@ -244,7 +272,7 @@ changing it, set these in the environment. They are never written to the `.env`:
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `agy`, `aider`, `qwen`, `opencode`, `hermes` or `gemini` (deprecated) |
+| `ZELTRO_AI_AGENT` | The agent: `codex`, `claude`, `agy`, `aider`, `qwen`, `opencode`, `hermes`, `cline` or `gemini` (deprecated) |
 | `ZELTRO_AI_MODEL` | The model |
 | `ZELTRO_AI_API_BASE` | The endpoint |
 | `ZELTRO_AI_API_KEY` | The key |
@@ -267,9 +295,9 @@ command before anything runs. Nothing is installed for you; use
 The language instruction reaches Claude Code and Qwen Code through
 `--append-system-prompt`, Codex through `-c developer_instructions=...`, and Aider
 through `--chat-language`, and Hermes through `HERMES_EPHEMERAL_SYSTEM_PROMPT`, so it
-also holds on `zeltro resume`. agy, Gemini CLI and OpenCode have no way to add to their
-system prompt, so `zeltro ai` puts the instruction at the top of the prompt and a resumed
-agy, Gemini or OpenCode session gets none.
+also holds on `zeltro resume`. agy, Gemini CLI, OpenCode and Cline have no way to add to
+their system prompt, so `zeltro ai` puts the instruction at the top of the prompt and a
+resumed agy, Gemini, OpenCode or Cline session gets none.
 
 In the Zeltro app, **AI profiles** (Settings → AI Profiles) are named agent, model,
 endpoint and key setups you pick per session. Keys are stored encrypted, and a

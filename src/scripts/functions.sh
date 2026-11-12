@@ -14,7 +14,7 @@ _zeltro_src_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)
 unset _zeltro_src_dir
 
 # Agents Zeltro knows how to drive. The agent name is also its binary name.
-ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen opencode hermes agy"
+ZELTRO_KNOWN_AI_AGENTS="codex claude gemini aider qwen opencode hermes agy cline"
 
 # Per-session AI overrides. A caller (the GUI running a chosen profile, a script)
 # can pick the agent for ONE run without rewriting /etc/zeltro-cli/.env:
@@ -119,7 +119,7 @@ zeltro_prepare_project_context() {
 zeltro_ai_context_instruction() {
     local f="${ZELTRO_CONTEXT_FILE:-}"
     [ -n "$f" ] || return 0
-    case "$1:$(basename "$f")" in codex:AGENTS.md|opencode:AGENTS.md|hermes:AGENTS.md) return 0 ;; esac
+    case "$1:$(basename "$f")" in codex:AGENTS.md|opencode:AGENTS.md|hermes:AGENTS.md|cline:AGENTS.md) return 0 ;; esac
     if [ "$(basename "$f")" = "ZELTRO.md" ]; then
         printf 'This is a Zeltro project. Before anything else, read %s (how to work in this project with Zeltro), then the repo'"'"'s own AGENTS.md. Where they disagree about installing or running tools on this computer, follow ZELTRO.md.' "$f"
     else
@@ -145,10 +145,11 @@ zeltro_ai_system_instruction() {
 #                 reply-language setting
 #   hermes        HERMES_EPHEMERAL_SYSTEM_PROMPT (exported here), which Hermes
 #                 adds to its system prompt without saving it into the session
-#   gemini,       nothing: gemini can only REPLACE its whole system prompt
-#   opencode,     (GEMINI_SYSTEM_MD), and opencode and agy have no flag or
-#   agy           variable for it at all. `zeltro ai` prepends the instruction
-#                 to the prompt instead; a resumed session gets none.
+#   gemini,       nothing: gemini and cline can only REPLACE their whole system
+#   opencode,     prompt (GEMINI_SYSTEM_MD, cline --system), and opencode and
+#   agy, cline    agy have no flag or variable for it at all. `zeltro ai`
+#                 prepends the instruction to the prompt instead; a resumed
+#                 session gets none.
 # Expand with ${ZELTRO_SYSTEM_ARGS[@]+"${ZELTRO_SYSTEM_ARGS[@]}"} (bash 3.2 + set -u).
 zeltro_ai_system_args() {
     ZELTRO_SYSTEM_ARGS=()
@@ -171,7 +172,7 @@ zeltro_ai_system_args() {
 
 # Agents whose system instruction rides on the prompt (see zeltro_ai_system_args).
 zeltro_ai_system_in_prompt() {
-    case "$1" in gemini|opencode|agy) return 0 ;; *) return 1 ;; esac
+    case "$1" in gemini|opencode|agy|cline) return 0 ;; *) return 1 ;; esac
 }
 
 # OpenCode (opencode.ai). Sets ZELTRO_OPENCODE_ARGS and exports what the run needs.
@@ -247,12 +248,103 @@ zeltro_hermes_prepare() {
     return 0
 }
 
+# Cline (cline.bot). Sets ZELTRO_CLINE_ARGS (-P provider, -m model).
+#   - No key and no endpoint: Cline's own sign-in decides (Cline account,
+#     ClinePass, ChatGPT, or a provider set with `cline auth`); a --model is
+#     passed to it as-is.
+#   - Custom endpoint (--api-base), --model required: an openrouter.ai base uses
+#     Cline's OpenRouter provider; a base ending in /anthropic (an
+#     Anthropic-style endpoint) its Anthropic provider; anything else its
+#     OpenAI-compatible provider.
+#   - Key without endpoint: a provider prefix on the model picks the provider
+#     (anthropic/, openai/, gemini/, google/, openrouter/, deepseek/) and the rest
+#     is the model; no prefix means OpenAI.
+# Cline's interactive screen only reads keys and endpoints from its own
+# providers.json, so they're saved there, as `cline auth` does: only that one
+# provider's entry changes, the file stays mode 600, and a file Zeltro can't
+# parse is left alone.
+zeltro_cline_prepare() {
+    ZELTRO_CLINE_ARGS=()
+    local model="${AI_MODEL:-}" base="${AI_API_BASE:-}" key="${AI_API_KEY:-}" provider="" url=""
+    if [ -n "$base" ]; then
+        case "$base" in
+            *openrouter.ai*) provider="openrouter" ;;
+            */anthropic|*/anthropic/) provider="anthropic"; url="${base%/}/v1" ;;
+            */anthropic/v1|*/anthropic/v1/) provider="anthropic"; url="${base%/}" ;;
+            *) provider="openai-compatible"; url="${base%/}" ;;
+        esac
+        [ -n "$key" ] || key="zeltro-no-key"
+    elif [ -n "$key" ]; then
+        case "$model" in
+            anthropic/*)  provider="anthropic" ;;
+            openai/*)     provider="openai-native" ;;
+            gemini/*|google/*) provider="gemini" ;;
+            openrouter/*) provider="openrouter" ;;
+            deepseek/*)   provider="deepseek" ;;
+            *)            provider="openai-native" ;;
+        esac
+        case "$model" in */*) [ "$provider" = "openai-native" ] && [ "${model%%/*}" != "openai" ] || model="${model#*/}" ;; esac
+    fi
+    if [ -n "$provider" ]; then
+        local settings="${CLINE_PROVIDER_SETTINGS_PATH:-${CLINE_DATA_DIR:-$HOME/.cline/data}/settings/providers.json}"
+        python3 - "$settings" "$provider" "$key" "$model" "$url" <<'PYCLINE' || echo-yellow "Couldn't save the key for Cline in $settings; Cline will use its own settings." >&2
+import json, os, sys, datetime
+path, provider, key, model, url = sys.argv[1:6]
+data = {"version": 1, "modes": {}, "providers": {}}
+if os.path.exists(path):
+    try:
+        data = json.load(open(path))
+        assert isinstance(data, dict)
+    except Exception:
+        sys.exit(1)
+entry = {"provider": provider, "apiKey": key}
+if model:
+    entry["model"] = model
+if url:
+    entry["baseUrl"] = url
+providers = data.setdefault("providers", {})
+old = providers.get(provider, {}).get("settings", {})
+if {k: old.get(k) for k in entry} == entry and data.get("lastUsedProvider") == provider:
+    sys.exit(0)
+providers[provider] = {"settings": {**{k: v for k, v in old.items() if k not in ("baseUrl", "model")}, **entry},
+                       "updatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+                       "tokenSource": "manual"}
+data["lastUsedProvider"] = provider
+os.makedirs(os.path.dirname(path), exist_ok=True)
+tmp = path + ".zeltro-tmp"
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+os.replace(tmp, path)
+PYCLINE
+        ZELTRO_CLINE_ARGS+=(-P "$provider")
+    fi
+    [ -n "$model" ] && ZELTRO_CLINE_ARGS+=(-m "$model")
+    return 0
+}
+
+# The newest Cline session started in directory $1, or nothing.
+zeltro_cline_last_session() {
+    cline history --json --limit 200 2>/dev/null | python3 -c '
+import json, os, sys
+d = os.path.realpath(sys.argv[1])
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+rows = [r for r in rows if not r.get("isSubagent") and os.path.realpath(r.get("cwd") or "") == d]
+rows.sort(key=lambda r: r.get("updatedAt") or r.get("startedAt") or "", reverse=True)
+if rows:
+    print(rows[0].get("sessionId", ""))
+' "$1" 2>/dev/null
+}
+
 # The agent's product name, for messages: codex -> Codex, claude -> Claude Code.
 zeltro_agent_display_name() {
     case "$1" in
         codex) echo "Codex" ;; claude) echo "Claude Code" ;; gemini) echo "Gemini CLI" ;;
         qwen) echo "Qwen Code" ;; aider) echo "Aider" ;; opencode) echo "OpenCode" ;;
-        hermes) echo "Hermes Agent" ;; agy) echo "Antigravity CLI" ;; *) echo "$1" ;;
+        hermes) echo "Hermes Agent" ;; agy) echo "Antigravity CLI" ;; cline) echo "Cline" ;; *) echo "$1" ;;
     esac
 }
 
@@ -346,7 +438,7 @@ zeltro_add_agent_bin_dirs
 
 # The order Zeltro picks a default agent in when none is configured.
 # Gemini comes last: see zeltro_agent_deprecated.
-ZELTRO_DEFAULT_AGENT_ORDER="claude codex agy qwen aider opencode hermes gemini"
+ZELTRO_DEFAULT_AGENT_ORDER="claude codex agy qwen aider opencode hermes cline gemini"
 
 # When no default agent is configured (AI_AGENT is blank, as env.example ships
 # it), use the first installed one in ZELTRO_DEFAULT_AGENT_ORDER, so "Host
@@ -591,6 +683,9 @@ zeltro_gui_event_agents_json() {
 # bypass consent (skipDangerousModePermissionPrompt), without which its
 # --dangerously-skip-permissions opens a confirmation dialog.
 # Agents with no per-run "ask" switch (agy, hermes) ignore 0.
+# Cline has no saved setting of its own (it approves by default), so when the
+# mode is unset its runs follow `zeltro ai-unattended cline`, kept in
+# zeltro_agent_config_path cline.
 #
 # Fills ZELTRO_UNATTENDED_ARGS; may export OPENCODE_PERMISSION.
 #   $1 agent name
@@ -624,6 +719,9 @@ zeltro_unattended_args() {
         hermes:1)   ZELTRO_UNATTENDED_ARGS=(--yolo) ;;
         aider:1)    ZELTRO_UNATTENDED_ARGS=(--yes-always) ;;
         aider:0)    ZELTRO_UNATTENDED_ARGS=(--no-yes-always) ;;
+        cline:1)    ZELTRO_UNATTENDED_ARGS=(--auto-approve true) ;;
+        cline:0)    ZELTRO_UNATTENDED_ARGS=(--auto-approve false) ;;
+        cline:)     [ "$(zeltro_read_agent_autonomy cline)" = "false" ] && ZELTRO_UNATTENDED_ARGS=(--auto-approve false) ;;
     esac
     return 0
 }
@@ -3305,6 +3403,7 @@ zeltro_offer_agent_autonomy() {
         opencode) cfg="$HOME/.config/opencode/opencode.json"; desc='"permission": "allow"' ;;
         hermes) cfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"; desc='approvals.mode: off' ;;
         agy)    cfg="$HOME/.gemini/antigravity-cli/settings.json"; desc='"toolPermission": "always-proceed", "artifactReviewPolicy": "always-proceed"' ;;
+        # Cline approves its own actions by default; there's nothing to ask.
         *) return 0 ;;
     esac
 
@@ -3503,11 +3602,35 @@ PYAGY
                 return 1
             fi
             ;;
+        cline)
+            zeltro_cline_set_auto_approve "$cfg" true || { echo-yellow "Couldn't write $cfg."; return 1; }
+            ;;
     esac
 
     echo-green "Recorded in $cfg — $agent will now run unattended under Zeltro."
     echo-white  "Undo it by editing that file."
     return 0
+}
+
+# Zeltro's own record of whether Cline runs approve themselves ($2 true|false),
+# in file $1. Cline saves no such setting, so this is what `zeltro ai-unattended
+# cline` changes; zeltro_unattended_args turns it into --auto-approve.
+zeltro_cline_set_auto_approve() {
+    python3 - "$1" "$2" <<'PYCLA'
+import json, os, sys
+path, value = sys.argv[1], sys.argv[2] == "true"
+data = {}
+if os.path.exists(path):
+    try:
+        data = json.load(open(path))
+        assert isinstance(data, dict)
+    except Exception:
+        sys.exit(1)
+data["autoApprove"] = value
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+PYCLA
 }
 
 # Read whether an agent is currently configured to run unattended.
@@ -3524,6 +3647,18 @@ zeltro_read_agent_autonomy() {
         qwen)   cfg="$HOME/.qwen/settings.json" ;;
         aider)  cfg="$HOME/.aider.conf.yml" ;;
         agy)    cfg="$HOME/.gemini/antigravity-cli/settings.json" ;;
+        cline)
+            # No file is Cline's own default: it approves its actions itself.
+            cfg="$(zeltro_agent_config_path cline)"
+            [ -f "$cfg" ] || { echo "true"; return 0; }
+            python3 -c '
+import json, sys
+try:
+    v = json.load(open(sys.argv[1])).get("autoApprove", True)
+except Exception:
+    print("unknown"); sys.exit(0)
+print("false" if v is False else "true")' "$cfg" 2>/dev/null || echo "unknown"
+            return 0 ;;
         opencode)
             # OpenCode merges opencode.json with its own opencode.jsonc (and project
             # files), so ask it for the resolved setting rather than reading one file.
@@ -3625,6 +3760,14 @@ zeltro_revoke_agent_autonomy() {
         aider)  cfg="$HOME/.aider.conf.yml" ;;
         opencode) cfg="$HOME/.config/opencode/opencode.json" ;;
         agy)    cfg="$HOME/.gemini/antigravity-cli/settings.json" ;;
+        cline)
+            cfg="$(zeltro_agent_config_path cline)"
+            if zeltro_cline_set_auto_approve "$cfg" false; then
+                echo-green "cline will ask for approval again under Zeltro (autoApprove: false in $cfg)."
+                return 0
+            fi
+            echo-yellow "Couldn't write $cfg."
+            return 1 ;;
         hermes)
             cfg="${HERMES_HOME:-$HOME/.hermes}/config.yaml"
             # "smart" is Hermes's own default: a helper model judges risky commands.
@@ -3739,6 +3882,8 @@ zeltro_agent_config_path() {
         opencode) echo "$HOME/.config/opencode/opencode.json" ;;
         hermes) echo "${HERMES_HOME:-$HOME/.hermes}/config.yaml" ;;
         agy)    echo "$HOME/.gemini/antigravity-cli/settings.json" ;;
+        # Cline saves no approval setting, so Zeltro keeps this one for it.
+        cline)  echo "${XDG_CONFIG_HOME:-$HOME/.config}/zeltro/cline.json" ;;
         *) return 1 ;;
     esac
 }

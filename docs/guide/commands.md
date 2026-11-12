@@ -208,10 +208,10 @@ zeltro ai-set --json-output
 
 Supported flags:
 
-- `--agent <name>` – Set the AI agent CLI (`codex`, `claude`, `agy`, `qwen`, `aider`, `opencode` or `hermes`). `gemini` still works but is deprecated: Google stopped serving Gemini CLI to personal accounts on 2026-06-18, so use `agy`, the Antigravity CLI that replaces it.
-- `--model <name>` – Set the model name (optional for Codex, Claude, agy, Gemini, OpenCode and Hermes; required for Qwen and Aider, and for OpenCode and Hermes with `--api-base`). OpenCode and Hermes take `provider/model`, e.g. `openai/gpt-5.4-mini`.
-- `--api-key <key>` – Set the AI API key (optional for Codex, Claude, agy, OpenCode and Hermes; for agy and Gemini a Gemini API key, passed as `GEMINI_API_KEY`; required for Aider). `--api-key ""` clears a stored key.
-- `--api-base <url>` – Set a custom API endpoint: OpenAI-compatible for Codex, Qwen, Aider, OpenCode and Hermes; an Anthropic-compatible proxy for Claude. `--api-base none` clears it.
+- `--agent <name>` – Set the AI agent CLI (`codex`, `claude`, `agy`, `qwen`, `aider`, `opencode`, `hermes` or `cline`). `gemini` still works but is deprecated: Google stopped serving Gemini CLI to personal accounts on 2026-06-18, so use `agy`, the Antigravity CLI that replaces it.
+- `--model <name>` – Set the model name (optional for Codex, Claude, agy, Gemini, OpenCode, Hermes and Cline; required for Qwen and Aider, and for OpenCode, Hermes and Cline with `--api-base`). OpenCode, Hermes and Cline take `provider/model`, e.g. `openai/gpt-5.4-mini`.
+- `--api-key <key>` – Set the AI API key (optional for Codex, Claude, agy, OpenCode, Hermes and Cline; for agy and Gemini a Gemini API key, passed as `GEMINI_API_KEY`; required for Aider). `--api-key ""` clears a stored key.
+- `--api-base <url>` – Set a custom API endpoint: OpenAI-compatible for Codex, Qwen, Aider, OpenCode, Hermes and Cline; an Anthropic-compatible proxy for Claude, or for Cline with a URL ending in `/anthropic`. `--api-base none` clears it.
 - `--allow-unattended` / `--no-allow-unattended` – Let the agent run without approval prompts, or turn that off. Written to the agent's own config; omit both to leave it unchanged. It's what terminal runs follow; in the desktop app each project's "Works without asking" switch (on by default) overrides it per session through `ZELTRO_AI_UNATTENDED`.
 - `--install-only` – With `--agent`: install that agent's CLI if missing without making it the default. Writes nothing to Zeltro's configuration.
 - `--json-output` – Return the result as JSON (non-interactive). On its own, `zeltro ai-set --json-output` is a read-only probe: it installs and writes nothing, and reports the current settings plus `"session_overrides": true`, `"ai_language": true` and `"installed_agents": [...]`.
@@ -237,7 +237,7 @@ Examples:
 
 | Variable | Overrides |
 |---|---|
-| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `agy`, `aider`, `qwen`, `opencode`, `hermes` or `gemini` (deprecated) |
+| `ZELTRO_AI_AGENT` | `AI_AGENT` — `codex`, `claude`, `agy`, `aider`, `qwen`, `opencode`, `hermes`, `cline` or `gemini` (deprecated) |
 | `ZELTRO_AI_MODEL` | `AI_MODEL` |
 | `ZELTRO_AI_API_BASE` | `AI_API_BASE` |
 | `ZELTRO_AI_API_KEY` | `AI_API_KEY` |
@@ -358,7 +358,8 @@ zeltro ai --interactive "Add a health-check endpoint at /ping"
   - Aider: `aider --no-check-update --no-pretty --no-auto-commits --subtree-only [--no-git] [--model "$AI_MODEL"] [--api-key <provider>="$AI_API_KEY"] [--openai-api-base "$AI_API_BASE"] --message "<prompt>"` (one-off). Aider's `--message` exits after the reply, so interactive runs seed the session with `--load` instead and hand it back to you. `--no-git` is added when the directory isn't already a git repository.
   - OpenCode: `opencode run [-m "$AI_MODEL"] "<prompt>"` (one-off) / `opencode [-m ...] --prompt "<prompt>"` (interactive). The key goes to the variable the model's provider reads; an endpoint becomes an OpenAI-compatible provider named `zeltro` in `OPENCODE_CONFIG_CONTENT`, with the model as `zeltro/<model>`. Auto-update is off for the run.
   - Hermes: `hermes chat [--provider <p>] [-m <model>] --oneshot -Q -q "<prompt>"` (one-off) / `hermes chat [...] -q "<prompt>"` (interactive). A model prefix (`openai/`, `openrouter/`, `anthropic/`, `gemini/`) becomes `--provider`; an endpoint uses `--provider openai` with `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
-- **Passes approval-bypass flags only when told to.** By default, whether an agent runs without asking is recorded in the agent's own config (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/antigravity-cli/settings.json`, `~/.gemini/settings.json`, `~/.qwen/settings.json`, `~/.aider.conf.yml`, `~/.config/opencode/opencode.json`, `~/.hermes/config.yaml`), set with `zeltro ai-set --allow-unattended` or `zeltro ai-unattended`. For one run, `ZELTRO_AI_UNATTENDED=1` adds the flags (the desktop app uses it for its per-project switch; `ZELTRO_AI_AUTO_APPROVE=1` still works) and `ZELTRO_AI_UNATTENDED=0` turns approvals on instead. With `1` it passes (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`, `--yolo`, `--dangerously-skip-permissions` for agy, `--yolo --skip-trust` for Gemini, `--yes-always` for Aider, `--auto` for OpenCode, `--yolo` for Hermes).
+  - Cline: `cline [-P <provider>] [-m <model>] "<prompt>"` (one-off) / `cline -i [...] "<prompt>"` (interactive). A key or endpoint is saved in Cline's own `~/.cline/data/settings/providers.json` (only that provider's entry); a model prefix (`anthropic/`, `openai/`, `gemini/`, `openrouter/`, `deepseek/`) picks the provider; an endpoint uses Cline's OpenRouter, Anthropic (URL ending in `/anthropic`) or OpenAI-compatible provider.
+- **Passes approval-bypass flags only when told to.** By default, whether an agent runs without asking is recorded in the agent's own config (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/antigravity-cli/settings.json`, `~/.gemini/settings.json`, `~/.qwen/settings.json`, `~/.aider.conf.yml`, `~/.config/opencode/opencode.json`, `~/.hermes/config.yaml`; for Cline, which saves no such setting, Zeltro's `~/.config/zeltro/cline.json`), set with `zeltro ai-set --allow-unattended` or `zeltro ai-unattended`. For one run, `ZELTRO_AI_UNATTENDED=1` adds the flags (the desktop app uses it for its per-project switch; `ZELTRO_AI_AUTO_APPROVE=1` still works) and `ZELTRO_AI_UNATTENDED=0` turns approvals on instead. With `1` it passes (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`, `--yolo`, `--dangerously-skip-permissions` for agy, `--yolo --skip-trust` for Gemini, `--yes-always` for Aider, `--auto` for OpenCode, `--yolo` for Hermes, `--auto-approve true` for Cline).
 
 ## 🎯 Command Options
 

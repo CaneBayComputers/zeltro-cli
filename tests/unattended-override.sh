@@ -15,14 +15,14 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 # <env assignments> <agent> -> the args, then "|OPENCODE_PERMISSION"
 args_for() {
     env -u ZELTRO_AI_UNATTENDED -u ZELTRO_AI_AUTO_APPROVE -u OPENCODE_PERMISSION \
-        CLAUDE_CONFIG_DIR="${CDIR:-$T/claude}" $1 bash -c "
+        CLAUDE_CONFIG_DIR="${CDIR:-$T/claude}" XDG_CONFIG_HOME="${XDIR:-$T/xdg}" $1 bash -c "
         cd '$REPO/src' && set +u && source scripts/functions.sh >/dev/null 2>&1
         zeltro_unattended_args $2
         echo \"\${ZELTRO_UNATTENDED_ARGS[*]}|\${OPENCODE_PERMISSION:-}\""
 }
 
 echo "unset: the agent's own config decides"
-for a in claude codex qwen gemini agy opencode hermes aider; do
+for a in claude codex qwen gemini agy opencode hermes aider cline; do
     check "$a" "$(args_for "" $a)" "|"
 done
 
@@ -35,6 +35,7 @@ check agy      "$(args_for ZELTRO_AI_UNATTENDED=1 agy)"      "--dangerously-skip
 check opencode "$(args_for ZELTRO_AI_UNATTENDED=1 opencode)" "--auto|"
 check hermes   "$(args_for ZELTRO_AI_UNATTENDED=1 hermes)"   "--yolo|"
 check aider    "$(args_for ZELTRO_AI_UNATTENDED=1 aider)"    "--yes-always|"
+check cline    "$(args_for ZELTRO_AI_UNATTENDED=1 cline)"    "--auto-approve true|"
 check "older ZELTRO_AI_AUTO_APPROVE=1 still means 1" "$(args_for ZELTRO_AI_AUTO_APPROVE=1 codex)" "--dangerously-bypass-approvals-and-sandbox|"
 check "ZELTRO_AI_UNATTENDED=0 beats AUTO_APPROVE=1" "$(args_for "ZELTRO_AI_AUTO_APPROVE=1 ZELTRO_AI_UNATTENDED=0" qwen)" "--approval-mode default|"
 
@@ -47,6 +48,20 @@ check "agy (no per-run ask switch)" "$(args_for ZELTRO_AI_UNATTENDED=0 agy)" "|"
 check opencode "$(args_for ZELTRO_AI_UNATTENDED=0 opencode)" '|{"*":"ask"}'
 check "hermes (no per-run ask switch)" "$(args_for ZELTRO_AI_UNATTENDED=0 hermes)" "|"
 check aider    "$(args_for ZELTRO_AI_UNATTENDED=0 aider)"    "--no-yes-always|"
+check cline    "$(args_for ZELTRO_AI_UNATTENDED=0 cline)"    "--auto-approve false|"
+
+echo "Cline: no saved setting of its own, so Zeltro's (ai-unattended cline) applies when unset"
+mkdir -p "$T/xdg/zeltro"; echo '{"autoApprove": false}' > "$T/xdg/zeltro/cline.json"
+check "saved off, unset: asks"        "$(args_for "" cline)"                       "--auto-approve false|"
+check "saved off, 1 still wins"       "$(args_for ZELTRO_AI_UNATTENDED=1 cline)"  "--auto-approve true|"
+echo '{"autoApprove": true}' > "$T/xdg/zeltro/cline.json"
+check "saved on, unset: Cline's default" "$(args_for "" cline)"                    "|"
+read_cline() { XDG_CONFIG_HOME="$T/xdg2" bash -c "cd '$REPO/src' && set +u && source scripts/functions.sh >/dev/null 2>&1; $1"; }
+check "no file reads as on (Cline's default)" "$(read_cline 'zeltro_read_agent_autonomy cline')" "true"
+read_cline 'zeltro_revoke_agent_autonomy cline' >/dev/null
+check "off writes autoApprove false"  "$(read_cline 'zeltro_read_agent_autonomy cline')" "false"
+read_cline 'zeltro_allow_agent_autonomy cline' >/dev/null
+check "on writes autoApprove true"    "$(read_cline 'zeltro_read_agent_autonomy cline')" "true"
 
 echo "Claude's consent key"
 check "0 writes nothing" "$(CDIR="$T/claude0" args_for ZELTRO_AI_UNATTENDED=0 claude >/dev/null; ls "$T/claude0" 2>/dev/null | wc -l)" "0"

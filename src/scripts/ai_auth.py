@@ -72,6 +72,8 @@ CAPABILITIES = {
                  "subscription_note": "ChatGPT only"},
     "hermes":   {"subscription": True,  "api_key": True, "endpoint": "openai",
                  "subscription_note": "Nous Portal or ChatGPT"},
+    "cline":    {"subscription": True,  "api_key": True, "endpoint": "openai",
+                 "subscription_note": "Cline account, ClinePass or ChatGPT, signed in inside cline"},
     "agy":      {"subscription": True,  "api_key": True, "endpoint": None,
                  "subscription_note": "Google account, signed in inside agy"},
 }
@@ -203,6 +205,30 @@ def status_hermes():
     return {"auth": "unknown", "signed_in": False, "account": ""}
 
 
+def status_cline():
+    # Cline keeps every provider it's set up for in providers.json: an OAuth
+    # sign-in (Cline account, ClinePass, ChatGPT) or an API key.
+    base = os.environ.get("CLINE_DATA_DIR") or os.path.expanduser("~/.cline/data")
+    path = os.environ.get("CLINE_PROVIDER_SETTINGS_PATH") or os.path.join(base, "settings", "providers.json")
+    try:
+        data = json.load(open(path))
+        providers = data.get("providers") or {}
+    except Exception:
+        return {"auth": "none", "signed_in": False, "account": ""}
+    labels = {"cline": "Cline account", "cline-pass": "ClinePass", "openai-codex": "ChatGPT",
+              "claude-code": "Claude (through Claude Code)"}
+    order = [data.get("lastUsedProvider")] + [p for p in providers if p != data.get("lastUsedProvider")]
+    for pid in order:
+        entry = providers.get(pid) or {}
+        settings = entry.get("settings") or {}
+        if pid in labels and (entry.get("tokenSource") == "oauth" or settings.get("auth")
+                              or settings.get("accessToken") or pid == "claude-code"):
+            return {"auth": "subscription", "signed_in": True, "account": labels[pid]}
+        if settings.get("apiKey"):
+            return {"auth": "api_key", "signed_in": True, "account": ""}
+    return {"auth": "none", "signed_in": False, "account": ""}
+
+
 def status_agy():
     # agy keeps its sign-in in the system keyring; `agy models` lists models only
     # when signed in (1.4.6), else "Please sign in to view available models".
@@ -224,7 +250,8 @@ def status_agy():
 
 
 STATUS = {"claude": status_claude, "codex": status_codex,
-          "opencode": status_opencode, "hermes": status_hermes, "agy": status_agy}
+          "opencode": status_opencode, "hermes": status_hermes, "agy": status_agy,
+          "cline": status_cline}
 
 
 def status(agent):
