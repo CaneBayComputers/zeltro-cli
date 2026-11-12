@@ -1,8 +1,8 @@
 # Zeltro CLI
 
-## DevOps in-a-box!
+## A home for all your projects, on your Linux box or server
 
-**Pre-plumbed PHP, Python and Node environments so your AI agent can skip the setup and get straight to building.**
+**Each project in its own container, with an AI agent already set up to build in it, using whichever AI subscription you already pay for. Free and open source (MIT).**
 
 | | AI without Zeltro | AI with Zeltro |
 |---|---|---|
@@ -127,4 +127,4 @@ installs it through Homebrew. Packages are on the
 
 ---
 
-Runs on Linux and macOS, and on Windows through the desktop app. The CLI is open source (MIT); the desktop app is proprietary and free for personal use, with a [lifetime commercial license](https://zeltro.ai/commercial) for businesses.
+Linux first; it also runs on macOS, and on Windows through the desktop app. Both the CLI and the [desktop app](https://github.com/CaneBayComputers/zeltro-gui) are free and open source under the MIT license.
